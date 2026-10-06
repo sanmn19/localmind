@@ -1,5 +1,6 @@
 // ignore_for_file: prefer_initializing_formals
 
+import 'package:flutter/foundation.dart';
 import 'package:localmind/features/mcp/data/web/web_fetch_service.dart';
 import 'package:localmind/features/mcp/data/web/web_search_service.dart';
 
@@ -111,6 +112,25 @@ class McpServerManager {
     ];
     _serverUrls[exampleMcpServerLabel] = exampleMcpServerUrl;
     _localExampleServers.add(exampleMcpServerLabel);
+  }
+
+  /// Registers a server without any network round-trip by populating the
+  /// internal maps directly (mirrors how [addExampleServer] is seeded).
+  ///
+  /// Test seam only: the stub label has no client/web/example backing, so
+  /// [callTool]'s default dispatch does not serve it — tests that need
+  /// execution semantics override [callTool].
+  @visibleForTesting
+  Future<void> addStubServer(
+    String label, {
+    required String url,
+    required List<McpTool> tools,
+    McpCapabilities capabilities = const McpCapabilities(tools: true),
+  }) async {
+    await removeServer(label);
+    _capabilities[label] = capabilities;
+    _tools[label] = tools;
+    _serverUrls[label] = url;
   }
 
   Future<void> addWebServer(WebServices services) async {

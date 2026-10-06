@@ -38,17 +38,28 @@ class McpToolProvider implements ToolProvider {
     String name,
     Map<String, dynamic> args,
   ) async {
-    for (final label in serverManager.serverLabels) {
-      final serverTools = serverManager.getTools(label);
-      if (serverTools.any((t) => t.name == name)) {
-        try {
-          final result = await serverManager.callTool(label, name, args);
-          return ToolExecutionResult.success(result);
-        } catch (e) {
-          return ToolExecutionResult.failure(e.toString());
-        }
-      }
+    final owners = [
+      for (final label in serverManager.serverLabels)
+        if (serverManager.getTools(label).any((t) => t.name == name)) label,
+    ];
+    if (owners.isEmpty) {
+      return const ToolExecutionResult.failure('MCP tool not found');
     }
-    return const ToolExecutionResult.failure('MCP tool not found');
+    // Several servers may expose the same tool name (user-configured
+    // remote integrations can shadow the built-in web tools). ROUTE to
+    // the local in-process web server when it owns the name:
+    // serverLabels is insertion order and addWebServer re-inserts the web
+    // server on every settings rebuild, so first-match alone would let a
+    // remote registered earlier hijack execution.
+    final label = owners.firstWhere(
+      (candidate) => serverManager.getServerUrl(candidate) == webMcpServerUrl,
+      orElse: () => owners.first,
+    );
+    try {
+      final result = await serverManager.callTool(label, name, args);
+      return ToolExecutionResult.success(result);
+    } catch (e) {
+      return ToolExecutionResult.failure(e.toString());
+    }
   }
 }
