@@ -57,26 +57,37 @@ class WebFetchService {
   }
 }
 
-/// True when [uri] targets localhost, a literal loopback/private/labelled IP
-/// (10/8, 172.16/12, 192.168/16, 169.254/16, 100.64/10) or a hostless URL.
+/// True when [uri] targets localhost, a hostless URL, or a literal IP inside
+/// loopback or the private ranges 10.0.0.0/8, 172.16.0.0/12 (covers
+/// 172.16.x.x-172.31.x.x), 192.168.0.0/16, 169.254.0.0/16, and 100.64.0.0/10
+/// (carrier NAT + tailscale, ends at 100.127.255.255).
 bool isBlockedFetchTarget(Uri uri) {
   final host = uri.host.toLowerCase();
   if (host.isEmpty || host == 'localhost') return true;
   final address = InternetAddress.tryParse(host);
   if (address == null) return false;
   if (address.isLoopback) return true;
-  final blockedPrefixes = [
-    [10, 0],
-    for (var second = 16; second <= 31; second++) [172, second],
-    [192, 168],
-    [169, 254],
-    [100, 64],
+  const blockedV4Ranges = [
+    ([10, 0, 0, 0], 8),
+    ([172, 16, 0, 0], 12),
+    ([192, 168, 0, 0], 16),
+    ([169, 254, 0, 0], 16),
+    ([100, 64, 0, 0], 10),
   ];
-  for (final range in blockedPrefixes) {
-    if (address.rawAddress[0] == range[0] &&
-        address.rawAddress[1] == range[1]) {
-      return true;
-    }
+  final bytes = address.rawAddress;
+  if (bytes.length != 4) return false; // No IPv6 private ranges in scope.
+  for (final (network, prefixBits) in blockedV4Ranges) {
+    if (_inCidr4(bytes, network, prefixBits)) return true;
   }
   return false;
+}
+
+/// True when the first [prefixBits] bits of [address] match [network].
+bool _inCidr4(List<int> address, List<int> network, int prefixBits) {
+  for (var i = 0; i < prefixBits; i++) {
+    final byte = i >> 3;
+    final bit = 7 - (i & 7);
+    if (((address[byte] ^ network[byte]) >> bit) & 1 == 1) return false;
+  }
+  return true;
 }

@@ -10,17 +10,21 @@ void main() {
     expect(isBlockedFetchTarget(Uri.parse('http://LOCALHOST/x')), isTrue);
     expect(isBlockedFetchTarget(Uri.parse('http://127.0.0.1/x')), isTrue);
     expect(isBlockedFetchTarget(Uri.parse('http://10.0.0.3/x')), isTrue);
+    expect(isBlockedFetchTarget(Uri.parse('http://10.5.0.1/x')), isTrue);
     expect(isBlockedFetchTarget(Uri.parse('http://172.16.0.9/x')), isTrue);
     expect(isBlockedFetchTarget(Uri.parse('http://172.31.5.5/x')), isTrue);
+    expect(isBlockedFetchTarget(Uri.parse('http://172.31.255.255/x')), isTrue);
     expect(isBlockedFetchTarget(Uri.parse('http://192.168.1.5/x')), isTrue);
     expect(isBlockedFetchTarget(Uri.parse('http://169.254.169.254/m')), isTrue);
     expect(
       isBlockedFetchTarget(Uri.parse('http://100.64.0.7/tailnet')),
       isTrue,
     );
+    expect(isBlockedFetchTarget(Uri.parse('http://100.100.0.1/x')), isTrue);
     expect(isBlockedFetchTarget(Uri.parse('http://example.com/x')), isFalse);
+    expect(isBlockedFetchTarget(Uri.parse('http://8.8.8.8/x')), isFalse);
     expect(isBlockedFetchTarget(Uri.parse('http://172.32.0.1/x')), isFalse);
-    expect(isBlockedFetchTarget(Uri.parse('http://100.65.0.1/x')), isFalse);
+    expect(isBlockedFetchTarget(Uri.parse('http://100.128.0.1/x')), isFalse);
   });
 
   test(
