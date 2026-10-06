@@ -29,4 +29,15 @@ void main() {
     expect(restored.webSearchProvider, 'ddg');
     expect(restored.webSearchApiKey, isNull);
   });
+
+  test(
+    'copyWith clears webSearchApiKey on explicit null and keeps when omitted',
+    () {
+      final base = AppSettings().copyWith(webSearchApiKey: 'k123');
+      final cleared = base.copyWith(webSearchApiKey: null);
+      expect(cleared.webSearchApiKey, isNull);
+      final kept = base.copyWith(webToolsEnabled: true);
+      expect(kept.webSearchApiKey, 'k123');
+    },
+  );
 }

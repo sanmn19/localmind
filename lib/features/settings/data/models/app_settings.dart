@@ -180,7 +180,7 @@ class AppSettings {
     bool? locationToolsEnabled,
     bool? webToolsEnabled,
     String? webSearchProvider,
-    String? webSearchApiKey,
+    Object? webSearchApiKey = _unset,
     bool? autoCollapseThinking,
     bool? sendTemperature,
     bool? sendTopP,
@@ -259,7 +259,9 @@ class AppSettings {
       locationToolsEnabled: locationToolsEnabled ?? this.locationToolsEnabled,
       webToolsEnabled: webToolsEnabled ?? this.webToolsEnabled,
       webSearchProvider: webSearchProvider ?? this.webSearchProvider,
-      webSearchApiKey: webSearchApiKey ?? this.webSearchApiKey,
+      webSearchApiKey: identical(webSearchApiKey, _unset)
+          ? this.webSearchApiKey
+          : webSearchApiKey as String?,
       autoCollapseThinking: autoCollapseThinking ?? this.autoCollapseThinking,
       sendTemperature: sendTemperature ?? this.sendTemperature,
       sendTopP: sendTopP ?? this.sendTopP,
