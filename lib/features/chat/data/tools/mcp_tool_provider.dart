@@ -13,6 +13,11 @@ class McpToolProvider implements ToolProvider {
     final tools = <ToolDefinition>[];
     for (final label in serverManager.serverLabels) {
       final serverTools = serverManager.getTools(label);
+      if (serverTools.isEmpty) continue;
+      // providerRef carries the server URL (`local://web`,
+      // `local://example-mcp`, or a remote https URL) so ownership of a
+      // tool name can be attributed to a concrete server.
+      final providerRef = serverManager.getServerUrl(label) ?? label;
       for (final tool in serverTools) {
         tools.add(
           ToolDefinition(
@@ -20,7 +25,7 @@ class McpToolProvider implements ToolProvider {
             description: tool.description ?? '',
             inputSchema: tool.inputSchema,
             providerType: ToolProviderType.mcp,
-            providerRef: label,
+            providerRef: providerRef,
           ),
         );
       }

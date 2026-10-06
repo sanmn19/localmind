@@ -38,8 +38,11 @@ final availableToolsProvider = FutureProvider<List<ToolDefinition>>((
   return registry.listTools();
 });
 
-bool shouldAutoApproveTool(String toolName, bool webToolsEnabled) =>
-    webToolsEnabled && (toolName == 'web.search' || toolName == 'web.fetch');
+Future<bool> shouldAutoApproveTool(
+  String toolName,
+  bool webToolsEnabled,
+  ToolRegistry registry,
+) async => webToolsEnabled && await registry.isLocalWebTool(toolName);
 
 WebSearchProvider webSearchProviderFromName(String name) {
   switch (name) {

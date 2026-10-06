@@ -2294,9 +2294,10 @@ class ChatNotifier extends Notifier<ChatState> {
           adapter: adapter,
           registry: registry,
           onRequestApproval: (call) async {
-            if (shouldAutoApproveTool(
+            if (await shouldAutoApproveTool(
               call.name,
               ref.read(settingsProvider).webToolsEnabled,
+              registry,
             )) {
               return true;
             }
