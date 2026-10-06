@@ -11,7 +11,6 @@ import 'package:localmind/features/chat/data/chat_service.dart';
 import 'package:localmind/features/chat/data/models/chat_parameters.dart';
 import 'package:localmind/features/chat/data/models/message.dart'
     hide ToolCallData;
-import 'package:localmind/features/chat/data/models/mcp_integration.dart';
 import 'package:localmind/features/chat/data/tools/tool_definition.dart';
 import 'package:localmind/features/chat/data/tools/tool_registry.dart';
 import 'package:localmind/features/chat/providers/chat_mcp_providers.dart';
