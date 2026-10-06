@@ -59,6 +59,9 @@ class AppSettings {
   final bool showSystemMessagesInChat;
   final bool calendarToolsEnabled;
   final bool locationToolsEnabled;
+  final bool webToolsEnabled;
+  final String webSearchProvider;
+  final String? webSearchApiKey;
   final bool autoCollapseThinking;
 
   /// Whether `temperature` / `top_p` are sent to remote APIs. Some providers
@@ -118,6 +121,9 @@ class AppSettings {
     this.showSystemMessagesInChat = true,
     this.calendarToolsEnabled = false,
     this.locationToolsEnabled = false,
+    this.webToolsEnabled = false,
+    this.webSearchProvider = 'ddg',
+    this.webSearchApiKey,
     this.autoCollapseThinking = false,
     this.sendTemperature = true,
     this.sendTopP = true,
@@ -172,6 +178,9 @@ class AppSettings {
     bool? showSystemMessagesInChat,
     bool? calendarToolsEnabled,
     bool? locationToolsEnabled,
+    bool? webToolsEnabled,
+    String? webSearchProvider,
+    String? webSearchApiKey,
     bool? autoCollapseThinking,
     bool? sendTemperature,
     bool? sendTopP,
@@ -248,6 +257,9 @@ class AppSettings {
           showSystemMessagesInChat ?? this.showSystemMessagesInChat,
       calendarToolsEnabled: calendarToolsEnabled ?? this.calendarToolsEnabled,
       locationToolsEnabled: locationToolsEnabled ?? this.locationToolsEnabled,
+      webToolsEnabled: webToolsEnabled ?? this.webToolsEnabled,
+      webSearchProvider: webSearchProvider ?? this.webSearchProvider,
+      webSearchApiKey: webSearchApiKey ?? this.webSearchApiKey,
       autoCollapseThinking: autoCollapseThinking ?? this.autoCollapseThinking,
       sendTemperature: sendTemperature ?? this.sendTemperature,
       sendTopP: sendTopP ?? this.sendTopP,
@@ -304,6 +316,9 @@ class AppSettings {
       'showSystemMessagesInChat': showSystemMessagesInChat,
       'calendarToolsEnabled': calendarToolsEnabled,
       'locationToolsEnabled': locationToolsEnabled,
+      'webToolsEnabled': webToolsEnabled,
+      'webSearchProvider': webSearchProvider,
+      'webSearchApiKey': webSearchApiKey,
       'autoCollapseThinking': autoCollapseThinking,
       'sendTemperature': sendTemperature,
       'sendTopP': sendTopP,
@@ -364,6 +379,9 @@ class AppSettings {
       showSystemMessagesInChat: map['showSystemMessagesInChat'] ?? true,
       calendarToolsEnabled: map['calendarToolsEnabled'] ?? false,
       locationToolsEnabled: map['locationToolsEnabled'] ?? false,
+      webToolsEnabled: map['webToolsEnabled'] ?? false,
+      webSearchProvider: map['webSearchProvider'] as String? ?? 'ddg',
+      webSearchApiKey: map['webSearchApiKey'] as String?,
       autoCollapseThinking: map['autoCollapseThinking'] ?? false,
       sendTemperature: map['sendTemperature'] ?? true,
       sendTopP: map['sendTopP'] ?? true,
