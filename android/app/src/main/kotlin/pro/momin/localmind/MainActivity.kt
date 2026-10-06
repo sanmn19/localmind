@@ -1,5 +1,8 @@
 package pro.momin.localmind
 
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.ComponentName
+import android.view.accessibility.AccessibilityManager
 import androidx.annotation.NonNull
 import android.app.Activity
 import android.app.ActivityManager
@@ -10,7 +13,10 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
+import android.util.Log
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -23,6 +29,14 @@ class MainActivity : AudioServiceActivity() {
     private var assistantChannel: MethodChannel? = null
     private var pendingAssistantInvocation = false
     private var pendingRoleRequest: MethodChannel.Result? = null
+
+    // Assistant screen-capture staging: the capture is requested on the
+    // invocation itself so it reflects the screen the assistant was fired
+    // from, and the Dart side is told about it once the bitmap is on disk.
+    private var assistantScreenshotPath: String? = null
+    private var assistantScreenshotAwaited = false
+    private var assistantScreenshotTimeout: Runnable? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -102,7 +116,19 @@ class MainActivity : AudioServiceActivity() {
                     "consumePendingInvocation" -> {
                         val wasPending = pendingAssistantInvocation
                         pendingAssistantInvocation = false
-                        result.success(wasPending)
+                        if (wasPending && assistantScreenshotAwaited) {
+                            // A screenshot capture is still resolving; Dart
+                            // waits and the invocation arrives via a later
+                            // assistantInvoked push.
+                            result.success(mapOf("pending" to true, "screenshotPending" to true))
+                        } else {
+                            result.success(
+                                mapOf(
+                                    "pending" to wasPending,
+                                    "screenshotPath" to if (wasPending) assistantScreenshotPath else null
+                                )
+                            )
+                        }
                     }
                     "getAssistantStatus" -> result.success(getAssistantStatus())
                     "requestAssistantRole" -> requestAssistantRole(result)
@@ -113,6 +139,20 @@ class MainActivity : AudioServiceActivity() {
                             result.error(
                                 "assistant_settings_unavailable",
                                 "Android assistant settings are unavailable.",
+                                null
+                            )
+                        }
+                    }
+                    "isScreenshotCaptureEnabled" ->
+                        result.success(isAssistantScreenCaptureEnabled())
+                    "openScreenCaptureSettings" -> {
+                        try {
+                            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                            result.success(null)
+                        } catch (error: ActivityNotFoundException) {
+                            result.error(
+                                "accessibility_settings_unavailable",
+                                "Accessibility settings are unavailable.",
                                 null
                             )
                         }
@@ -135,24 +175,77 @@ class MainActivity : AudioServiceActivity() {
     }
 
     private fun captureAssistantInvocation(intent: Intent?) {
-        if (intent?.action == Intent.ACTION_ASSIST) {
-            pendingAssistantInvocation = true
+        if (intent?.action != Intent.ACTION_ASSIST) return
+        pendingAssistantInvocation = true
+        assistantScreenshotPath = null
+        assistantScreenshotAwaited = false
+        assistantScreenshotTimeout?.let { mainHandler.removeCallbacks(it) }
+        assistantScreenshotTimeout = null
+
+        val service = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            ScreenCaptureAccessibilityService.instance
+        } else {
+            null
         }
+        Log.i("LocalMindAssist", "Screen capture requested; service bound: ${service != null}")
+        if (service != null) {
+            assistantScreenshotAwaited = true
+            service.captureCurrentScreen { path ->
+                onAssistantScreenshotResolved(path)
+            }
+            assistantScreenshotTimeout = Runnable {
+                if (assistantScreenshotAwaited) {
+                    Log.w("LocalMindAssist", "Assistant screen capture timed out")
+                    onAssistantScreenshotResolved(null)
+                }
+            }.also { mainHandler.postDelayed(it, SCREENSHOT_TIMEOUT_MS) }
+            return
+        }
+        // No capture service (disabled or unsupported): deliver without a
+        // screenshot path right away.
+        deliverAssistantInvocation()
+    }
+
+    private fun onAssistantScreenshotResolved(path: String?) {
+        assistantScreenshotPath = path
+        assistantScreenshotAwaited = false
+        assistantScreenshotTimeout?.let { mainHandler.removeCallbacks(it) }
+        assistantScreenshotTimeout = null
+        deliverAssistantInvocation()
     }
 
     private fun deliverAssistantInvocation() {
-        if (!pendingAssistantInvocation) return
+        if (!pendingAssistantInvocation || assistantScreenshotAwaited) return
         val channel = assistantChannel ?: return
 
-        channel.invokeMethod("assistantInvoked", null, object : MethodChannel.Result {
-            override fun success(result: Any?) {
-                pendingAssistantInvocation = false
+        channel.invokeMethod(
+            "assistantInvoked",
+            mapOf("screenshotPath" to assistantScreenshotPath),
+            object : MethodChannel.Result {
+                override fun success(result: Any?) {
+                    // The Dart handler echoes a truthy ack. A null reply means
+                    // no Dart handler was attached yet; keep the invocation
+                    // pending so the app-start `consumePendingInvocation`
+                    // pull can still deliver it.
+                    if (result != null) {
+                        pendingAssistantInvocation = false
+                    }
+                }
+
+                override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) = Unit
+
+                override fun notImplemented() = Unit
             }
+        )
+    }
 
-            override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) = Unit
-
-            override fun notImplemented() = Unit
-        })
+    private fun isAssistantScreenCaptureEnabled(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false
+        val manager = getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
+        if (manager == null) return false
+        val expected = ComponentName(this, ScreenCaptureAccessibilityService::class.java).flattenToString()
+        return manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+            .any { it.id == expected }
     }
 
     private fun getAssistantStatus(): String {
@@ -231,5 +324,6 @@ class MainActivity : AudioServiceActivity() {
 
     companion object {
         private const val ASSISTANT_ROLE_REQUEST_CODE = 4101
+        private const val SCREENSHOT_TIMEOUT_MS = 2000L
     }
 }
