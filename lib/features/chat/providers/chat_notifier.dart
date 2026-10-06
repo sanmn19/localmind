@@ -55,6 +55,21 @@ class PendingToolApproval {
   PendingToolApproval({required this.toolCall, required this.completer});
 }
 
+/// What one turn's collected tool calls led to, shared by the first-turn
+/// send and multi-hop continuation streams. `finalMessage` is the finalized
+/// assistant message with the executed tool events merged in; when
+/// `followUpStarted` is true the follow-up stream owns the rest of the chain
+/// and the caller must bail out of its own post-stream bookkeeping.
+class CollectedToolCallsOutcome {
+  const CollectedToolCallsOutcome({
+    required this.finalMessage,
+    required this.followUpStarted,
+  });
+
+  final Message finalMessage;
+  final bool followUpStarted;
+}
+
 bool shouldIncludeMessageInChatContext(Message message) {
   if (message.role == MessageRole.assistant &&
       message.status == MessageStatus.error &&
@@ -1189,168 +1204,29 @@ class ChatNotifier extends Notifier<ChatState> {
                     session: session,
                   );
 
-                  if (mcpConfig.enabled && collectedToolCalls.isNotEmpty) {
-                    try {
-                      // Split collected tool calls into:
-                      //  - `serverExecuted`: calls whose output the server
-                      //    already populated (e.g. LM Studio's native
-                      //    /api/v1/chat runs MCP tools server-side). These
-                      //    must NOT be re-executed by the client.
-                      //  - `clientExecuted`: calls that arrived without
-                      //    output (OpenAI-compatible streaming tool calls).
-                      //    These are run by ToolExecutionLoop as before.
-                      final dedupedCalls = <String, ToolCallData>{};
-                      for (final tc in collectedToolCalls) {
-                        dedupedCalls[tc.tool] = tc;
-                      }
-                      final allCalls = dedupedCalls.values.toList();
-                      final serverExecuted = allCalls
-                          .where((tc) => tc.output != null)
-                          .toList();
-                      final clientExecuted = allCalls
-                          .where((tc) => tc.output == null)
-                          .toList();
-
-                      final toolEvents = <ToolEvent>[];
-
-                      if (serverExecuted.isNotEmpty) {
-                        final sessionId = DateTime.now().millisecondsSinceEpoch
-                            .toString();
-                        for (final tc in serverExecuted) {
-                          final eventId =
-                              '${sessionId}_1_${tc.tool}.server_executed';
-                          toolEvents.add(
-                            ToolEvent(
-                              eventId: eventId,
-                              timestamp: DateTime.now(),
-                              status: ToolEventStatus.completed,
-                              toolName: tc.tool,
-                              providerType: ToolProviderType.lmStudioServer,
-                              arguments: tc.arguments,
-                              result: tc.output,
-                            ),
-                          );
-                        }
-                      }
-
-                      if (clientExecuted.isNotEmpty && ref.mounted) {
-                        final registry = ref.read(toolRegistryProvider);
-                        final adapter = createAdapterForServerType(server.type);
-
-                        final preParsedCalls = clientExecuted
-                            .map(
-                              (tc) => ParsedToolCall(
-                                id: tc.tool,
-                                name: tc.tool,
-                                arguments: tc.arguments,
-                              ),
-                            )
-                            .toList();
-
-                        final loop = ToolExecutionLoop(
-                          adapter: adapter,
-                          registry: registry,
-                          onRequestApproval: (call) async {
-                            if (shouldAutoApproveTool(
-                              call.name,
-                              ref.read(settingsProvider).webToolsEnabled,
-                            )) {
-                              return true;
-                            }
-                            final completer = Completer<bool>();
-                            final approval = PendingToolApproval(
-                              toolCall: call,
-                              completer: completer,
-                            );
-                            _pendingToolApproval = approval;
-                            if (ref.mounted) {
-                              state = state.copyWith(
-                                pendingToolApproval: approval,
-                              );
-                            }
-
-                            final result = await completer.future;
-
-                            _pendingToolApproval = null;
-                            if (ref.mounted) {
-                              state = state.copyWith(
-                                clearPendingApproval: true,
-                              );
-                            }
-
-                            return result;
-                          },
-                        );
-
-                        final loopResult = await loop.run(
-                          initialUserMessage: content,
-                          assistantContent: streamingAssistantMessage.content,
-                          preParsedCalls: preParsedCalls,
-                        );
-
-                        if (loopResult.events.isNotEmpty) {
-                          toolEvents.addAll(loopResult.events);
-                        }
-                      }
-
-                      if (toolEvents.isNotEmpty) {
-                        finalMessage = finalMessage.copyWith(
-                          toolEvents: toolEvents,
-                        );
-                      }
-
-                      // After successful tool execution the chat must
-                      // continue: the model has emitted a tool call, the
-                      // client (or server) executed it, and now we need to
-                      // send a follow-up chat completion containing the
-                      // tool-role result(s) so the model can produce the
-                      // final answer. Without this, the conversation just
-                      // ends as soon as the tool returns — see issue #77.
-                      final completedResults = toolEvents
-                          .where((e) => e.status == ToolEventStatus.completed)
-                          .toList();
-                      if (ref.mounted && completedResults.isNotEmpty) {
-                        await _sendFollowupWithToolResults(
-                          previousAssistant: finalMessage,
-                          toolEvents: toolEvents,
-                          server: server,
-                          selectedModel: selectedModel,
-                          effectiveModelId: effectiveModelId,
-                          chatService: chatService,
-                          chatParams: chatParams,
-                          tools: tools,
-                          integrations: integrations,
-                          streamConvId: streamConvId,
-                          isCurrentContext: isCurrentContext,
-                        );
-                        // After the follow-up the original `finalMessage`
-                        // already contains its `toolEvents` and is on disk;
-                        // mark it as final and bail out of the rest of the
-                        // post-stream bookkeeping that was meant for the
-                        // first turn only.
-                        if (ref.mounted) {
-                          await _saveMessage(
-                            finalMessage,
-                            persist: session.persisted,
-                          );
-                          if (isCurrentContext) {
-                            _replaceMessageInState(
-                              finalMessage,
-                              clearStreaming: true,
-                            );
-                          }
-                        }
-                        return;
-                      }
-                    } catch (e) {
-                      Log.error('Tool execution loop failed: $e');
-                      // A follow-up that failed after registering its own
-                      // session must not leave it running forever.
-                      final followUp = _sessions[session.conversationId];
-                      if (followUp != null && !identical(followUp, session)) {
-                        await followUp.detach();
-                        _endSession(followUp);
-                      }
+                  final toolOutcome = await _executeCollectedToolCalls(
+                    collectedToolCalls: collectedToolCalls,
+                    finalizedMessage: finalMessage,
+                    mcpEnabled: mcpConfig.enabled,
+                    initialUserMessage: content,
+                    session: session,
+                    server: server,
+                    selectedModel: selectedModel,
+                    effectiveModelId: effectiveModelId,
+                    chatService: chatService,
+                    chatParams: chatParams,
+                    tools: tools,
+                    integrations: integrations,
+                    streamConvId: streamConvId,
+                    isCurrentContext: isCurrentContext,
+                  );
+                  if (toolOutcome != null) {
+                    finalMessage = toolOutcome.finalMessage;
+                    if (toolOutcome.followUpStarted) {
+                      // Tool calls executed and the follow-up stream now
+                      // owns the chain — bail out of the post-stream
+                      // bookkeeping that was meant for the first turn only.
+                      return;
                     }
                   }
 
@@ -2336,6 +2212,183 @@ class ChatNotifier extends Notifier<ChatState> {
     );
   }
 
+  /// Executes the tool calls collected from one assistant turn's stream.
+  /// The first send collects them locally; continuation streams collect
+  /// them on `session.collectedToolCalls`. Completed results are fed back
+  /// via `_sendFollowupWithToolResults` so multi-hop chains (search ->
+  /// fetch -> answer) keep running the model's next tool calls.
+  ///
+  /// Returns null when MCP is off or nothing was collected (caller proceeds
+  /// with its own bookkeeping), otherwise the possibly toolEvents-merged
+  /// final message plus `followUpStarted`.
+  Future<CollectedToolCallsOutcome?> _executeCollectedToolCalls({
+    required List<ToolCallData> collectedToolCalls,
+    required Message finalizedMessage,
+    required bool mcpEnabled,
+    required String initialUserMessage,
+    required GenerationSession session,
+    required Server server,
+    required ModelInfo? selectedModel,
+    required String effectiveModelId,
+    required ChatService chatService,
+    required ChatParameters chatParams,
+    required List<ToolDefinition> tools,
+    required List<McpIntegration>? integrations,
+    required String streamConvId,
+    required bool isCurrentContext,
+  }) async {
+    if (!mcpEnabled || collectedToolCalls.isEmpty) return null;
+
+    var finalMessage = finalizedMessage;
+    try {
+      // Split collected tool calls into:
+      //  - `serverExecuted`: calls whose output the server already
+      //    populated (e.g. LM Studio's native /api/v1/chat runs MCP tools
+      //    server-side). These must NOT be re-executed by the client.
+      //  - `clientExecuted`: calls that arrived without output
+      //    (OpenAI-compatible streaming tool calls). These are run by
+      //    ToolExecutionLoop as before.
+      final dedupedCalls = <String, ToolCallData>{};
+      for (final tc in collectedToolCalls) {
+        dedupedCalls[tc.tool] = tc;
+      }
+      final allCalls = dedupedCalls.values.toList();
+      final serverExecuted = allCalls.where((tc) => tc.output != null).toList();
+      final clientExecuted = allCalls.where((tc) => tc.output == null).toList();
+
+      final toolEvents = <ToolEvent>[];
+
+      if (serverExecuted.isNotEmpty) {
+        final sessionId = DateTime.now().millisecondsSinceEpoch.toString();
+        for (final tc in serverExecuted) {
+          final eventId = '${sessionId}_1_${tc.tool}.server_executed';
+          toolEvents.add(
+            ToolEvent(
+              eventId: eventId,
+              timestamp: DateTime.now(),
+              status: ToolEventStatus.completed,
+              toolName: tc.tool,
+              providerType: ToolProviderType.lmStudioServer,
+              arguments: tc.arguments,
+              result: tc.output,
+            ),
+          );
+        }
+      }
+
+      if (clientExecuted.isNotEmpty && ref.mounted) {
+        final registry = ref.read(toolRegistryProvider);
+        final adapter = createAdapterForServerType(server.type);
+
+        final preParsedCalls = clientExecuted
+            .map(
+              (tc) => ParsedToolCall(
+                id: tc.tool,
+                name: tc.tool,
+                arguments: tc.arguments,
+              ),
+            )
+            .toList();
+
+        final loop = ToolExecutionLoop(
+          adapter: adapter,
+          registry: registry,
+          onRequestApproval: (call) async {
+            if (shouldAutoApproveTool(
+              call.name,
+              ref.read(settingsProvider).webToolsEnabled,
+            )) {
+              return true;
+            }
+            final completer = Completer<bool>();
+            final approval = PendingToolApproval(
+              toolCall: call,
+              completer: completer,
+            );
+            _pendingToolApproval = approval;
+            if (ref.mounted) {
+              state = state.copyWith(pendingToolApproval: approval);
+            }
+
+            final result = await completer.future;
+
+            _pendingToolApproval = null;
+            if (ref.mounted) {
+              state = state.copyWith(clearPendingApproval: true);
+            }
+
+            return result;
+          },
+        );
+
+        final loopResult = await loop.run(
+          initialUserMessage: initialUserMessage,
+          assistantContent: finalMessage.content,
+          preParsedCalls: preParsedCalls,
+        );
+
+        if (loopResult.events.isNotEmpty) {
+          toolEvents.addAll(loopResult.events);
+        }
+      }
+
+      if (toolEvents.isNotEmpty) {
+        finalMessage = finalMessage.copyWith(toolEvents: toolEvents);
+      }
+
+      // After successful tool execution the chat must continue: the model
+      // has emitted a tool call, the client (or server) executed it, and now
+      // we need to send a follow-up chat completion containing the tool-role
+      // result(s) so the model can produce the final answer. Without this,
+      // the conversation just ends as soon as the tool returns — issue #77.
+      final completedResults = toolEvents
+          .where((e) => e.status == ToolEventStatus.completed)
+          .toList();
+      if (ref.mounted && completedResults.isNotEmpty) {
+        await _sendFollowupWithToolResults(
+          previousAssistant: finalMessage,
+          toolEvents: toolEvents,
+          server: server,
+          selectedModel: selectedModel,
+          effectiveModelId: effectiveModelId,
+          chatService: chatService,
+          chatParams: chatParams,
+          tools: tools,
+          integrations: integrations,
+          streamConvId: streamConvId,
+          isCurrentContext: isCurrentContext,
+        );
+        // After the follow-up the original `finalMessage` already contains
+        // its `toolEvents` and is on disk; mark it as final and bail out of
+        // the rest of the post-stream bookkeeping that was meant for the
+        // first turn only.
+        if (ref.mounted) {
+          await _saveMessage(finalMessage, persist: session.persisted);
+          if (isCurrentContext) {
+            _replaceMessageInState(finalMessage, clearStreaming: true);
+          }
+        }
+        return CollectedToolCallsOutcome(
+          finalMessage: finalMessage,
+          followUpStarted: true,
+        );
+      }
+    } catch (e) {
+      Log.error('Tool execution loop failed: $e');
+      // A follow-up that failed after registering its own session must not
+      // leave it running forever.
+      final followUp = _sessions[session.conversationId];
+      if (followUp != null && !identical(followUp, session)) {
+        await followUp.detach();
+        _endSession(followUp);
+      }
+    }
+    return CollectedToolCallsOutcome(
+      finalMessage: finalMessage,
+      followUpStarted: false,
+    );
+  }
+
   Future<void> _runAssistantStream(
     GenerationSession session,
     Message assistantMessage,
@@ -2497,6 +2550,17 @@ class ChatNotifier extends Notifier<ChatState> {
                     _endSession(session);
                   }
                   break;
+                case ChatResponseType.toolCall:
+                  // Multi-hop: a continuation stream can emit NEW tool
+                  // calls. Accumulate them on the session exactly like the
+                  // first send does, so onDone executes them instead of
+                  // silently dropping them.
+                  if (response.toolCall != null) {
+                    final calls = session.collectedToolCalls ??=
+                        <ToolCallData>[];
+                    calls.add(response.toolCall!);
+                  }
+                  break;
                 case ChatResponseType.done:
                   if (response.stats != null) {
                     session.stats = response.stats;
@@ -2517,7 +2581,7 @@ class ChatNotifier extends Notifier<ChatState> {
               final streamConvId = assistantMessage.conversationId;
               final isCurrentContext = _activeConversationId == streamConvId;
 
-              final finalMessage = _finalizeStreamMessage(
+              var finalMessage = _finalizeStreamMessage(
                 streamingAssistantMessage.copyWith(
                   status: MessageStatus.complete,
                   isProcessing: false,
@@ -2525,6 +2589,35 @@ class ChatNotifier extends Notifier<ChatState> {
                 stopReason: 'complete',
                 session: session,
               );
+
+              // Multi-hop: the continuation stream may have emitted NEW
+              // tool calls. Run the same shared tool-execution block the
+              // first send uses and, when its follow-up takes over the
+              // chain, bail out of this turn's own bookkeeping.
+              final toolOutcome = await _executeCollectedToolCalls(
+                collectedToolCalls:
+                    session.collectedToolCalls ?? const <ToolCallData>[],
+                finalizedMessage: finalMessage,
+                mcpEnabled: mcpConfig.enabled,
+                initialUserMessage: finalMessage.content,
+                session: session,
+                server: server,
+                selectedModel: selectedModel,
+                effectiveModelId: effectiveModelId,
+                chatService: chatService,
+                chatParams: chatParams,
+                tools: tools,
+                integrations: integrations,
+                streamConvId: streamConvId,
+                isCurrentContext: isCurrentContext,
+              );
+              if (toolOutcome != null) {
+                finalMessage = toolOutcome.finalMessage;
+                if (toolOutcome.followUpStarted) {
+                  return;
+                }
+              }
+
               await _saveMessage(finalMessage, persist: session.persisted);
               if (!ref.mounted) return;
               if (isCurrentContext) {
