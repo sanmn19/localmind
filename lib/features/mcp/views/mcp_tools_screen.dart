@@ -201,6 +201,8 @@ class McpToolsScreen extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           mcpCard,
+                          const SizedBox(height: 16),
+                          const _WebBrowserCard(),
                           if (settings.mcpEnabled) ...[
                             const SizedBox(height: 16),
                             _ConfiguredMcpServersCard(
@@ -612,6 +614,142 @@ Color _surfaceColor(BuildContext context) {
 
 Color _outlineColor(BuildContext context, {double alpha = 0.6}) {
   return ShadTheme.of(context).colorScheme.border.withValues(alpha: alpha);
+}
+
+class _WebBrowserCard extends ConsumerStatefulWidget {
+  const _WebBrowserCard();
+
+  @override
+  ConsumerState<_WebBrowserCard> createState() => __WebBrowserCardState();
+}
+
+class __WebBrowserCardState extends ConsumerState<_WebBrowserCard> {
+  static const _providerOptions = <String, String>{
+    'ddg': 'DuckDuckGo (no key)',
+    'tavily': 'Tavily',
+    'brave': 'Brave',
+    'serper': 'Serper',
+  };
+
+  final _apiKeyController = TextEditingController();
+  final _apiKeyFocusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _apiKeyController.text = ref.read(settingsProvider).webSearchApiKey ?? '';
+    _apiKeyFocusNode.addListener(_onApiKeyFocusChange);
+  }
+
+  @override
+  void dispose() {
+    _apiKeyFocusNode.removeListener(_onApiKeyFocusChange);
+    _apiKeyFocusNode.dispose();
+    _apiKeyController.dispose();
+    super.dispose();
+  }
+
+  void _onApiKeyFocusChange() {
+    // Most users dismiss the keyboard by tapping elsewhere rather than
+    // pressing a keyboard "done" action, which doesn't fire onSubmitted
+    // or onEditingComplete. Save on focus loss too so typed values apply.
+    if (!_apiKeyFocusNode.hasFocus) {
+      _saveApiKey();
+    }
+  }
+
+  void _saveApiKey() {
+    final key = _apiKeyController.text.trim();
+    if (key == (ref.read(settingsProvider).webSearchApiKey ?? '')) return;
+    ref
+        .read(settingsProvider.notifier)
+        .setWebSearchApiKey(key.isEmpty ? null : key);
+    ref.invalidate(availableToolsProvider);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final settings = ref.watch(settingsProvider);
+    final enabled = settings.webToolsEnabled;
+
+    return _McpSectionCard(
+      title: l10n.web_browser_card_title,
+      accent: const Color(0xFF0EA5E9),
+      icon: HugeIcons.strokeRoundedGlobe02,
+      trailing: ShadSwitch(
+        key: const Key('web_tools_toggle'),
+        value: enabled,
+        onChanged: (value) {
+          ref.read(settingsProvider.notifier).setWebToolsEnabled(value);
+          ref.invalidate(availableToolsProvider);
+        },
+      ),
+      children: [
+        Text(
+          l10n.web_browser_card_desc,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        Opacity(
+          opacity: enabled ? 1.0 : 0.55,
+          child: IgnorePointer(
+            ignoring: !enabled,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  l10n.web_search_provider,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                ShadSelect<String>(
+                  key: const Key('web_search_provider_select'),
+                  initialValue: settings.webSearchProvider,
+                  selectedOptionBuilder: (context, value) =>
+                      Text(_providerOptions[value] ?? value),
+                  options: [
+                    for (final entry in _providerOptions.entries)
+                      ShadOption(value: entry.key, child: Text(entry.value)),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    ref
+                        .read(settingsProvider.notifier)
+                        .setWebSearchProvider(value);
+                    ref.invalidate(availableToolsProvider);
+                  },
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  l10n.web_search_provider_key,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                ShadInput(
+                  key: const Key('web_search_api_key'),
+                  controller: _apiKeyController,
+                  focusNode: _apiKeyFocusNode,
+                  obscureText: true,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  placeholder: Text(l10n.web_search_key_hint),
+                  onSubmitted: (_) => _saveApiKey(),
+                  onEditingComplete: () => _saveApiKey(),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _ConfiguredMcpServersCard extends ConsumerStatefulWidget {

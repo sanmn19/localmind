@@ -24,7 +24,12 @@
     "builtin_ai_not_supported",
     "builtin_ai_unsupported_desc",
     "builtin_ai_unsupported_chip",
-    "builtin_ai_enable"
+    "builtin_ai_enable",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint"
   ],
 
   "bn": [
@@ -56,7 +61,12 @@
     "builtin_ai_not_supported",
     "builtin_ai_unsupported_desc",
     "builtin_ai_unsupported_chip",
-    "builtin_ai_enable"
+    "builtin_ai_enable",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint"
   ],
 
   "de": [
@@ -88,7 +98,12 @@
     "builtin_ai_not_supported",
     "builtin_ai_unsupported_desc",
     "builtin_ai_unsupported_chip",
-    "builtin_ai_enable"
+    "builtin_ai_enable",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint"
   ],
 
   "es": [
@@ -120,7 +135,12 @@
     "builtin_ai_not_supported",
     "builtin_ai_unsupported_desc",
     "builtin_ai_unsupported_chip",
-    "builtin_ai_enable"
+    "builtin_ai_enable",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint"
   ],
 
   "fr": [
@@ -152,7 +172,12 @@
     "builtin_ai_not_supported",
     "builtin_ai_unsupported_desc",
     "builtin_ai_unsupported_chip",
-    "builtin_ai_enable"
+    "builtin_ai_enable",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint"
   ],
 
   "hi": [
@@ -184,7 +209,12 @@
     "builtin_ai_not_supported",
     "builtin_ai_unsupported_desc",
     "builtin_ai_unsupported_chip",
-    "builtin_ai_enable"
+    "builtin_ai_enable",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint"
   ],
 
   "it": [
@@ -216,7 +246,12 @@
     "builtin_ai_not_supported",
     "builtin_ai_unsupported_desc",
     "builtin_ai_unsupported_chip",
-    "builtin_ai_enable"
+    "builtin_ai_enable",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint"
   ],
 
   "ja": [
@@ -248,7 +283,12 @@
     "builtin_ai_not_supported",
     "builtin_ai_unsupported_desc",
     "builtin_ai_unsupported_chip",
-    "builtin_ai_enable"
+    "builtin_ai_enable",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint"
   ],
 
   "ko": [
@@ -266,7 +306,12 @@
     "gguf_projector_url_hint",
     "gguf_vision_not_supported_error",
     "model_vision_support_label",
-    "model_vision_support_desc"
+    "model_vision_support_desc",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint"
   ],
 
   "pt": [
@@ -284,7 +329,12 @@
     "gguf_projector_url_hint",
     "gguf_vision_not_supported_error",
     "model_vision_support_label",
-    "model_vision_support_desc"
+    "model_vision_support_desc",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint"
   ],
 
   "ru": [
@@ -316,7 +366,12 @@
     "builtin_ai_not_supported",
     "builtin_ai_unsupported_desc",
     "builtin_ai_unsupported_chip",
-    "builtin_ai_enable"
+    "builtin_ai_enable",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint"
   ],
 
   "tr": [
@@ -348,7 +403,12 @@
     "builtin_ai_not_supported",
     "builtin_ai_unsupported_desc",
     "builtin_ai_unsupported_chip",
-    "builtin_ai_enable"
+    "builtin_ai_enable",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint"
   ],
 
   "zh": [
@@ -380,7 +440,12 @@
     "builtin_ai_not_supported",
     "builtin_ai_unsupported_desc",
     "builtin_ai_unsupported_chip",
-    "builtin_ai_enable"
+    "builtin_ai_enable",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint"
   ],
 
   "zh_TW": [
@@ -412,6 +477,11 @@
     "builtin_ai_not_supported",
     "builtin_ai_unsupported_desc",
     "builtin_ai_unsupported_chip",
-    "builtin_ai_enable"
+    "builtin_ai_enable",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint"
   ]
 }

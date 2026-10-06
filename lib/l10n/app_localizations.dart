@@ -6194,6 +6194,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'App'**
   String get sidebar_section_app;
+
+  /// No description provided for @web_browser_card_title.
+  ///
+  /// In en, this message translates to:
+  /// **'Web Browser'**
+  String get web_browser_card_title;
+
+  /// No description provided for @web_browser_card_desc.
+  ///
+  /// In en, this message translates to:
+  /// **'Gives models two tools: web.search and web.fetch. DuckDuckGo needs no key and is best-effort; Tavily / Brave / Serper keys are more reliable.'**
+  String get web_browser_card_desc;
+
+  /// No description provided for @web_search_provider.
+  ///
+  /// In en, this message translates to:
+  /// **'Search provider'**
+  String get web_search_provider;
+
+  /// No description provided for @web_search_provider_key.
+  ///
+  /// In en, this message translates to:
+  /// **'Provider API key'**
+  String get web_search_provider_key;
+
+  /// No description provided for @web_search_key_hint.
+  ///
+  /// In en, this message translates to:
+  /// **'API key…'**
+  String get web_search_key_hint;
 }
 
 class _AppLocalizationsDelegate

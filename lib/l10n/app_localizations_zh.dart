@@ -3258,6 +3258,22 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get sidebar_section_app => '应用';
+
+  @override
+  String get web_browser_card_title => 'Web Browser';
+
+  @override
+  String get web_browser_card_desc =>
+      'Gives models two tools: web.search and web.fetch. DuckDuckGo needs no key and is best-effort; Tavily / Brave / Serper keys are more reliable.';
+
+  @override
+  String get web_search_provider => 'Search provider';
+
+  @override
+  String get web_search_provider_key => 'Provider API key';
+
+  @override
+  String get web_search_key_hint => 'API key…';
 }
 
 /// The translations for Chinese, as used in Taiwan (`zh_TW`).

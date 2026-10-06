@@ -3523,5 +3523,10 @@
   "settings_group_composer": "Composer",
   "sidebar_section_chats": "Chats",
   "sidebar_section_models": "Models",
-  "sidebar_section_app": "App"
+  "sidebar_section_app": "App",
+  "web_browser_card_title": "Web Browser",
+  "web_browser_card_desc": "Gives models two tools: web.search and web.fetch. DuckDuckGo needs no key and is best-effort; Tavily / Brave / Serper keys are more reliable.",
+  "web_search_provider": "Search provider",
+  "web_search_provider_key": "Provider API key",
+  "web_search_key_hint": "API key…"
 }
