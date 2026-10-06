@@ -38,6 +38,8 @@ class McpToolsScreen extends ConsumerWidget {
     final topPadding = MediaQuery.of(context).padding.top;
     final bottomInset = bottomSystemInset(context);
 
+    ref.watch(webServerRegistrationProvider);
+
     return Column(
       children: [
         Container(

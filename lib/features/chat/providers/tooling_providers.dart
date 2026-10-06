@@ -5,6 +5,8 @@ import '../data/tools/builtin_tool_provider.dart';
 import '../data/tools/mcp_tool_provider.dart';
 import '../data/tools/tool_definition.dart';
 import '../data/mcp_server_manager.dart';
+import '../../mcp/data/web/web_fetch_service.dart';
+import '../../mcp/data/web/web_search_service.dart';
 
 final mcpServerManagerProvider = Provider<McpServerManager>((ref) {
   final packageInfo = ref.watch(packageInfoProvider);
@@ -34,4 +36,52 @@ final availableToolsProvider = FutureProvider<List<ToolDefinition>>((
 ) async {
   final registry = ref.watch(toolRegistryProvider);
   return registry.listTools();
+});
+
+bool shouldAutoApproveTool(String toolName, bool webToolsEnabled) =>
+    webToolsEnabled && (toolName == 'web.search' || toolName == 'web.fetch');
+
+WebSearchProvider webSearchProviderFromName(String name) {
+  switch (name) {
+    case 'tavily':
+      return WebSearchProvider.tavily;
+    case 'brave':
+      return WebSearchProvider.brave;
+    case 'serper':
+      return WebSearchProvider.serper;
+    default:
+      return WebSearchProvider.ddgLite;
+  }
+}
+
+/// Keeps the in-process web MCP server in step with the web tools setting.
+///
+/// A [Provider] only runs while it is being watched, so a UI surface that
+/// should keep the web server in sync MUST watch this provider:
+/// `ref.watch(webServerRegistrationProvider);` (used by the MCP tools
+/// screen). Rebuilds on any web-tools setting change and (de)registers the
+/// `web.search` / `web.fetch` server accordingly. It produces no state —
+/// watch it for its side effect.
+final webServerRegistrationProvider = Provider<void>((ref) {
+  final settings = ref.watch(settingsProvider);
+  final manager = ref.watch(mcpServerManagerProvider);
+  if (settings.webToolsEnabled) {
+    manager.addWebServer(
+      WebServices(
+        search: WebSearchService(
+          provider: webSearchProviderFromName(settings.webSearchProvider),
+          apiKey: settings.webSearchApiKey,
+        ),
+        fetch: WebFetchService(),
+      ),
+    );
+  } else if (manager.hasWebServer()) {
+    manager.removeServer(webMcpServerLabel);
+  }
+  ref.onDispose(() {
+    if (manager.hasWebServer()) {
+      // Not awaited — teardown best-effort.
+      manager.removeServer(webMcpServerLabel);
+    }
+  });
 });

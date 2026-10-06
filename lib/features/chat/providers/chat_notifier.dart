@@ -1251,6 +1251,12 @@ class ChatNotifier extends Notifier<ChatState> {
                           adapter: adapter,
                           registry: registry,
                           onRequestApproval: (call) async {
+                            if (shouldAutoApproveTool(
+                              call.name,
+                              ref.read(settingsProvider).webToolsEnabled,
+                            )) {
+                              return true;
+                            }
                             final completer = Completer<bool>();
                             final approval = PendingToolApproval(
                               toolCall: call,
