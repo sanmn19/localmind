@@ -1,9 +1,21 @@
 // ignore_for_file: prefer_initializing_formals
 
+import 'package:localmind/features/mcp/data/web/web_fetch_service.dart';
+import 'package:localmind/features/mcp/data/web/web_search_service.dart';
+
 import 'mcp_client.dart';
 
 const exampleMcpServerLabel = 'Example MCP';
 const exampleMcpServerUrl = 'local://example-mcp';
+
+const webMcpServerLabel = 'Web Browser';
+const webMcpServerUrl = 'local://web';
+
+class WebServices {
+  const WebServices({required this.search, required this.fetch});
+  final WebSearchService search;
+  final WebFetchService fetch;
+}
 
 class McpServerManager {
   final String _appVersion;
@@ -11,6 +23,7 @@ class McpServerManager {
   final Map<String, McpCapabilities> _capabilities = {};
   final Map<String, List<McpTool>> _tools = {};
   final Map<String, String> _serverUrls = {};
+  final Map<String, WebServices> _webServices = {};
   final Set<String> _localExampleServers = {};
   final Set<String> _pendingLabels = {};
 
@@ -58,6 +71,7 @@ class McpServerManager {
     _capabilities.remove(label);
     _tools.remove(label);
     _serverUrls.remove(label);
+    _webServices.remove(label);
     _localExampleServers.remove(label);
   }
 
@@ -99,11 +113,65 @@ class McpServerManager {
     _localExampleServers.add(exampleMcpServerLabel);
   }
 
+  Future<void> addWebServer(WebServices services) async {
+    await removeServer(webMcpServerLabel);
+
+    _webServices[webMcpServerLabel] = services;
+    _capabilities[webMcpServerLabel] = const McpCapabilities(tools: true);
+    _tools[webMcpServerLabel] = const [
+      McpTool(
+        name: 'web.search',
+        description:
+            'Search the web and return numbered results (title, url, snippet). '
+            'Prefer 1-2 precise queries over many broad ones.',
+        inputSchema: {
+          'type': 'object',
+          'properties': {
+            'query': {'type': 'string', 'description': 'The search query.'},
+            'max_results': {
+              'type': 'integer',
+              'description': 'How many results (1-8). Defaults to 6.',
+            },
+          },
+          'required': ['query'],
+        },
+      ),
+      McpTool(
+        name: 'web.fetch',
+        description:
+            'Fetch a web page URL and return its readable content as plain '
+            'text (title + body). Use after web.search or for URLs the user '
+            'provides.',
+        inputSchema: {
+          'type': 'object',
+          'properties': {
+            'url': {
+              'type': 'string',
+              'description': 'The http(s) URL to fetch.',
+            },
+            'max_chars': {
+              'type': 'integer',
+              'description':
+                  'Maximum characters of readable content (default 6000, '
+                  'max 8000).',
+            },
+          },
+          'required': ['url'],
+        },
+      ),
+    ];
+    _serverUrls[webMcpServerLabel] = webMcpServerUrl;
+  }
+
   bool hasServer(String label) =>
-      _clients.containsKey(label) || _localExampleServers.contains(label);
+      _clients.containsKey(label) ||
+      _localExampleServers.contains(label) ||
+      _webServices.containsKey(label);
 
   bool hasExampleServer() =>
       _localExampleServers.contains(exampleMcpServerLabel);
+
+  bool hasWebServer() => _webServices.containsKey(webMcpServerLabel);
 
   List<McpTool> getTools(String label) => _tools[label] ?? [];
 
@@ -118,6 +186,10 @@ class McpServerManager {
     String toolName,
     Map<String, dynamic> args,
   ) async {
+    if (_webServices.containsKey(serverLabel)) {
+      return _callWebTool(toolName, args);
+    }
+
     if (_localExampleServers.contains(serverLabel)) {
       return _callExampleTool(toolName, args);
     }
@@ -155,7 +227,49 @@ class McpServerManager {
     _capabilities.clear();
     _tools.clear();
     _serverUrls.clear();
+    _webServices.clear();
     _localExampleServers.clear();
+  }
+
+  Future<String> _callWebTool(
+    String toolName,
+    Map<String, dynamic> args,
+  ) async {
+    final services = _webServices[webMcpServerLabel];
+    if (services == null) {
+      throw McpException('MCP server not connected: $webMcpServerLabel');
+    }
+
+    switch (toolName) {
+      case 'web.search':
+        final query = args['query'];
+        if (query is! String) {
+          throw McpException('web.search requires a string query');
+        }
+        final rawMax = args['max_results'];
+        final maxResults = rawMax is int ? rawMax : 6;
+        final results = await services.search.search(
+          query,
+          maxResults: maxResults,
+        );
+        final lines = <String>[];
+        for (final (i, r) in results.indexed) {
+          lines.add('${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}');
+        }
+        return lines.join('\n');
+      case 'web.fetch':
+        final url = args['url'];
+        if (url is! String) {
+          throw McpException('web.fetch requires a string url');
+        }
+        final rawChars = args['max_chars'];
+        final maxChars = rawChars is int
+            ? rawChars.clamp(1, 8000).toInt()
+            : 6000;
+        return services.fetch.fetch(url, maxChars: maxChars);
+      default:
+        throw McpException('Web MCP tool not found: $toolName');
+    }
   }
 
   String _callExampleTool(String toolName, Map<String, dynamic> args) {
