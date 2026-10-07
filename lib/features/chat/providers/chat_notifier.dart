@@ -2369,6 +2369,16 @@ class ChatNotifier extends Notifier<ChatState> {
             _replaceMessageInState(finalMessage, clearStreaming: true);
           }
         }
+        // This turn's stream is done and the follow-up owns the chain on its
+        // own session — `_sendFollowupWithToolResults` already began it via
+        // `_beginSession`, which REPLACED this session's map entry (and
+        // detached it). End this turn's session once the handoff has
+        // happened: the `identical` guard in `_endSession` protects the
+        // newer follow-up session from being removed. Without this, a
+        // handoff that did not reach the follow-up's `_beginSession` (e.g.
+        // an unmounted notifier) would leave this session mapped forever.
+        _endSession(session);
+        session.latestMessage = null;
         return CollectedToolCallsOutcome(
           finalMessage: finalMessage,
           followUpStarted: true,
