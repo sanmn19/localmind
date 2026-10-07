@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:localmind/features/mcp/data/web/web_search_service.dart';
+import 'mcp_fixtures.dart';
 import 'stub_dio_adapter.dart';
 
 /// Test helper: results page accepted by the lite parser (one link+snippet).
@@ -175,7 +176,7 @@ void main() {
   );
 
   test(
-    'empty lite page falls back to html, then raises the block hint',
+    'ends the chain with the throttled hint when ddg fallback and ring fail',
     () async {
       final requested = <String>[];
       final dio = Dio()
@@ -195,12 +196,15 @@ void main() {
           isA<WebSearchBlockedException>().having(
             (e) => e.message,
             'message',
-            endsWith(blockHintTail),
+            'All web-search vendors are throttled right now — try again '
+                'shortly or configure a provider key',
           ),
         ),
       );
-      expect(requested, hasLength(2));
-      expect(requested[1], 'https://html.duckduckgo.com/html/?q=none');
+      expect(requested.sublist(0, 2), [
+        'https://lite.duckduckgo.com/lite/?q=none',
+        'https://html.duckduckgo.com/html/?q=none',
+      ]);
     },
   );
 
@@ -260,8 +264,13 @@ void main() {
     expect(sent.single.data, contains('"num"'));
   });
 
-  test('missing api key throws with provider hint', () async {
-    final dio = Dio()..httpClientAdapter = StubAdapter({});
+  test('keyed provider without a key defers to the keyless ring', () async {
+    final requested = <String>[];
+    final dio = Dio()
+      ..httpClientAdapter = StubAdapter(
+        {},
+        onRequest: (options) => requested.add(options.uri.toString()),
+      );
     final service = WebSearchService(
       provider: WebSearchProvider.tavily,
       dio: dio,
@@ -272,32 +281,42 @@ void main() {
         isA<WebSearchBlockedException>().having(
           (e) => e.message,
           'message',
-          'No API key configured for Tavily — configure one in Settings',
+          'All web-search vendors are throttled right now — try again '
+              'shortly or configure a provider key',
         ),
       ),
     );
+    expect(requested.where((u) => u.contains('tavily')), isEmpty);
   });
 
-  test('non-200 response throws Search failed', () async {
+  test('keyed provider failure rescues via the ring', () async {
+    final requested = <String>[];
     final dio = Dio()
-      ..httpClientAdapter = StubAdapter({
-        'https://api.tavily.com/search': StubResponse(500, '{}'),
-      });
+      ..httpClientAdapter = StubAdapter(
+        {'https://api.tavily.com/search': StubResponse(500, '{}')},
+        sequences: {
+          exaMcpUrl: [
+            StubResponse(
+              200,
+              sseEnvelope(0, mcpInitializeResult()),
+              headers: {
+                'mcp-session-id': ['sess-exa-1'],
+              },
+            ),
+            StubResponse(202, ''),
+            StubResponse(200, sseEnvelope(1, mcpTextResult(mcpPairText))),
+          ],
+        },
+        onRequest: (options) => requested.add(options.uri.toString()),
+      );
     final service = WebSearchService(
       provider: WebSearchProvider.tavily,
       apiKey: 'KEY',
       dio: dio,
     );
-    await expectLater(
-      () => service.search('q'),
-      throwsA(
-        isA<WebSearchBlockedException>().having(
-          (e) => e.message,
-          'message',
-          'Search failed: 500',
-        ),
-      ),
-    );
+    final results = await service.search('q');
+    expect(results.map((r) => r.title), ['Alpha', 'Beta']);
+    expect(requested.first, 'https://api.tavily.com/search');
   });
 
   test('clamps results to maxResults and caps at eight', () async {
@@ -507,44 +526,48 @@ void main() {
     ]);
   });
 
-  test('raises the block hint when lite and html are both blocked', () async {
-    final requested = <String>[];
-    final dio = Dio()
-      ..httpClientAdapter = StubAdapter({
-        'https://lite.duckduckgo.com/lite/?q=double': StubResponse(
-          200,
-          liteAnomalyBody(),
+  test(
+    'both ddg endpoints blocked and ring dead: throttled hint wins',
+    () async {
+      final requested = <String>[];
+      final dio = Dio()
+        ..httpClientAdapter = StubAdapter({
+          'https://lite.duckduckgo.com/lite/?q=double': StubResponse(
+            200,
+            liteAnomalyBody(),
+          ),
+          'https://html.duckduckgo.com/html/?q=double': StubResponse(
+            200,
+            liteAnomalyBody(),
+          ),
+        }, onRequest: (options) => requested.add(options.uri.toString()));
+      final service = WebSearchService(
+        provider: WebSearchProvider.ddgLite,
+        dio: dio,
+      );
+      await expectLater(
+        () => service.search('double'),
+        throwsA(
+          isA<WebSearchBlockedException>().having(
+            (e) => e.message,
+            'message',
+            'All web-search vendors are throttled right now — try again '
+                'shortly or configure a provider key',
+          ),
         ),
-        'https://html.duckduckgo.com/html/?q=double': StubResponse(
-          200,
-          liteAnomalyBody(),
-        ),
-      }, onRequest: (options) => requested.add(options.uri.toString()));
-    final service = WebSearchService(
-      provider: WebSearchProvider.ddgLite,
-      dio: dio,
-    );
-    await expectLater(
-      () => service.search('double'),
-      throwsA(
-        isA<WebSearchBlockedException>().having(
-          (e) => e.message,
-          'message',
-          endsWith(blockHintTail),
-        ),
-      ),
-    );
-    expect(requested, [
-      'https://lite.duckduckgo.com/lite/?q=double',
-      'https://html.duckduckgo.com/html/?q=double',
-    ]);
-  });
+      );
+      expect(requested.sublist(0, 2), [
+        'https://lite.duckduckgo.com/lite/?q=double',
+        'https://html.duckduckgo.com/html/?q=double',
+      ]);
+    },
+  );
 
   test(
-    'throws immediately during cooldown without network, then recovers',
+    'ddg cooldown suppresses only the ddg leg; the ring stays reachable',
     () async {
       var now = DateTime(2026, 1, 1);
-      var fetches = 0;
+      var ddgRequests = 0;
       final routes = {
         'https://lite.duckduckgo.com/lite/?q=cool': StubResponse(
           200,
@@ -556,7 +579,12 @@ void main() {
         ),
       };
       final dio = Dio()
-        ..httpClientAdapter = StubAdapter(routes, onRequest: (_) => fetches++);
+        ..httpClientAdapter = StubAdapter(
+          routes,
+          onRequest: (options) {
+            if (options.uri.host.endsWith('duckduckgo.com')) ddgRequests++;
+          },
+        );
       final service = WebSearchService(
         provider: WebSearchProvider.ddgLite,
         dio: dio,
@@ -567,21 +595,17 @@ void main() {
         () => service.search('cool'),
         throwsA(isA<WebSearchBlockedException>()),
       );
-      expect(fetches, 2);
+      expect(ddgRequests, 2);
 
       await expectLater(
         () => service.search('cool'),
-        throwsA(
-          isA<WebSearchBlockedException>().having(
-            (e) => e.message,
-            'message',
-            startsWith(
-              'search backoff active, try again shortly or configure a key',
-            ),
-          ),
-        ),
+        throwsA(isA<WebSearchBlockedException>()),
       );
-      expect(fetches, 2, reason: 'cooldown must short-circuit before network');
+      expect(
+        ddgRequests,
+        2,
+        reason: 'cooldown must short-circuit the ddg leg before any traffic',
+      );
 
       now = now.add(const Duration(seconds: 61));
       routes['https://html.duckduckgo.com/html/?q=cool'] = StubResponse(
@@ -590,33 +614,121 @@ void main() {
       );
       final recovered = await service.search('cool');
       expect(recovered, hasLength(2));
-      expect(fetches, 4);
+      expect(recovered.first.title, 'HTML Result A');
+      expect(
+        ddgRequests,
+        4,
+        reason: 'after the cooldown the ddg chain runs again',
+      );
+    },
+  );
 
-      now = now.add(const Duration(seconds: 5));
-      routes['https://lite.duckduckgo.com/lite/?q=cool2'] = StubResponse(
-        200,
-        liteAnomalyBody(),
+  test('auto provider runs the keyless ring first and skips ddg', () async {
+    final requested = <String>[];
+    final dio = Dio()
+      ..httpClientAdapter = StubAdapter(
+        {},
+        sequences: {
+          exaMcpUrl: [
+            StubResponse(
+              200,
+              sseEnvelope(0, mcpInitializeResult()),
+              headers: {
+                'mcp-session-id': ['sess-exa-1'],
+              },
+            ),
+            StubResponse(202, ''),
+            StubResponse(200, sseEnvelope(1, mcpTextResult(mcpPairText))),
+          ],
+        },
+        onRequest: (options) => requested.add(options.uri.toString()),
       );
-      routes['https://html.duckduckgo.com/html/?q=cool2'] = StubResponse(
-        200,
-        liteAnomalyBody(),
+    final service = WebSearchService(
+      provider: WebSearchProvider.auto,
+      dio: dio,
+    );
+    final results = await service.search('auto ring');
+    expect(results.map((r) => r.title), ['Alpha', 'Beta']);
+    expect(requested, everyElement(contains('mcp.exa.ai')));
+  });
+
+  test(
+    'auto falls through to the ddg chain when the ring is blocked',
+    () async {
+      final requested = <String>[];
+      final dio = Dio()
+        ..httpClientAdapter = StubAdapter(
+          {
+            'https://lite.duckduckgo.com/lite/?q=ringdown': StubResponse(
+              200,
+              liteOkBody,
+            ),
+          },
+          sequences: {
+            exaMcpUrl: [StubResponse(429, 'rate limit')],
+            parallelMcpUrl: [StubResponse(429, 'rate limit')],
+          },
+          onRequest: (options) => requested.add(options.uri.toString()),
+        );
+      final service = WebSearchService(
+        provider: WebSearchProvider.auto,
+        dio: dio,
+        clock: () => DateTime(2026, 1, 1),
+        jitterFor: () => Duration.zero,
       );
-      await expectLater(
-        () => service.search('cool2'),
-        throwsA(isA<WebSearchBlockedException>()),
+      final results = await service.search('ringdown');
+      expect(results.single.title, 'Ok');
+      expect(requested, [
+        exaMcpUrl,
+        parallelMcpUrl,
+        'https://lite.duckduckgo.com/lite/?q=ringdown',
+      ]);
+    },
+  );
+
+  test(
+    "'ddg' chain is rescued by the ring when both endpoints block",
+    () async {
+      final requested = <String>[];
+      final dio = Dio()
+        ..httpClientAdapter = StubAdapter(
+          {
+            'https://lite.duckduckgo.com/lite/?q=annoyed': StubResponse(
+              200,
+              liteAnomalyBody(),
+            ),
+            'https://html.duckduckgo.com/html/?q=annoyed': StubResponse(
+              200,
+              liteAnomalyBody(),
+            ),
+          },
+          sequences: {
+            exaMcpUrl: [
+              StubResponse(
+                200,
+                sseEnvelope(0, mcpInitializeResult()),
+                headers: {
+                  'mcp-session-id': ['sess-exa-1'],
+                },
+              ),
+              StubResponse(202, ''),
+              StubResponse(200, sseEnvelope(1, mcpTextResult(mcpPairText))),
+            ],
+          },
+          onRequest: (options) => requested.add(options.uri.toString()),
+        );
+      final service = WebSearchService(
+        provider: WebSearchProvider.ddgLite,
+        dio: dio,
+        clock: () => DateTime(2026, 1, 1),
+        jitterFor: () => Duration.zero,
       );
-      expect(fetches, 6);
-      await expectLater(
-        () => service.search('cool2'),
-        throwsA(
-          isA<WebSearchBlockedException>().having(
-            (e) => e.message,
-            'message',
-            contains('suppressed searches: 1'),
-          ),
-        ),
-      );
-      expect(fetches, 6, reason: 'counter reset on success: fresh cooldown');
+      final results = await service.search('annoyed');
+      expect(results.map((r) => r.title), ['Alpha', 'Beta']);
+      expect(requested.sublist(0, 2), [
+        'https://lite.duckduckgo.com/lite/?q=annoyed',
+        'https://html.duckduckgo.com/html/?q=annoyed',
+      ]);
     },
   );
 }

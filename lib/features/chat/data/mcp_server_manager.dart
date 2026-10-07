@@ -274,7 +274,10 @@ class McpServerManager {
         );
         final lines = <String>[];
         for (final (i, r) in results.indexed) {
-          lines.add('${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}');
+          // Unlinked rows (e.g. unstructured ring fallbacks) carry no url —
+          // render them as title + snippet only instead of an empty line.
+          final urlLine = r.url.isEmpty ? '' : '\n   ${r.url}';
+          lines.add("${i + 1}. ${r.title}$urlLine\n   ${r.snippet}");
         }
         return lines.join('\n');
       case 'web.fetch':

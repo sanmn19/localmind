@@ -146,6 +146,8 @@ void main() {
       expect(webSearchProviderFromName('tavily'), WebSearchProvider.tavily);
       expect(webSearchProviderFromName('brave'), WebSearchProvider.brave);
       expect(webSearchProviderFromName('serper'), WebSearchProvider.serper);
+      expect(webSearchProviderFromName('ring'), WebSearchProvider.keylessRing);
+      expect(webSearchProviderFromName('auto'), WebSearchProvider.auto);
     });
 
     test('unknown or blank names fall back to ddgLite', () {

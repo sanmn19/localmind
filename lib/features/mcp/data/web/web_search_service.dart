@@ -5,6 +5,8 @@ import 'package:dio/dio.dart';
 import 'package:html/dom.dart';
 import 'package:html/parser.dart' as parser;
 
+import 'keyless_mcp_ring.dart';
+
 const webChromeUserAgent =
     'Mozilla/5.0 (Linux; Android 10; K) '
     'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
@@ -36,7 +38,20 @@ const _ddgChainBlockedMessage =
     'endpoints — configure a search provider key in Settings → Tools → Web '
     'Browser for reliable results';
 
-enum WebSearchProvider { ddgLite, tavily, brave, serper }
+/// Search provider chains (Amendment 1: keyless rings survive device-level
+/// bot blocks):
+///
+/// - [auto] (the settings default): the anonymous keyless MCP ring (exa →
+///   parallel) first, then the DDG lite→html chain.
+/// - [keylessRing]: only the anonymous ring.
+/// - Keyed vendors (tavily/brave/serper) with an API key: that vendor first,
+///   the ring as rescue; without a key the ring runs alone.
+/// - [ddgLite] (explicit 'ddg'): the DDG chain first, ring as rescue.
+enum WebSearchProvider { ddgLite, tavily, brave, serper, keylessRing, auto }
+
+/// One chain link: serves the query or throws [WebSearchBlockedException].
+typedef _ChainAttempt =
+    Future<List<WebSearchResult>> Function(String query, int limit);
 
 class WebSearchResult {
   final String title;
@@ -59,13 +74,19 @@ class WebSearchService {
     Dio? dio,
     DateTime Function()? clock,
     Duration Function()? jitterFor,
-  }) : dio = dio ?? Dio(),
-       _clock = clock ?? DateTime.now,
-       _jitterFor = jitterFor ?? _defaultJitter;
+    KeylessMcpRing? ring,
+  }) : _clock = clock ?? DateTime.now,
+       _jitterFor = jitterFor ?? _defaultJitter {
+    this.dio = dio ?? Dio();
+    this.ring = ring ?? KeylessMcpRing(dio: this.dio, clock: _clock);
+  }
 
   final WebSearchProvider provider;
   final String? apiKey;
-  final Dio dio;
+  // Assigned in the constructor body so the ring can share the same Dio
+  // instance when both are defaulted.
+  late final Dio dio;
+  late final KeylessMcpRing ring;
   final DateTime Function() _clock;
   final Duration Function() _jitterFor;
 
@@ -123,6 +144,56 @@ class WebSearchService {
     int maxResults = 6,
   }) async {
     final limit = maxResults.clamp(1, 8).toInt();
+    final cacheKey = '${provider.name}/${_normalize(query)}/$limit';
+    final cached = _takeFromCache(cacheKey);
+    if (cached != null) return cached;
+    await _pace();
+    WebSearchBlockedException? lastError;
+    for (final attempt in _resolveChain()) {
+      try {
+        return _store(cacheKey, await attempt(query, limit));
+      } on WebSearchBlockedException catch (error) {
+        lastError = error;
+      } on DioException catch (error) {
+        final status = error.response?.statusCode ?? error.type.name;
+        lastError = WebSearchBlockedException('Search failed: $status');
+      }
+    }
+    // Chain end: surface the last link's failure to the model.
+    throw lastError ?? WebSearchBlockedException('search failed');
+  }
+
+  // Amendment 1 resolution: auto runs ring→ddg; explicit keyed providers run
+  // themselves first with the ring as rescue; a keyed provider without a key
+  // falls straight to the ring; explicit ddg is rescued by the ring; ring is
+  // ring-only.
+  List<_ChainAttempt> _resolveChain() {
+    switch (provider) {
+      case WebSearchProvider.auto:
+        return [_ringAttempt, _ddgAttempt];
+      case WebSearchProvider.keylessRing:
+        return [_ringAttempt];
+      case WebSearchProvider.ddgLite:
+        return [_ddgAttempt, _ringAttempt];
+      case WebSearchProvider.tavily:
+        return _keyedChain((query, limit) => _searchTavily(query, limit));
+      case WebSearchProvider.brave:
+        return _keyedChain((query, limit) => _searchBrave(query, limit));
+      case WebSearchProvider.serper:
+        return _keyedChain((query, limit) => _searchSerper(query, limit));
+    }
+  }
+
+  List<_ChainAttempt> _keyedChain(_ChainAttempt request) =>
+      apiKey == null ? [_ringAttempt] : [request, _ringAttempt];
+
+  Future<List<WebSearchResult>> _ringAttempt(String query, int limit) =>
+      ring.search(query, numResults: limit);
+
+  // The ddg chain keeps its block cooldown: a fully blocked lite→html run
+  // arms it so a model retry loop cannot hammer DDG right after anomaly
+  // detection triggered. Only this leg is suppressed; the ring stays usable.
+  Future<List<WebSearchResult>> _ddgAttempt(String query, int limit) async {
     if (_blockedUntil != null && _clock().isBefore(_blockedUntil!)) {
       _suppressedSearches += 1;
       throw WebSearchBlockedException(
@@ -130,37 +201,12 @@ class WebSearchService {
         'configure a key (suppressed searches: $_suppressedSearches)',
       );
     }
-    final cacheKey = '${provider.name}/${_normalize(query)}/$limit';
-    final cached = _takeFromCache(cacheKey);
-    if (cached != null) return cached;
-    await _pace();
     try {
-      final results = switch (provider) {
-        WebSearchProvider.ddgLite => (await _searchDdgWithFallback(
-          query,
-        )).take(limit).toList(),
-        WebSearchProvider.tavily => await _searchTavily(query, limit),
-        WebSearchProvider.brave => await _searchBrave(query, limit),
-        WebSearchProvider.serper => await _searchSerper(query, limit),
-      };
-      return _store(cacheKey, results);
+      return (await _searchDdgWithFallback(query)).take(limit).toList();
     } on DioException catch (error) {
       final status = error.response?.statusCode ?? error.type.name;
       throw WebSearchBlockedException('Search failed: $status');
     }
-  }
-
-  void _requireKey() {
-    if (apiKey != null) return;
-    final displayName = switch (provider) {
-      WebSearchProvider.tavily => 'Tavily',
-      WebSearchProvider.brave => 'Brave',
-      WebSearchProvider.serper => 'Serper',
-      WebSearchProvider.ddgLite => 'DuckDuckGo Lite',
-    };
-    throw WebSearchBlockedException(
-      'No API key configured for $displayName — configure one in Settings',
-    );
   }
 
   // Keyless chain: lite first, then the html endpoint. Two anomalies in a
@@ -301,7 +347,6 @@ class WebSearchService {
   String _collapse(String text) => text.replaceAll(RegExp(r'\s+'), ' ').trim();
 
   Future<List<WebSearchResult>> _searchTavily(String query, int limit) async {
-    _requireKey();
     final response = await dio.post<dynamic>(
       'https://api.tavily.com/search',
       data: jsonEncode({
@@ -323,7 +368,6 @@ class WebSearchService {
   }
 
   Future<List<WebSearchResult>> _searchBrave(String query, int limit) async {
-    _requireKey();
     final response = await dio.get<dynamic>(
       'https://api.search.brave.com/res/v1/web/search',
       queryParameters: {'q': query, 'count': limit},
@@ -341,7 +385,6 @@ class WebSearchService {
   }
 
   Future<List<WebSearchResult>> _searchSerper(String query, int limit) async {
-    _requireKey();
     final response = await dio.post<dynamic>(
       'https://google.serper.dev/search',
       data: jsonEncode({'q': query, 'num': limit}),

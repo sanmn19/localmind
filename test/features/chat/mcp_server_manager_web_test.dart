@@ -4,9 +4,11 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:localmind/features/chat/data/mcp_client.dart';
 import 'package:localmind/features/chat/data/mcp_server_manager.dart';
+import 'package:localmind/features/mcp/data/web/keyless_mcp_ring.dart';
 import 'package:localmind/features/mcp/data/web/web_fetch_service.dart';
 import 'package:localmind/features/mcp/data/web/web_search_service.dart';
 
+import '../mcp/web/mcp_fixtures.dart';
 import '../mcp/web/stub_dio_adapter.dart';
 
 void main() {
@@ -165,6 +167,82 @@ void main() {
       () => manager.callTool(webMcpServerLabel, 'web.nope', {}),
       throwsA(isA<McpException>()),
     );
+  });
+
+  test('web.search surfaces keyless ring results end-to-end', () async {
+    final ringDio = Dio()
+      ..httpClientAdapter = StubAdapter(
+        {},
+        sequences: {
+          exaMcpUrl: [
+            StubResponse(
+              200,
+              sseEnvelope(0, mcpInitializeResult()),
+              headers: {
+                'mcp-session-id': ['sess-exa-1'],
+              },
+            ),
+            StubResponse(202, ''),
+            StubResponse(200, sseEnvelope(1, mcpTextResult(mcpPairText))),
+          ],
+        },
+      );
+    final manager = McpServerManager();
+    await manager.addWebServer(
+      WebServices(
+        search: WebSearchService(
+          provider: WebSearchProvider.auto,
+          ring: KeylessMcpRing(dio: ringDio),
+        ),
+        fetch: WebFetchService(),
+      ),
+    );
+
+    final output = await manager.callTool(webMcpServerLabel, 'web.search', {
+      'query': 'ring results',
+    });
+    expect(output, startsWith('1. Alpha'));
+    expect(output, contains('https://a.example/one'));
+    expect(output, contains('first snippet line 1 first snippet line 2'));
+    expect(output, contains('https://a.example/two'));
+  });
+
+  test('unstructured ring rows render without an empty url line', () async {
+    final ringDio = Dio()
+      ..httpClientAdapter = StubAdapter(
+        {},
+        sequences: {
+          exaMcpUrl: [
+            StubResponse(
+              200,
+              sseEnvelope(0, mcpInitializeResult()),
+              headers: {
+                'mcp-session-id': ['sess-exa-1'],
+              },
+            ),
+            StubResponse(202, ''),
+            StubResponse(
+              200,
+              sseEnvelope(1, mcpTextResult('_unstructured body_')),
+            ),
+          ],
+        },
+      );
+    final manager = McpServerManager();
+    await manager.addWebServer(
+      WebServices(
+        search: WebSearchService(
+          provider: WebSearchProvider.auto,
+          ring: KeylessMcpRing(dio: ringDio),
+        ),
+        fetch: WebFetchService(),
+      ),
+    );
+
+    final output = await manager.callTool(webMcpServerLabel, 'web.search', {
+      'query': 'unstructured',
+    });
+    expect(output, '1. Results\n   _unstructured body_');
   });
 
   test('removeServer and clear clean the web registry', () async {

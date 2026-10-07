@@ -1,13 +1,18 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:localmind/features/chat/providers/tooling_providers.dart';
+import 'package:localmind/features/mcp/data/web/web_search_service.dart';
 import 'package:localmind/features/settings/data/models/app_settings.dart';
 
 void main() {
-  test('web tool settings default to disabled and duckduckgo', () {
-    final settings = AppSettings();
-    expect(settings.webToolsEnabled, isFalse);
-    expect(settings.webSearchProvider, 'ddg');
-    expect(settings.webSearchApiKey, isNull);
-  });
+  test(
+    'web tool settings default to disabled with the auto provider chain',
+    () {
+      final settings = AppSettings();
+      expect(settings.webToolsEnabled, isFalse);
+      expect(settings.webSearchProvider, 'auto');
+      expect(settings.webSearchApiKey, isNull);
+    },
+  );
 
   test('web tool settings survive toMap/fromMap round-trip', () {
     final settings = AppSettings().copyWith(
@@ -26,8 +31,17 @@ void main() {
   test('fromMap tolerates missing web fields (upgrade path)', () {
     final restored = AppSettings.fromMap({'themeMode': 2});
     expect(restored.webToolsEnabled, isFalse);
-    expect(restored.webSearchProvider, 'ddg');
+    expect(restored.webSearchProvider, 'auto');
     expect(restored.webSearchApiKey, isNull);
+  });
+
+  test('fromMap keeps legacy ddg values after the auto upgrade', () {
+    final restored = AppSettings.fromMap({'webSearchProvider': 'ddg'});
+    expect(restored.webSearchProvider, 'ddg');
+    expect(
+      webSearchProviderFromName(restored.webSearchProvider),
+      WebSearchProvider.ddgLite,
+    );
   });
 
   test(

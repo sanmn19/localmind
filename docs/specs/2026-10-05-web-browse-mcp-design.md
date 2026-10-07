@@ -75,3 +75,19 @@ caching, pagination.
   header assertions; private-IP block; registry wiring; continuation
   tool-call collection.
 - Device: search+fetch on the S23 chat; no-approval flow; per-chat gating.
+
+## Amendment 1 (2026-10-07): keyless rings after device-validated blocks
+
+On-device testing showed DDG blocks after ~10 calls. The proven pattern
+(reference: hermes-agent's keyless_mcp ring) is layered anonymous vendors
+behind browser-grade headers with rotate-on-ratelimit:
+
+- `web_search`: [user-keyed provider (tavily/brave/serper)] → keyless ring
+  (exa MCP `web_search_exa` → parallel MCP `web_search`; anonymous, session
+  via `Mcp-Session-Id`, rotate cursor on rate-limit-shaped failures) →
+  ddgLite → ddg html. New DEFAULT provider setting: `auto` (the chain above);
+  explicit provider settings still honored as the FIRST choice.
+- `web_fetch`: direct fetch (Chrome UA) → on 403/bot-detection → exa MCP
+  `web_fetch_exa` (server-rendered) → ERROR text.
+- Ring state (sessions, cursor, cooldown) lives per-service instance inside
+  the manager's registration, stateless across app restarts.

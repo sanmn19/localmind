@@ -625,6 +625,8 @@ class _WebBrowserCard extends ConsumerStatefulWidget {
 
 class __WebBrowserCardState extends ConsumerState<_WebBrowserCard> {
   static const _providerOptions = <String, String>{
+    'auto': 'Auto (keyless ring → DDG)',
+    'ring': 'Keyless ring (exa/parallel)',
     'ddg': 'DuckDuckGo (no key)',
     'tavily': 'Tavily',
     'brave': 'Brave',

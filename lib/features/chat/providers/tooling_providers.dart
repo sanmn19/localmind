@@ -52,6 +52,10 @@ WebSearchProvider webSearchProviderFromName(String name) {
       return WebSearchProvider.brave;
     case 'serper':
       return WebSearchProvider.serper;
+    case 'ring':
+      return WebSearchProvider.keylessRing;
+    case 'auto':
+      return WebSearchProvider.auto;
     default:
       return WebSearchProvider.ddgLite;
   }
