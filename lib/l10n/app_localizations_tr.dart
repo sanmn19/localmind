@@ -2370,6 +2370,20 @@ class AppLocalizationsTr extends AppLocalizations {
   String get tool_status_failed => 'Başarısız';
 
   @override
+  String get tool_activity_title => 'Web activity';
+
+  @override
+  String tool_activity_calls(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count calls',
+      one: '$count call',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get model_favorite_toggle => 'Toggle favorite';
 
   @override

@@ -4,10 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:localmind/core/models/enums.dart';
 import 'package:localmind/core/providers/app_providers.dart';
 import 'package:localmind/features/chat/data/models/message.dart';
+import 'package:localmind/features/chat/data/tool_activity_grouping.dart';
 import 'package:localmind/features/chat/providers/chat_providers.dart';
 import 'package:localmind/features/conversations/providers/conversation_providers.dart';
 import 'package:localmind/l10n/app_localizations.dart';
 import '../chat_bubble.dart';
+import 'components/tool_activity_block.dart';
 
 class MessageList extends StatelessWidget {
   const MessageList({
@@ -273,6 +275,31 @@ class _MessageList extends ConsumerWidget {
     final showTrailingStreamingBubble =
         streamingBelongsToActiveTimeline && isStreaming;
 
+    // Multi-round tool chains resolve into their newest round only; the
+    // per-round activity (searches, fetches, thinking) is consolidated into
+    // one "Web activity" card rendered above the answering tail. Rows whose
+    // parent assistant turn got resolved into a block disappear from the
+    // list; anything else (orphan tool rows) keeps its original rendering.
+    final blockByMessageId = <String, ToolActivitySnapshot>{};
+    final consumedToolRowIds = <String>{};
+    for (final message in visibleMessages) {
+      if (message.role != MessageRole.assistant) continue;
+      final snapshot = toolActivityForChain(allMessages, message);
+      if (snapshot == null) continue;
+      blockByMessageId[message.id] = snapshot;
+      for (final row in chainToolMessages(allMessages, message)) {
+        consumedToolRowIds.add(row.id);
+      }
+    }
+
+    final timeline = visibleMessages
+        .where(
+          (message) =>
+              !(message.role == MessageRole.tool &&
+                  consumedToolRowIds.contains(message.id)),
+        )
+        .toList();
+
     return ListView.builder(
       controller: scrollController,
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -280,21 +307,36 @@ class _MessageList extends ConsumerWidget {
         top: 16,
         bottom: 120 + (hasSmartReplies ? 64 : 0) + bottomInset,
       ),
-      itemCount: visibleMessages.length + (showTrailingStreamingBubble ? 1 : 0),
+      itemCount: timeline.length + (showTrailingStreamingBubble ? 1 : 0),
       itemBuilder: (context, index) {
-        if (showTrailingStreamingBubble && index == visibleMessages.length) {
-          return ChatBubble(
-            key: ValueKey(streamingMessage!.id),
-            message: streamingMessage!,
+        if (showTrailingStreamingBubble && index == timeline.length) {
+          final live = streamingMessage!;
+          final streamingSnapshot = live.role == MessageRole.assistant
+              ? toolActivityForChain(allMessages, live)
+              : null;
+          final bubble = ChatBubble(
+            key: ValueKey(live.id),
+            message: live,
             allMessages: allMessages,
             isStreaming: true,
             onModelTap: onModelPicker,
+            showReasoning: streamingSnapshot?.reasoning?.isNotEmpty != true,
+          );
+          if (streamingSnapshot == null) return bubble;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ToolActivityBlock(snapshot: streamingSnapshot),
+              bubble,
+            ],
           );
         }
 
-        final message = visibleMessages[index];
-        final isLast = index == visibleMessages.length - 1;
+        final message = timeline[index];
+        final isLast = index == timeline.length - 1;
         final itemKey = messageKeys.putIfAbsent(message.id, GlobalKey.new);
+        final snapshot = blockByMessageId[message.id];
+        final showsThinking = snapshot?.reasoning?.isNotEmpty == true;
 
         final bubble = ChatBubble(
           key: itemKey,
@@ -304,6 +346,7 @@ class _MessageList extends ConsumerWidget {
               isLast &&
               showTrailingStreamingBubble &&
               message.id == streamingMessage?.id,
+          showReasoning: !showsThinking,
           onRetry: () => onRetry(message.id),
           onDelete: () => onDelete(message.id),
           onEdit: message.role == MessageRole.user
@@ -326,6 +369,15 @@ class _MessageList extends ConsumerWidget {
           onSave: onSave,
           onShare: onShare == null ? null : () => onShare!(message),
         );
+        final wrappedBubble = snapshot == null
+            ? bubble
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ToolActivityBlock(snapshot: snapshot),
+                  bubble,
+                ],
+              );
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -340,11 +392,11 @@ class _MessageList extends ConsumerWidget {
                         .read(selectedMessageIdsProvider.notifier)
                         .toggle(message.id),
                   ),
-                  Expanded(child: bubble),
+                  Expanded(child: wrappedBubble),
                 ],
               )
             else
-              bubble,
+              wrappedBubble,
             if (!isStreaming &&
                 isLast &&
                 message.role == MessageRole.user &&

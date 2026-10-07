@@ -4401,6 +4401,18 @@ abstract class AppLocalizations {
   /// **'Failed'**
   String get tool_status_failed;
 
+  /// Header of the collapsed card summarizing a tool chain's web searches and fetches
+  ///
+  /// In en, this message translates to:
+  /// **'Web activity'**
+  String get tool_activity_title;
+
+  /// Badge counting the tool calls inside the web activity card
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{{count} call} other{{count} calls}}'**
+  String tool_activity_calls(int count);
+
   /// Long-press menu option to favorite a model
   ///
   /// In en, this message translates to:

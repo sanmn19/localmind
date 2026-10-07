@@ -24,6 +24,7 @@ class ChatBubble extends StatelessWidget {
     this.onSave,
     this.onShare,
     this.isStreaming = false,
+    this.showReasoning = true,
   });
 
   final Message message;
@@ -40,6 +41,7 @@ class ChatBubble extends StatelessWidget {
   final void Function(Message message)? onSave;
   final VoidCallback? onShare;
   final bool isStreaming;
+  final bool showReasoning;
 
   @override
   Widget build(BuildContext context) {
@@ -81,6 +83,7 @@ class ChatBubble extends StatelessWidget {
             onSave: onSave,
             onShare: onShare,
             isStreaming: isStreaming,
+            showReasoning: showReasoning,
           ),
         );
       case MessageRole.system:
