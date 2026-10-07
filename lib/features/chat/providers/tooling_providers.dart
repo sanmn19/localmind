@@ -5,9 +5,18 @@ import '../data/tools/builtin_tool_provider.dart';
 import '../data/tools/mcp_tool_provider.dart';
 import '../data/tools/tool_definition.dart';
 import '../data/mcp_server_manager.dart';
+import '../data/tool_budget.dart';
 import '../../mcp/data/web/keyless_mcp_ring.dart';
 import '../../mcp/data/web/web_fetch_service.dart';
 import '../../mcp/data/web/web_search_service.dart';
+
+/// Per-turn web-tool budgets, owning state in the notifier's tool path.
+/// One instance per app session: consecutive tool rounds of a reply SHARE
+/// a budget via the chain token (variantGroupId), and nothing needs
+/// disposing — the plain instance dies with this provider.
+final webToolBudgetProvider = Provider<WebToolBudget>((ref) {
+  return WebToolBudget();
+});
 
 final mcpServerManagerProvider = Provider<McpServerManager>((ref) {
   final packageInfo = ref.watch(packageInfoProvider);

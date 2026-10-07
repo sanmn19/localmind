@@ -25,10 +25,12 @@ import 'package:localmind/features/servers/data/models/server.dart';
 import 'package:localmind/features/servers/providers/server_providers.dart';
 import 'package:localmind/objectbox.g.dart';
 import '../data/chat_service.dart';
+import '../data/mcp_server_manager.dart' show webMcpServerUrl;
 import '../data/models/chat_parameters.dart';
 import '../data/models/message.dart' hide ToolCallData;
 import '../data/models/message.dart' as msg_model show ToolCallData;
 import '../data/title_generation_service.dart';
+import '../data/tool_budget.dart';
 import '../data/tools/tool_definition.dart';
 import '../data/tools/tool_event.dart';
 import '../data/tools/tool_execution_loop.dart';
@@ -1207,6 +1209,7 @@ class ChatNotifier extends Notifier<ChatState> {
                   final toolOutcome = await _executeCollectedToolCalls(
                     collectedToolCalls: collectedToolCalls,
                     finalizedMessage: finalMessage,
+                    isChainStart: true,
                     mcpEnabled: mcpConfig.enabled,
                     initialUserMessage: content,
                     session: session,
@@ -1997,6 +2000,7 @@ class ChatNotifier extends Notifier<ChatState> {
       target.selectedModel,
       effectiveModelId: effectiveModelId,
       continueGeneration: true,
+      isChainStart: true,
     );
   }
 
@@ -2150,12 +2154,15 @@ class ChatNotifier extends Notifier<ChatState> {
       assistantMessage,
       selectedModel,
       effectiveModelId: effectiveModelId,
+      isChainStart: true,
     );
   }
 
   /// After successful tool execution (issue #77), build `tool` role messages
-  /// for each completed tool event, persist them, and re-issue the chat
-  /// completion so the model can produce the final answer.
+  /// for each completed tool event — plus the per-chain web budget skip
+  /// failures whose error text tells the model to wrap up — persist them,
+  /// and re-issue the chat completion so the model can produce the final
+  /// answer.
   ///
   /// The assistant message emitted in the first turn has its `toolCalls`
   /// field populated with the executed results, plus matching `MessageRole.tool`
@@ -2177,10 +2184,18 @@ class ChatNotifier extends Notifier<ChatState> {
   }) async {
     if (!ref.mounted) return;
 
-    final completed = toolEvents
-        .where((e) => e.status == ToolEventStatus.completed)
+    // Feedback rows: completed results AND the per-chain web budget skip
+    // failures — the overdrawn call's error text tells the model to wrap
+    // the turn up with what it already fetched. Everything else (plain
+    // loop failures, rejections) stays out of the feedback path.
+    final feedback = toolEvents
+        .where(
+          (e) =>
+              e.status == ToolEventStatus.completed ||
+              isWebBudgetSkipFailure(e),
+        )
         .toList();
-    if (completed.isEmpty) return;
+    if (feedback.isEmpty) return;
 
     // Synthesize stable tool-call IDs that match between the assistant
     // message's `tool_calls[].id` and the tool role message's `tool_call_id`.
@@ -2193,7 +2208,7 @@ class ChatNotifier extends Notifier<ChatState> {
       return 'call_${uniqueSuffix}_completed';
     }
 
-    final toolCallEntries = completed
+    final toolCallEntries = feedback
         .map(
           (e) => msg_model.ToolCallData(
             id: toolCallIdFor(e),
@@ -2214,7 +2229,7 @@ class ChatNotifier extends Notifier<ChatState> {
       _replaceMessageInAll(assistantWithToolCalls, clearStreaming: true);
     }
 
-    final toolMessages = completed.map((e) {
+    final toolMessages = feedback.map((e) {
       final callId = toolCallIdFor(e);
       return Message(
         id: 'tool_${callId}_${e.timestamp.microsecondsSinceEpoch}',
@@ -2321,8 +2336,9 @@ class ChatNotifier extends Notifier<ChatState> {
 
   /// Executes the tool calls collected from one assistant turn's stream.
   /// The first send collects them locally; continuation streams collect
-  /// them on `session.collectedToolCalls`. Completed results are fed back
-  /// via `_sendFollowupWithToolResults` so multi-hop chains (search ->
+  /// them on `session.collectedToolCalls`. Completed results — plus the
+  /// per-chain web budget skip failures — are fed back via
+  /// `_sendFollowupWithToolResults` so multi-hop chains (search ->
   /// fetch -> answer) keep running the model's next tool calls.
   ///
   /// Returns null when MCP is off or nothing was collected (caller proceeds
@@ -2331,6 +2347,7 @@ class ChatNotifier extends Notifier<ChatState> {
   Future<CollectedToolCallsOutcome?> _executeCollectedToolCalls({
     required List<ToolCallData> collectedToolCalls,
     required Message finalizedMessage,
+    required bool isChainStart,
     required bool mcpEnabled,
     required String initialUserMessage,
     required GenerationSession session,
@@ -2397,6 +2414,39 @@ class ChatNotifier extends Notifier<ChatState> {
             )
             .toList();
 
+        // Per-chain web-turn budget: one reply (the head assistant row and
+        // its continuation rounds) shares counters keyed by the chain
+        // token. A chain start resets; continuations inherit the budget so
+        // over-burning chains stop at the lookup layer instead of draining
+        // anonymous keyless vendors. Non-local-web names pass through.
+        final chainKey = WebToolBudget.chainKeyFor(finalMessage);
+        final budget = ref.read(webToolBudgetProvider);
+        if (isChainStart) budget.reset(chainKey);
+
+        final ownedTools = {
+          for (final tool in await registry.listTools()) tool.name: tool,
+        };
+        bool isLocalWebSearch(String name) =>
+            name == 'web.search' &&
+            ownedTools[name]?.providerRef == webMcpServerUrl;
+        bool isLocalWebFetch(String name) =>
+            name == 'web.fetch' &&
+            ownedTools[name]?.providerRef == webMcpServerUrl;
+
+        final executableCalls = <ParsedToolCall>[];
+        final overdrawnCalls = <ParsedToolCall>[];
+        for (final call in preParsedCalls) {
+          final isSearch = isLocalWebSearch(call.name);
+          final isWeb = isSearch || isLocalWebFetch(call.name);
+          if (!isWeb || budget.allow(chainKey, isSearch: isSearch)) {
+            executableCalls.add(call);
+          } else {
+            // Denied WITHOUT executing: nothing is recorded, but the model
+            // still gets a readable failure instead of a network call.
+            overdrawnCalls.add(call);
+          }
+        }
+
         final loop = ToolExecutionLoop(
           adapter: adapter,
           registry: registry,
@@ -2432,11 +2482,44 @@ class ChatNotifier extends Notifier<ChatState> {
         final loopResult = await loop.run(
           initialUserMessage: initialUserMessage,
           assistantContent: finalMessage.content,
-          preParsedCalls: preParsedCalls,
+          preParsedCalls: executableCalls,
         );
+
+        // Every EXECUTED call consumes budget — successful or failed.
+        for (final call in executableCalls) {
+          if (isLocalWebSearch(call.name)) {
+            budget.record(chainKey, isSearch: true);
+          } else if (isLocalWebFetch(call.name)) {
+            budget.record(chainKey, isSearch: false);
+          }
+        }
 
         if (loopResult.events.isNotEmpty) {
           toolEvents.addAll(loopResult.events);
+        }
+
+        // Skipped overdraws surface as failed tool events so the tool rows
+        // stay readable AND the failure text flows to the model through
+        // the same tool-message feedback path.
+        for (final call in overdrawnCalls) {
+          final counts = budget.countsFor(chainKey);
+          toolEvents.add(
+            ToolEvent(
+              eventId:
+                  '${chainKey}_skip_${call.name}'
+                  '_${budget.nextSkipSequence(chainKey)}',
+              timestamp: DateTime.now(),
+              status: ToolEventStatus.failed,
+              toolName: call.name,
+              providerType: ToolProviderType.mcp,
+              providerRef: webMcpServerUrl,
+              arguments: call.arguments,
+              error: webBudgetExhaustedMessage(
+                searches: counts.searches,
+                fetches: counts.fetches,
+              ),
+            ),
+          );
         }
       }
 
@@ -2452,7 +2535,9 @@ class ChatNotifier extends Notifier<ChatState> {
       final completedResults = toolEvents
           .where((e) => e.status == ToolEventStatus.completed)
           .toList();
-      if (ref.mounted && completedResults.isNotEmpty) {
+      final budgetSkips = toolEvents.where(isWebBudgetSkipFailure).toList();
+      if (ref.mounted &&
+          (completedResults.isNotEmpty || budgetSkips.isNotEmpty)) {
         await _sendFollowupWithToolResults(
           previousAssistant: finalMessage,
           toolEvents: toolEvents,
@@ -2508,6 +2593,7 @@ class ChatNotifier extends Notifier<ChatState> {
     ModelInfo? selectedModel, {
     required String effectiveModelId,
     bool continueGeneration = false,
+    bool isChainStart = false,
   }) async {
     final server = session.server;
     final chatService = session.chatService;
@@ -2711,6 +2797,7 @@ class ChatNotifier extends Notifier<ChatState> {
                 collectedToolCalls:
                     session.collectedToolCalls ?? const <ToolCallData>[],
                 finalizedMessage: finalMessage,
+                isChainStart: isChainStart,
                 mcpEnabled: mcpConfig.enabled,
                 initialUserMessage: finalMessage.content,
                 session: session,
