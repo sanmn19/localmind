@@ -245,6 +245,48 @@ void main() {
     expect(output, '1. Results\n   _unstructured body_');
   });
 
+  test('callTool web.fetch falls back to the shared exa mirror ring', () async {
+    final fetchDio = Dio()
+      ..httpClientAdapter = StubAdapter({
+        'https://example.com/blocked': StubResponse(403, 'Access Denied'),
+      });
+    final ring = KeylessMcpRing(
+      dio: Dio()
+        ..httpClientAdapter = StubAdapter(
+          {},
+          sequences: {
+            exaMcpUrl: [
+              StubResponse(
+                200,
+                sseEnvelope(0, mcpInitializeResult()),
+                headers: {
+                  'mcp-session-id': ['sess-exa-1'],
+                },
+              ),
+              StubResponse(202, ''),
+              StubResponse(
+                200,
+                sseEnvelope(1, mcpTextResult('Mirror rendered page body')),
+              ),
+            ],
+          },
+        ),
+    );
+    final manager = McpServerManager();
+    await manager.addWebServer(
+      WebServices(
+        search: WebSearchService(provider: WebSearchProvider.auto, ring: ring),
+        fetch: WebFetchService(dio: fetchDio, fallbackRing: ring),
+      ),
+    );
+
+    final output = await manager.callTool(webMcpServerLabel, 'web.fetch', {
+      'url': 'https://example.com/blocked',
+    });
+    expect(output, contains('Mirror rendered page body'));
+    expect(output, contains('via exa mirror'));
+  });
+
   test('removeServer and clear clean the web registry', () async {
     final manager = await managerWithServices();
     await manager.removeServer(webMcpServerLabel);

@@ -5,6 +5,7 @@ import '../data/tools/builtin_tool_provider.dart';
 import '../data/tools/mcp_tool_provider.dart';
 import '../data/tools/tool_definition.dart';
 import '../data/mcp_server_manager.dart';
+import '../../mcp/data/web/keyless_mcp_ring.dart';
 import '../../mcp/data/web/web_fetch_service.dart';
 import '../../mcp/data/web/web_search_service.dart';
 
@@ -73,13 +74,17 @@ final webServerRegistrationProvider = Provider<void>((ref) {
   final settings = ref.watch(settingsProvider);
   final manager = ref.watch(mcpServerManagerProvider);
   if (settings.webToolsEnabled) {
+    // One ring per registration: search and fetch share session/cursor state
+    // so an exa fetch rescue reuses the session a prior search established.
+    final ring = KeylessMcpRing();
     manager.addWebServer(
       WebServices(
         search: WebSearchService(
           provider: webSearchProviderFromName(settings.webSearchProvider),
           apiKey: settings.webSearchApiKey,
+          ring: ring,
         ),
-        fetch: WebFetchService(),
+        fetch: WebFetchService(fallbackRing: ring),
       ),
     );
   } else if (manager.hasWebServer()) {

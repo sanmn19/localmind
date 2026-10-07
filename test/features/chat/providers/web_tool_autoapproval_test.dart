@@ -261,5 +261,30 @@ void main() {
         expect(manager.hasWebServer(), isFalse);
       },
     );
+
+    test(
+      'shares one exa ring between web.search and web.fetch while enabled',
+      () async {
+        final manager = _RecordingManager();
+        final settings = _MutableSettings(AppSettings(webToolsEnabled: true));
+        final container = _container(manager: manager, settings: settings);
+        addTearDown(container.dispose);
+
+        container.listen(webServerRegistrationProvider, (_, _) {});
+        await pumpEventQueue();
+
+        expect(manager.hasServer(webMcpServerLabel), isTrue);
+        final toolNames = manager
+            .getTools(webMcpServerLabel)
+            .map((t) => t.name)
+            .toList();
+        expect(toolNames, contains('web.fetch'));
+        final services = manager.addedWebServices.single;
+        expect(
+          identical(services.search.ring, services.fetch.fallbackRing),
+          isTrue,
+        );
+      },
+    );
   });
 }

@@ -2,26 +2,24 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 
+import 'keyless_mcp_ring.dart';
 import 'web_search_service.dart';
 import 'html_reader.dart';
 
 /// Fetches a web page over http(s), converts it to readable text and guards
 /// against requests to local/private network addresses (SSRF defence).
 class WebFetchService {
-  WebFetchService({Dio? dio})
-    : _dio =
-          dio ??
-          Dio(
-            BaseOptions(
-              connectTimeout: const Duration(seconds: 15),
-              receiveTimeout: const Duration(seconds: 30),
-              followRedirects: true,
-              maxRedirects: 5,
-              validateStatus: (code) => code != null && code < 400,
-            ),
-          );
+  WebFetchService({Dio? dio, this.fallbackRing}) : _dio = dio ?? _defaultDio();
 
   final Dio _dio;
+
+  /// Ring used to rescue blocked fetches through exa's server-rendered
+  /// `web_fetch_exa` (Amendment 1). When null, a default ring sharing the
+  /// primary [_dio] is used; the registration provider injects the same ring
+  /// instance the search service holds so sessions stay warm.
+  final KeylessMcpRing? fallbackRing;
+
+  late final KeylessMcpRing ring = fallbackRing ?? KeylessMcpRing(dio: _dio);
 
   Future<String> fetch(String url, {int maxChars = 6000}) async {
     final uri = Uri.tryParse(url);
@@ -31,6 +29,7 @@ class WebFetchService {
     if (isBlockedFetchTarget(uri)) {
       return 'ERROR: refused to fetch a local/private address';
     }
+    String error;
     try {
       final response = await _dio.getUri<String>(
         uri,
@@ -48,13 +47,49 @@ class WebFetchService {
       final html = response.data ?? '';
       final title = extractHtmlTitle(html);
       final text = htmlToReadableText(html, maxChars: maxChars);
-      final header = title == null ? '' : '# $title\n\n';
-      return '$header$text\n\n(source: $url)';
+      if (text.isNotEmpty) {
+        final header = title == null ? '' : '# $title\n\n';
+        return '$header$text\n\n(source: $url)';
+      }
+      // 2xx but nothing readable — JS-only shell or a bot-garbage page.
+      error = 'ERROR: fetch failed (empty body)';
     } on DioException catch (e) {
       final code = e.response?.statusCode;
-      return 'ERROR: fetch failed${code == null ? '' : ' (HTTP $code)'}';
+      error = 'ERROR: fetch failed${code == null ? '' : ' (HTTP $code)'}';
+    }
+    return _rescueViaExa(url, maxChars, error);
+  }
+
+  // Exa rescue for bot-detected direct fetches. On overall success the page
+  // is returned with an explicit mirror source note; on any ring failure the
+  // direct error carries the mirror hint as one model-readable line.
+  Future<String> _rescueViaExa(
+    String url,
+    int maxChars,
+    String directError,
+  ) async {
+    try {
+      final text = await ring.fetchViaExa([url], maxCharacters: maxChars);
+      if (text.trim().isEmpty) {
+        return '$directError; exa mirror unavailable: empty response';
+      }
+      return '$text\n\n(source: $url · via exa mirror)';
+    } on WebSearchBlockedException catch (failure) {
+      return '$directError; exa mirror unavailable: ${failure.message}';
+    } catch (failure) {
+      return '$directError; exa mirror unavailable: $failure';
     }
   }
+
+  static Dio _defaultDio() => Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 30),
+      followRedirects: true,
+      maxRedirects: 5,
+      validateStatus: (code) => code != null && code < 400,
+    ),
+  );
 }
 
 /// True when [uri] targets localhost, a hostless URL, or a literal IP inside
