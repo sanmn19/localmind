@@ -19,6 +19,7 @@ import 'package:localmind/features/chat/providers/chat_params_providers.dart';
 import 'package:localmind/features/chat/providers/chat_service_providers.dart';
 import 'package:localmind/features/chat/providers/model_selection_providers.dart';
 import 'package:localmind/features/chat/providers/tooling_providers.dart';
+import 'package:localmind/features/chat/utils/message_variants.dart';
 import 'package:localmind/features/conversations/data/models/conversation.dart';
 import 'package:localmind/features/conversations/providers/conversation_providers.dart'
     as conv;
@@ -142,6 +143,135 @@ void main() {
       expect(container.read(activeGenerationsProvider), isEmpty);
     },
   );
+
+  /// Regression for the multi-round tool-chain UI bug: every continuation
+  /// round used to open its own variant "page" (1/N .. N/N pager) on top of
+  /// the turn's answer, and the resolver kept landing on the first
+  /// tool-result row of the turn instead of the newest round.
+  ///
+  /// The chain must behave like ONE turn: tool-chain rounds are timeline
+  /// history, not variants. After a 2-round chain
+  /// (`calc.add` -> `calc.multiply` -> final answer):
+  ///   * exactly the LAST assistant row of the turn stays `isActiveVariant`,
+  ///   * the resolver surfaces only that tail for the turn,
+  ///   * the follow-up requests still carry every round's
+  ///     assistant(tool_calls) + tool(result) protocol pair.
+  test('treats tool-chain rounds as timeline steps, not variants', () async {
+    final chatService = _ScriptedChatService();
+    final calcProvider = _CalcToolProvider();
+    late ProviderContainer container;
+
+    container = ProviderContainer(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(
+          await SharedPreferences.getInstance(),
+        ),
+        activeServerProvider.overrideWith(_RemoteServerNotifier.new),
+        activeChatTargetProvider.overrideWithValue(
+          ActiveChatTarget(
+            server: _remoteServer,
+            selectedModel: null,
+            effectiveModelId: 'model',
+            modelLabel: 'Model',
+          ),
+        ),
+        onDeviceEngineProvider.overrideWith(_EmptyEngineNotifier.new),
+        chatProvider.overrideWith(_TestChatNotifier.new),
+        chatServiceProvider.overrideWithValue(chatService),
+        chatServiceFactoryProvider.overrideWithValue((_) => chatService),
+        chatParamsProvider.overrideWithValue(ChatParameters.defaults()),
+        chatMcpConfigProvider.overrideWith(_EnabledMcpNotifier.new),
+        toolRegistryProvider.overrideWithValue(
+          ToolRegistry(providers: [calcProvider]),
+        ),
+        chatBackgroundServiceProvider.overrideWithValue(
+          _TestChatBackgroundService(),
+        ),
+        settingsProvider.overrideWith(_TestSettingsNotifier.new),
+        voiceModeProvider.overrideWith(_IdleVoiceModeNotifier.new),
+        conv.conversationsProvider.overrideWith(_FakeConversationsNotifier.new),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(chatProvider.notifier) as _TestChatNotifier;
+    await container.read(conv.conversationsProvider.future);
+    await notifier.loadConversation(_conversation);
+    await notifier.sendMessage('use your calc tools');
+    await _drain();
+    expect(await _grantNextApproval(container), isTrue);
+    await _drain();
+    expect(await _grantNextApproval(container), isTrue);
+    await _drain();
+    await _awaitChainCompletion(container);
+
+    // Mirror the database: latest persisted copy of each row wins.
+    final rows = <String, Message>{};
+    for (final saved in notifier.saved) {
+      rows[saved.id] = saved;
+    }
+
+    final tail = rows.values
+        .where(
+          (m) => m.role == MessageRole.assistant && m.content.contains('12.0'),
+        )
+        .single;
+    final chainGroupId = MessageVariants.groupId(tail);
+    final chainAssistants = rows.values
+        .where((m) => m.role == MessageRole.assistant)
+        .where((m) => MessageVariants.groupId(m) == chainGroupId)
+        .toList();
+
+    expect(chainAssistants, hasLength(3), reason: '2 tool rounds + final tail');
+    final activeAssistants = chainAssistants
+        .where((m) => m.isActiveVariant)
+        .map((m) => m.id)
+        .toSet();
+    expect(
+      activeAssistants,
+      {tail.id},
+      reason:
+          'only the chain tail (the round that answers the turn) may stay '
+          'active — earlier rounds are timeline steps, not variants',
+    );
+
+    // The resolver surfaces only the tail for this turn's group.
+    final state = container.read(chatProvider);
+    final resolved = MessageVariants.resolveActiveTimeline(state.allMessages);
+    final resolvedChain = resolved
+        .where((m) => MessageVariants.groupId(m) == chainGroupId)
+        .toList();
+    expect(
+      resolvedChain.map((m) => m.id),
+      {tail.id},
+      reason: 'resolver shows ONLY the newest round of the turn',
+    );
+
+    // Follow-up requests keep the assistant(tool_calls) + tool(result)
+    // pairing for BOTH rounds (the flip side of collapsing variants: the
+    // chain context must not leak away from the API payload).
+    final requests = chatService.requests;
+    expect(requests, hasLength(3));
+    final lastRequest = requests[2];
+    final toolRows = lastRequest
+        .where((m) => m.role == MessageRole.tool)
+        .toList();
+    expect(toolRows, hasLength(2));
+    final callRows = lastRequest
+        .where((m) => m.role == MessageRole.assistant && m.toolCalls != null)
+        .toList();
+    expect(callRows, hasLength(2));
+    // Each pair ordered: assistant(tool_calls) immediately followed by its
+    // tool result, round 1 then round 2.
+    final a1Row = callRows.first;
+    final c2Row = callRows.last;
+    expect(a1Row.toolCalls!.map((tc) => tc.id), [toolRows.first.toolCallId]);
+    expect(c2Row.toolCalls!.map((tc) => tc.id), [toolRows.last.toolCallId]);
+    final a1Idx = lastRequest.indexOf(a1Row);
+    expect(lastRequest[a1Idx + 1], toolRows.first);
+    final c2Idx = lastRequest.indexOf(c2Row);
+    expect(lastRequest[c2Idx + 1], toolRows.last);
+  });
 }
 
 Future<void> _drain([int iterations = 40]) async {
@@ -265,6 +395,7 @@ class _ScriptedChatService implements ChatService {
     ],
   ];
 
+  final List<List<Message>> requests = [];
   int roundIndex = 0;
   int cancelCount = 0;
 
@@ -278,6 +409,7 @@ class _ScriptedChatService implements ChatService {
     List<ToolDefinition>? tools,
     bool continueGeneration = false,
   }) async* {
+    requests.add(messages);
     final round = roundIndex++;
     for (final response
         in round < rounds.length

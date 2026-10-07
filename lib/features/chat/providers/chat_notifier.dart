@@ -1486,8 +1486,94 @@ class ChatNotifier extends Notifier<ChatState> {
       }
     }
 
+    // Tool-chain turns resolve to a single assistant tail in
+    // `resolveActiveTimeline` (chain rounds are timeline steps, not
+    // variants). The model still needs every round's
+    // assistant(tool_calls) + tool(result) protocol pair, so splice those
+    // rows back in from allMessages ahead of the turn's tail.
+    final spliced = spliceToolChainContext(messages, state.allMessages);
+
     final contextLength = ref.read(chatParamsProvider).contextLength;
-    return _truncateToContextWindow(messages, contextLength);
+    return _truncateToContextWindow(spliced, contextLength);
+  }
+
+  /// Re-inserts a tool-chain turn's history ahead of its assistant tail.
+  ///
+  /// [resolvedTimeline] comes from the active-timeline resolver, which shows
+  /// exactly one assistant row (the tail) per tool chain. Each chain's
+  /// assistant(tool_calls) and tool(result) rows live on in `allMessages`,
+  /// so for every resolved assistant whose group carries such rows we splice
+  /// them back, in order, right before the tail. A tail whose content is
+  /// still empty (the follow-up stream has just started) is replaced by the
+  /// chain rows, matching what the model received before consolidation.
+  List<Message> spliceToolChainContext(
+    List<Message> resolvedTimeline,
+    List<Message> allMessages,
+  ) {
+    if (resolvedTimeline.isEmpty || allMessages.isEmpty) {
+      return resolvedTimeline;
+    }
+
+    final spliced = <Message>[];
+    for (final message in resolvedTimeline) {
+      if (message.role != MessageRole.assistant ||
+          message.toolCalls?.isNotEmpty == true) {
+        // Round rows that are themselves resolved (legacy timelines, or a
+        // user-cycled mix) already carry their protocol position — leave
+        // them untouched.
+        spliced.add(message);
+        continue;
+      }
+      final family = _toolChainFamily(message, allMessages);
+      if (family == null) {
+        spliced.add(message);
+        continue;
+      }
+      if (message.content.trim().isNotEmpty) {
+        spliced.addAll(family);
+        spliced.add(message);
+      } else {
+        spliced.addAll(family);
+      }
+    }
+    return spliced;
+  }
+
+  /// The tool-call history of the chain [tail] belongs to: this turn's
+  /// assistant(tool_calls) rows plus their tool(result) rows — everything
+  /// in [tail]'s variant group chronologically before it, paired by
+  /// `toolCallId`. Returns null when the turn has no tool history (plain
+  /// answer turns pass through untouched).
+  List<Message>? _toolChainFamily(Message tail, List<Message> allMessages) {
+    final groupId = tail.variantGroupId;
+    if (groupId == null || groupId.isEmpty) return null;
+
+    final family = <Message>[
+      for (final message in allMessages)
+        if (message.id != tail.id &&
+            MessageVariants.groupId(message) == groupId &&
+            _isChainRow(message, tail))
+          message,
+    ];
+    if (family.isEmpty) return null;
+    family.sort((a, b) {
+      final orderCompare = a.threadOrder.compareTo(b.threadOrder);
+      if (orderCompare != 0) return orderCompare;
+      final createdAtCompare = a.createdAt.compareTo(b.createdAt);
+      if (createdAtCompare != 0) return createdAtCompare;
+      return a.id.compareTo(b.id);
+    });
+    return family;
+  }
+
+  bool _isChainRow(Message row, Message tail) {
+    if (row.role == MessageRole.tool) return true;
+    if (row.role != MessageRole.assistant) return false;
+    if (row.toolCalls?.isNotEmpty != true) return false;
+    // Rounds of a flat chain are ordered by threadOrder, each continuation
+    // taking nextThreadOrder. Rows at or below the tail's order that their
+    // group pairs with it belong to the chain leading to this tail.
+    return row.threadOrder <= tail.threadOrder;
   }
 
   List<Message> _buildMessagesForContinue(
@@ -2143,6 +2229,7 @@ class ChatNotifier extends Notifier<ChatState> {
         threadOrder: previousAssistant.threadOrder + 0,
         variantGroupId: previousAssistant.variantGroupId,
         variantIndex: previousAssistant.variantIndex,
+        isActiveVariant: false,
       );
     }).toList();
 
@@ -2152,18 +2239,38 @@ class ChatNotifier extends Notifier<ChatState> {
 
     if (!ref.mounted) return;
 
+    // The chain tail REPLACES the turn's answer in the variant system:
+    // tool-chain rounds are timeline steps, not variants. Demote the round
+    // this chain continues so the resolver keeps exactly one visible
+    // assistant row per turn — the newest one. The persisted row already
+    // carries this round's `toolCalls` (saved above).
+    final demotedRound = assistantWithToolCalls.copyWith(
+      isActiveVariant: false,
+    );
+    await _saveMessage(demotedRound);
+    if (!ref.mounted) return;
+
     // Persist the assistant+tool messages into state.allMessages so future
     // `_buildMessagesForApi(selectedModel)` calls (used by the follow-up
     // stream) include them. Without this the next request would be missing
     // the tool history and the model would re-emit the same tool call.
-    final newAll = [...state.allMessages, ...toolMessages];
+    final newAll = [
+      ...state.allMessages.map(
+        (m) => m.id == demotedRound.id ? demotedRound : m,
+      ),
+      ...toolMessages,
+    ];
     final activeTimeline = MessageVariants.resolveActiveTimeline(newAll);
     state = state.copyWith(allMessages: newAll, messages: activeTimeline);
 
     // Create a new assistant message that will receive the model's final
-    // answer. It shares the variant group with the previous assistant turn
-    // so users see a single grouped assistant card that contains both the
-    // tool-call turn and the follow-up answer.
+    // answer. It shares the variant group AND variant index with the round
+    // it continues: the resolver's convention is one active row per group,
+    // so this tail (already the only active row of the group once the
+    // previous round is demoted) becomes the turn's single answer.
+    // Its parent points at the round's own parent, keeping the chain flat —
+    // every round of the turn sits beside the others as a sibling so
+    // "one active per group" is what actually hides the older rounds.
     final continuationThreadOrder = MessageVariants.nextThreadOrder(
       state.allMessages,
     );
@@ -2176,10 +2283,10 @@ class ChatNotifier extends Notifier<ChatState> {
       status: MessageStatus.streaming,
       modelId: effectiveModelId,
       variantGroupId: previousAssistant.variantGroupId,
-      variantIndex: previousAssistant.variantIndex + 1,
+      variantIndex: previousAssistant.variantIndex,
       threadOrder: continuationThreadOrder,
       isActiveVariant: true,
-      parentMessageId: previousAssistant.id,
+      parentMessageId: previousAssistant.parentMessageId,
     );
 
     final newAllWithAssistant = [...newAll, continuationMessage];
@@ -2359,16 +2466,11 @@ class ChatNotifier extends Notifier<ChatState> {
           streamConvId: streamConvId,
           isCurrentContext: isCurrentContext,
         );
-        // After the follow-up the original `finalMessage` already contains
-        // its `toolEvents` and is on disk; mark it as final and bail out of
-        // the rest of the post-stream bookkeeping that was meant for the
-        // first turn only.
-        if (ref.mounted) {
-          await _saveMessage(finalMessage, persist: session.persisted);
-          if (isCurrentContext) {
-            _replaceMessageInState(finalMessage, clearStreaming: true);
-          }
-        }
+        // The follow-up owns this turn from here on: it already persisted
+        // the final round (toolCalls + demoted variant flag) itself and
+        // re-issuing `_saveMessage(finalMessage)` here would overwrite that
+        // row with the stale active copy, resurrecting the demoted round.
+        //
         // This turn's stream is done and the follow-up owns the chain on its
         // own session — `_sendFollowupWithToolResults` already began it via
         // `_beginSession`, which REPLACED this session's map entry (and
