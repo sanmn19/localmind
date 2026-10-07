@@ -33,7 +33,342 @@ String? headerOf(Map<String, dynamic> headers, String name) {
   return value as String?;
 }
 
+const searxBase = 'http://192.0.2.10:8888';
+
+String searxFixture() => File(
+  'test/features/mcp/web/fixtures/searx_results.json',
+).readAsStringSync();
+
 void main() {
+  group('searxng provider', () {
+    test('parses searxng json results and ignores malformed rows', () async {
+      final dio = Dio()
+        ..httpClientAdapter = StubAdapter({
+          '$searxBase/search?q=homelab&format=json&language=en&safesearch=1':
+              StubResponse(200, searxFixture()),
+        });
+      final service = WebSearchService(
+        provider: WebSearchProvider.searxng,
+        dio: dio,
+        searxUrl: searxBase,
+      );
+      final results = await service.search('homelab');
+      expect(results, hasLength(2));
+      expect(results.first.title, 'Rig docs');
+      expect(results.first.url, 'https://rig.local/docs');
+      expect(results.first.snippet, 'self-hosted search tier');
+      expect(results[1].title, 'Null snippet');
+      expect(results[1].url, 'https://rig.local/2');
+      expect(results[1].snippet, '');
+    });
+
+    test('takes only the first maxResults rows (clamped 1..8)', () async {
+      final dio = Dio()
+        ..httpClientAdapter = StubAdapter({
+          '$searxBase/search?q=many&format=json&language=en&safesearch=1':
+              StubResponse(
+                200,
+                jsonEncode({
+                  'results': List.generate(
+                    10,
+                    (i) => {
+                      'title': 'T$i',
+                      'url': 'https://t$i',
+                      'content': 'c$i',
+                    },
+                  ),
+                }),
+              ),
+        });
+      final few = WebSearchService(
+        provider: WebSearchProvider.searxng,
+        dio: dio,
+        searxUrl: searxBase,
+      );
+      expect(await few.search('many', maxResults: 2), hasLength(2));
+      final plenty = WebSearchService(
+        provider: WebSearchProvider.searxng,
+        dio: dio,
+        searxUrl: searxBase,
+      );
+      expect(await plenty.search('many', maxResults: 99), hasLength(8));
+    });
+
+    test('request hits $searxBase with the json format query params', () async {
+      final requested = <Uri>[];
+      final dio = Dio()
+        ..httpClientAdapter = StubAdapter({
+          '$searxBase/search?q=sorted&format=json&language=en&safesearch=1':
+              StubResponse(200, searxFixture()),
+        }, onRequest: (options) => requested.add(options.uri));
+      final service = WebSearchService(
+        provider: WebSearchProvider.searxng,
+        dio: dio,
+        searxUrl: searxBase,
+      );
+      await service.search('sorted');
+      expect(
+        requested.single.toString(),
+        '$searxBase/search?q=sorted&format=json&language=en&safesearch=1',
+      );
+    });
+
+    test('empty results raise the searx unreachable message', () async {
+      final dio = Dio()
+        ..httpClientAdapter = StubAdapter({
+          '$searxBase/search?q=empty&format=json&language=en&safesearch=1':
+              StubResponse(200, jsonEncode({'results': []})),
+        });
+      final service = WebSearchService(
+        provider: WebSearchProvider.searxng,
+        dio: dio,
+        searxUrl: searxBase,
+      );
+      await expectLater(
+        () => service.search('empty'),
+        throwsA(
+          isA<WebSearchBlockedException>().having(
+            (e) => e.message,
+            'message',
+            contains('SearXNG at the configured URL is unreachable'),
+          ),
+        ),
+      );
+    });
+
+    test('non-200 raises the searx unreachable message', () async {
+      final dio = Dio()
+        ..httpClientAdapter = StubAdapter({
+          '$searxBase/search?q=down&format=json&language=en&safesearch=1':
+              StubResponse(403, '{"error": "format not allowed"}'),
+        });
+      final service = WebSearchService(
+        provider: WebSearchProvider.searxng,
+        dio: dio,
+        searxUrl: searxBase,
+      );
+      await expectLater(
+        () => service.search('down'),
+        throwsA(isA<WebSearchBlockedException>()),
+      );
+    });
+
+    test('auto puts searx first when a searx url is configured', () async {
+      final requested = <String>[];
+      final dio = Dio()
+        ..httpClientAdapter = StubAdapter({
+          '$searxBase/search?q=first&format=json&language=en&safesearch=1':
+              StubResponse(200, searxFixture()),
+        }, onRequest: (options) => requested.add(options.uri.toString()));
+      final service = WebSearchService(
+        provider: WebSearchProvider.auto,
+        dio: dio,
+        searxUrl: searxBase,
+      );
+      final results = await service.search('first');
+      expect(results.first.title, 'Rig docs');
+      expect(requested.single, startsWith(searxBase));
+      expect(requested, everyElement(isNot(contains('mcp.exa.ai'))));
+    });
+
+    test(
+      'auto with searx down rescues via the ring, searx first in order',
+      () async {
+        final requested = <String>[];
+        final dio = Dio()
+          ..httpClientAdapter = StubAdapter(
+            {
+              '$searxBase/search?q=downchain&format=json&language=en&safesearch=1':
+                  StubResponse(500, '{}'),
+            },
+            sequences: {
+              exaMcpUrl: [
+                StubResponse(
+                  200,
+                  sseEnvelope(0, mcpInitializeResult()),
+                  headers: {
+                    'mcp-session-id': ['sess-exa-1'],
+                  },
+                ),
+                StubResponse(202, ''),
+                StubResponse(200, sseEnvelope(1, mcpTextResult(mcpPairText))),
+              ],
+            },
+            onRequest: (options) => requested.add(options.uri.toString()),
+          );
+        final service = WebSearchService(
+          provider: WebSearchProvider.auto,
+          dio: dio,
+          searxUrl: searxBase,
+        );
+        final results = await service.search('downchain');
+        expect(results.map((r) => r.title), ['Alpha', 'Beta']);
+        expect(
+          requested.first,
+          '$searxBase/search?q=downchain&format=json&language=en&safesearch=1',
+        );
+        expect(requested.elementAt(1), exaMcpUrl);
+      },
+    );
+
+    test(
+      'auto without a searx url keeps ring-first with no searx traffic',
+      () async {
+        final requested = <String>[];
+        final dio = Dio()
+          ..httpClientAdapter = StubAdapter(
+            {},
+            sequences: {
+              exaMcpUrl: [
+                StubResponse(
+                  200,
+                  sseEnvelope(0, mcpInitializeResult()),
+                  headers: {
+                    'mcp-session-id': ['sess-exa-1'],
+                  },
+                ),
+                StubResponse(202, ''),
+                StubResponse(200, sseEnvelope(1, mcpTextResult(mcpPairText))),
+              ],
+            },
+            onRequest: (options) => requested.add(options.uri.toString()),
+          );
+        final service = WebSearchService(
+          provider: WebSearchProvider.auto,
+          dio: dio,
+        );
+        await service.search('plain-auto');
+        expect(requested.first, exaMcpUrl);
+        expect(requested.where((u) => u.contains('/search?q=')), isEmpty);
+      },
+    );
+
+    test(
+      'explicit ddg joins searx first when a searx url is configured',
+      () async {
+        final requested = <String>[];
+        final dio = Dio()
+          ..httpClientAdapter = StubAdapter({
+            '$searxBase/search?q=ddglinks&format=json&language=en&safesearch=1':
+                StubResponse(200, searxFixture()),
+          }, onRequest: (options) => requested.add(options.uri.toString()));
+        final service = WebSearchService(
+          provider: WebSearchProvider.ddgLite,
+          dio: dio,
+          searxUrl: searxBase,
+        );
+        final results = await service.search('ddglinks');
+        expect(results.first.title, 'Rig docs');
+        expect(requested.single, startsWith(searxBase));
+      },
+    );
+
+    test(
+      'explicit searxng folds its failure through ring and ddg when all fail',
+      () async {
+        final requested = <String>[];
+        final dio = Dio()
+          ..httpClientAdapter = StubAdapter(
+            {
+              '$searxBase/search?q=doomed&format=json&language=en&safesearch=1':
+                  StubResponse(500, '{}'),
+              'https://lite.duckduckgo.com/lite/?q=doomed': StubResponse(
+                200,
+                liteAnomalyBody(),
+              ),
+              'https://html.duckduckgo.com/html/?q=doomed': StubResponse(
+                200,
+                liteAnomalyBody(),
+              ),
+            },
+            sequences: {
+              exaMcpUrl: [StubResponse(429, 'rate limit')],
+              parallelMcpUrl: [StubResponse(429, 'rate limit')],
+            },
+            onRequest: (options) => requested.add(options.uri.toString()),
+          );
+        final service = WebSearchService(
+          provider: WebSearchProvider.searxng,
+          dio: dio,
+          searxUrl: searxBase,
+        );
+        await expectLater(
+          () => service.search('doomed'),
+          throwsA(
+            isA<WebSearchBlockedException>().having(
+              (e) => e.message,
+              'message',
+              contains('configure a search provider key'),
+            ),
+          ),
+        );
+        expect(requested, [
+          '$searxBase/search?q=doomed&format=json&language=en&safesearch=1',
+          exaMcpUrl,
+          parallelMcpUrl,
+          'https://lite.duckduckgo.com/lite/?q=doomed',
+          'https://html.duckduckgo.com/html/?q=doomed',
+        ]);
+      },
+    );
+
+    test('explicit searxng without a url defers to the ring chain', () async {
+      final requested = <String>[];
+      final dio = Dio()
+        ..httpClientAdapter = StubAdapter(
+          {},
+          sequences: {
+            exaMcpUrl: [
+              StubResponse(
+                200,
+                sseEnvelope(0, mcpInitializeResult()),
+                headers: {
+                  'mcp-session-id': ['sess-exa-1'],
+                },
+              ),
+              StubResponse(202, ''),
+              StubResponse(200, sseEnvelope(1, mcpTextResult(mcpPairText))),
+            ],
+          },
+          onRequest: (options) => requested.add(options.uri.toString()),
+        );
+      final service = WebSearchService(
+        provider: WebSearchProvider.searxng,
+        dio: dio,
+        searxUrl: null,
+      );
+      final results = await service.search('no-url');
+      expect(results.map((r) => r.title), ['Alpha', 'Beta']);
+      expect(requested.first, exaMcpUrl);
+    });
+
+    test(
+      'serves repeat searxng queries from cache (no second adapter hit)',
+      () async {
+        var fetches = 0;
+        var now = DateTime(2026, 1, 1);
+        final dio = Dio()
+          ..httpClientAdapter = StubAdapter({
+            '$searxBase/search?q=cached&format=json&language=en&safesearch=1':
+                StubResponse(200, searxFixture()),
+          }, onRequest: (_) => fetches++);
+        final service = WebSearchService(
+          provider: WebSearchProvider.searxng,
+          dio: dio,
+          searxUrl: searxBase,
+          clock: () => now,
+          jitterFor: () => Duration.zero,
+        );
+        await service.search('cached');
+        await service.search('cached');
+        expect(fetches, 1);
+        now = now.add(const Duration(minutes: 11));
+        await service.search('cached');
+        expect(fetches, 2);
+      },
+    );
+  });
+
   test('parses DDG Lite results', () async {
     final dio = Dio()
       ..httpClientAdapter = StubAdapter({

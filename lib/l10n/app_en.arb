@@ -3536,8 +3536,10 @@
   "sidebar_section_models": "Models",
   "sidebar_section_app": "App",
   "web_browser_card_title": "Web Browser",
-  "web_browser_card_desc": "Gives models two tools: web.search and web.fetch. DuckDuckGo needs no key and is best-effort; Tavily / Brave / Serper keys are more reliable.",
+  "web_browser_card_desc": "Gives models two tools: web.search and web.fetch. SearXNG points at your own server and stays private; DuckDuckGo needs no key and is best-effort; Tavily / Brave / Serper keys are more reliable.",
   "web_search_provider": "Search provider",
   "web_search_provider_key": "Provider API key",
-  "web_search_key_hint": "API key…"
+  "web_search_key_hint": "API key…",
+  "searx_base_url_label": "SearXNG server URL",
+  "searx_base_url_hint": "http://your-rig:8888"
 }

@@ -91,3 +91,28 @@ behind browser-grade headers with rotate-on-ratelimit:
   `web_fetch_exa` (server-rendered) → ERROR text.
 - Ring state (sessions, cursor, cooldown) lives per-service instance inside
   the manager's registration, stateless across app restarts.
+
+## Amendment 2 (2026-10-07): self-hosted SearXNG as the private search tier
+
+The user can point the app at their OWN SearXNG instance (JSON API enabled)
+over the private network (Tailscale rig):
+
+- New provider: `searxng` (settings string 'searxng'; option label
+  "SearXNG (self-hosted, private)") + `webSearxUrl` base-URL setting
+  (nullable; explicit null clears, matching the api-key pattern).
+- Backend: GET `<base>/search?q=…&format=json&language=en&safesearch=1`
+  — plain JSON, no HTML scraping. Rows with missing url/title are ignored;
+  `content` is the snippet (nullable → ''). Non-200 or empty results throw
+  `WebSearchBlockedException(searxUnreachableMessage)`.
+- Chain resolution: whenever `webSearxUrl` is configured, the searx attempt
+  joins FIRST in every chain except the explicit keyless ring — the
+  self-hosted private tier outranks the anonymous vendors. Chains:
+  - searxng / auto+searxUrl: [searx → ring → ddg chain]; auto without stays
+    [ring → ddg].
+  - ddg explicit: [searx → ddg chain → ring] when searxUrl is set.
+  - keyed vendors: [searx → vendor-with-key → ring] as before, searx leading.
+  - a 'searxng' pick without a URL defers to the ring chain (no dead fire).
+- Folding: a searx failure continues to the next link; if the whole chain
+  fails, the searx reason folds into the surfaced final message.
+- UI: the Web Browser card shows a "SearXNG server URL" input when searxng
+  is selected; saves on submit and on focus loss like the API-key field.

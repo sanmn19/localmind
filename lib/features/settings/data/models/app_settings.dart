@@ -62,6 +62,10 @@ class AppSettings {
   final bool webToolsEnabled;
   final String webSearchProvider;
   final String? webSearchApiKey;
+
+  /// Base URL of the user's self-hosted SearXNG instance (empty/null when
+  /// unset); leads the web search chain whenever configured (Amendment 2).
+  final String? webSearxUrl;
   final bool autoCollapseThinking;
 
   /// Whether `temperature` / `top_p` are sent to remote APIs. Some providers
@@ -124,6 +128,7 @@ class AppSettings {
     this.webToolsEnabled = false,
     this.webSearchProvider = 'auto',
     this.webSearchApiKey,
+    this.webSearxUrl,
     this.autoCollapseThinking = false,
     this.sendTemperature = true,
     this.sendTopP = true,
@@ -181,6 +186,7 @@ class AppSettings {
     bool? webToolsEnabled,
     String? webSearchProvider,
     Object? webSearchApiKey = _unset,
+    Object? webSearxUrl = _unset,
     bool? autoCollapseThinking,
     bool? sendTemperature,
     bool? sendTopP,
@@ -262,6 +268,9 @@ class AppSettings {
       webSearchApiKey: identical(webSearchApiKey, _unset)
           ? this.webSearchApiKey
           : webSearchApiKey as String?,
+      webSearxUrl: identical(webSearxUrl, _unset)
+          ? this.webSearxUrl
+          : webSearxUrl as String?,
       autoCollapseThinking: autoCollapseThinking ?? this.autoCollapseThinking,
       sendTemperature: sendTemperature ?? this.sendTemperature,
       sendTopP: sendTopP ?? this.sendTopP,
@@ -321,6 +330,7 @@ class AppSettings {
       'webToolsEnabled': webToolsEnabled,
       'webSearchProvider': webSearchProvider,
       'webSearchApiKey': webSearchApiKey,
+      'webSearxUrl': webSearxUrl,
       'autoCollapseThinking': autoCollapseThinking,
       'sendTemperature': sendTemperature,
       'sendTopP': sendTopP,
@@ -384,6 +394,7 @@ class AppSettings {
       webToolsEnabled: map['webToolsEnabled'] ?? false,
       webSearchProvider: map['webSearchProvider'] as String? ?? 'auto',
       webSearchApiKey: map['webSearchApiKey'] as String?,
+      webSearxUrl: map['webSearxUrl'] as String?,
       autoCollapseThinking: map['autoCollapseThinking'] ?? false,
       sendTemperature: map['sendTemperature'] ?? true,
       sendTopP: map['sendTopP'] ?? true,

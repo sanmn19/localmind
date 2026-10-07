@@ -31,7 +31,9 @@
     "web_browser_card_desc",
     "web_search_provider",
     "web_search_provider_key",
-    "web_search_key_hint"
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ],
 
   "bn": [
@@ -70,7 +72,9 @@
     "web_browser_card_desc",
     "web_search_provider",
     "web_search_provider_key",
-    "web_search_key_hint"
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ],
 
   "de": [
@@ -109,7 +113,9 @@
     "web_browser_card_desc",
     "web_search_provider",
     "web_search_provider_key",
-    "web_search_key_hint"
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ],
 
   "es": [
@@ -148,7 +154,9 @@
     "web_browser_card_desc",
     "web_search_provider",
     "web_search_provider_key",
-    "web_search_key_hint"
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ],
 
   "fr": [
@@ -187,7 +195,9 @@
     "web_browser_card_desc",
     "web_search_provider",
     "web_search_provider_key",
-    "web_search_key_hint"
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ],
 
   "hi": [
@@ -226,7 +236,9 @@
     "web_browser_card_desc",
     "web_search_provider",
     "web_search_provider_key",
-    "web_search_key_hint"
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ],
 
   "it": [
@@ -265,7 +277,9 @@
     "web_browser_card_desc",
     "web_search_provider",
     "web_search_provider_key",
-    "web_search_key_hint"
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ],
 
   "ja": [
@@ -304,7 +318,9 @@
     "web_browser_card_desc",
     "web_search_provider",
     "web_search_provider_key",
-    "web_search_key_hint"
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ],
 
   "ko": [
@@ -329,7 +345,9 @@
     "web_browser_card_desc",
     "web_search_provider",
     "web_search_provider_key",
-    "web_search_key_hint"
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ],
 
   "pt": [
@@ -354,7 +372,9 @@
     "web_browser_card_desc",
     "web_search_provider",
     "web_search_provider_key",
-    "web_search_key_hint"
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ],
 
   "ru": [
@@ -393,7 +413,9 @@
     "web_browser_card_desc",
     "web_search_provider",
     "web_search_provider_key",
-    "web_search_key_hint"
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ],
 
   "tr": [
@@ -432,7 +454,9 @@
     "web_browser_card_desc",
     "web_search_provider",
     "web_search_provider_key",
-    "web_search_key_hint"
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ],
 
   "zh": [
@@ -471,7 +495,9 @@
     "web_browser_card_desc",
     "web_search_provider",
     "web_search_provider_key",
-    "web_search_key_hint"
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ],
 
   "zh_TW": [
@@ -510,6 +536,8 @@
     "web_browser_card_desc",
     "web_search_provider",
     "web_search_provider_key",
-    "web_search_key_hint"
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ]
 }

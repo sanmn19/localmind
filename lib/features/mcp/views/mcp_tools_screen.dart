@@ -626,6 +626,7 @@ class _WebBrowserCard extends ConsumerStatefulWidget {
 class __WebBrowserCardState extends ConsumerState<_WebBrowserCard> {
   static const _providerOptions = <String, String>{
     'auto': 'Auto (keyless ring → DDG)',
+    'searxng': 'SearXNG (self-hosted, private)',
     'ring': 'Keyless ring (exa/parallel)',
     'ddg': 'DuckDuckGo (no key)',
     'tavily': 'Tavily',
@@ -635,12 +636,16 @@ class __WebBrowserCardState extends ConsumerState<_WebBrowserCard> {
 
   final _apiKeyController = TextEditingController();
   final _apiKeyFocusNode = FocusNode();
+  final _searxUrlController = TextEditingController();
+  final _searxUrlFocusNode = FocusNode();
 
   @override
   void initState() {
     super.initState();
     _apiKeyController.text = ref.read(settingsProvider).webSearchApiKey ?? '';
     _apiKeyFocusNode.addListener(_onApiKeyFocusChange);
+    _searxUrlController.text = ref.read(settingsProvider).webSearxUrl ?? '';
+    _searxUrlFocusNode.addListener(_onSearxUrlFocusChange);
   }
 
   @override
@@ -648,6 +653,9 @@ class __WebBrowserCardState extends ConsumerState<_WebBrowserCard> {
     _apiKeyFocusNode.removeListener(_onApiKeyFocusChange);
     _apiKeyFocusNode.dispose();
     _apiKeyController.dispose();
+    _searxUrlFocusNode.removeListener(_onSearxUrlFocusChange);
+    _searxUrlFocusNode.dispose();
+    _searxUrlController.dispose();
     super.dispose();
   }
 
@@ -660,12 +668,27 @@ class __WebBrowserCardState extends ConsumerState<_WebBrowserCard> {
     }
   }
 
+  void _onSearxUrlFocusChange() {
+    if (!_searxUrlFocusNode.hasFocus) {
+      _saveSearxUrl();
+    }
+  }
+
   void _saveApiKey() {
     final key = _apiKeyController.text.trim();
     if (key == (ref.read(settingsProvider).webSearchApiKey ?? '')) return;
     ref
         .read(settingsProvider.notifier)
         .setWebSearchApiKey(key.isEmpty ? null : key);
+    ref.invalidate(availableToolsProvider);
+  }
+
+  void _saveSearxUrl() {
+    final url = _searxUrlController.text.trim();
+    if (url == (ref.read(settingsProvider).webSearxUrl ?? '')) return;
+    ref
+        .read(settingsProvider.notifier)
+        .setWebSearxUrl(url.isEmpty ? null : url);
     ref.invalidate(availableToolsProvider);
   }
 
@@ -727,6 +750,27 @@ class __WebBrowserCardState extends ConsumerState<_WebBrowserCard> {
                   },
                 ),
                 const SizedBox(height: 12),
+                if (settings.webSearchProvider == 'searxng') ...[
+                  Text(
+                    l10n.searx_base_url_label,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  ShadInput(
+                    key: const Key('web_searx_url'),
+                    controller: _searxUrlController,
+                    focusNode: _searxUrlFocusNode,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    keyboardType: TextInputType.url,
+                    placeholder: Text(l10n.searx_base_url_hint),
+                    onSubmitted: (_) => _saveSearxUrl(),
+                    onEditingComplete: () => _saveSearxUrl(),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 Text(
                   l10n.web_search_provider_key,
                   style: theme.textTheme.titleSmall?.copyWith(

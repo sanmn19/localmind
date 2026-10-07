@@ -134,6 +134,30 @@ void main() {
     expect(spy.setWebSearchApiKeyCalls, contains(null));
     expect(container.read(settingsProvider).webSearchApiKey, isNull);
   });
+
+  testWidgets('searxng provider shows the server url field and persists it on '
+      'submit', (tester) async {
+    final (container, spy) = await pumpWebCardHarness(tester, enabled: true);
+    await tester.pumpAndSettle();
+
+    // The field is hidden until searxng is the selected provider.
+    expect(find.byKey(const Key('web_searx_url')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('web_search_provider_select')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('SearXNG (self-hosted, private)').last);
+    await tester.pumpAndSettle();
+    expect(spy.setWebSearchProviderCalls, contains('searxng'));
+
+    final urlField = find.byKey(const Key('web_searx_url'));
+    expect(urlField, findsOneWidget);
+    await tester.enterText(urlField, 'http://my-rig:8888');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(spy.setWebSearxUrlCalls, contains('http://my-rig:8888'));
+    expect(container.read(settingsProvider).webSearxUrl, 'http://my-rig:8888');
+  });
 }
 
 class _SpySettingsNotifier extends SettingsNotifier {
@@ -143,6 +167,7 @@ class _SpySettingsNotifier extends SettingsNotifier {
   final setWebToolsEnabledCalls = <bool>[];
   final setWebSearchProviderCalls = <String>[];
   final setWebSearchApiKeyCalls = <String?>[];
+  final setWebSearxUrlCalls = <String?>[];
 
   @override
   AppSettings build() => AppSettings(
@@ -167,5 +192,11 @@ class _SpySettingsNotifier extends SettingsNotifier {
   void setWebSearchApiKey(String? value) {
     setWebSearchApiKeyCalls.add(value);
     super.setWebSearchApiKey(value);
+  }
+
+  @override
+  void setWebSearxUrl(String? value) {
+    setWebSearxUrlCalls.add(value);
+    super.setWebSearxUrl(value);
   }
 }

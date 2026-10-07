@@ -38,16 +38,37 @@ const _ddgChainBlockedMessage =
     'endpoints — configure a search provider key in Settings → Tools → Web '
     'Browser for reliable results';
 
+// The self-hosted SearXNG attempt's failure reason. Thrown for non-200
+// responses, connection errors and empty/undecodable result lists; also the
+// tail folded into the chain's final message when every later link fails.
+const searxUnreachableMessage =
+    'SearXNG at the configured URL is unreachable or returned no results — '
+    'check the server or pick another provider.';
+
 /// Search provider chains (Amendment 1: keyless rings survive device-level
-/// bot blocks):
+/// bot blocks; Amendment 2: self-hosted SearXNG outranks anonymous vendors):
 ///
 /// - [auto] (the settings default): the anonymous keyless MCP ring (exa →
-///   parallel) first, then the DDG lite→html chain.
+///   parallel) first, then the DDG lite→html chain. When a SearXNG base URL
+///   is configured, searx leads the chain (self-hosted = trusted + private).
+/// - [searxng]: the user's own SearXNG instance first, ring + ddg as rescue.
 /// - [keylessRing]: only the anonymous ring.
 /// - Keyed vendors (tavily/brave/serper) with an API key: that vendor first,
 ///   the ring as rescue; without a key the ring runs alone.
 /// - [ddgLite] (explicit 'ddg'): the DDG chain first, ring as rescue.
-enum WebSearchProvider { ddgLite, tavily, brave, serper, keylessRing, auto }
+///
+/// Whenever [WebSearchService.searxUrl] is configured, the SearXNG attempt
+/// joins FIRST in every chain except the explicit keyless ring — the private,
+/// self-hosted tier outranks everything the user has not explicitly pinned.
+enum WebSearchProvider {
+  ddgLite,
+  tavily,
+  brave,
+  serper,
+  searxng,
+  keylessRing,
+  auto,
+}
 
 /// One chain link: serves the query or throws [WebSearchBlockedException].
 typedef _ChainAttempt =
@@ -71,6 +92,7 @@ class WebSearchService {
   WebSearchService({
     required this.provider,
     this.apiKey,
+    this.searxUrl,
     Dio? dio,
     DateTime Function()? clock,
     Duration Function()? jitterFor,
@@ -83,6 +105,11 @@ class WebSearchService {
 
   final WebSearchProvider provider;
   final String? apiKey;
+
+  /// Base URL of the user's self-hosted SearXNG instance (e.g.
+  /// `http://192.168.1.20:8888`), reached over the private network (Tailscale
+  /// homelab rigs). Search tries it first when set.
+  final String? searxUrl;
   // Assigned in the constructor body so the ring can share the same Dio
   // instance when both are defaulted.
   late final Dio dio;
@@ -93,6 +120,9 @@ class WebSearchService {
   DateTime? _lastSearchAt;
   DateTime? _blockedUntil;
   int _suppressedSearches = 0;
+  // Set when the searx attempt throws during the current search and folded
+  // into the final message if every rescue link fails too (Amendment 2).
+  String? _searxFailureMessage;
   final Map<String, _SearchCacheEntry> _cache =
       <String, _SearchCacheEntry>{}; // LinkedHashMap: insertion order = LRU
 
@@ -148,6 +178,7 @@ class WebSearchService {
     final cached = _takeFromCache(cacheKey);
     if (cached != null) return cached;
     await _pace();
+    _searxFailureMessage = null;
     WebSearchBlockedException? lastError;
     for (final attempt in _resolveChain()) {
       try {
@@ -159,33 +190,70 @@ class WebSearchService {
         lastError = WebSearchBlockedException('Search failed: $status');
       }
     }
-    // Chain end: surface the last link's failure to the model.
-    throw lastError ?? WebSearchBlockedException('search failed');
+    // Chain end: surface the last link's failure to the model. When the
+    // self-hosted searx tier was tried and also failed, its reason is folded
+    // into the surfaced message — a 403 from `format=json` being disabled or
+    // a down rig deserves a mention beyond the generic ddg throttling hint.
+    final failure = lastError ?? WebSearchBlockedException('search failed');
+    final searxNote = _searxFailureMessage;
+    throw searxNote != null && searxNote != failure.message
+        ? WebSearchBlockedException('${failure.message} — $searxNote')
+        : failure;
   }
 
-  // Amendment 1 resolution: auto runs ring→ddg; explicit keyed providers run
-  // themselves first with the ring as rescue; a keyed provider without a key
-  // falls straight to the ring; explicit ddg is rescued by the ring; ring is
-  // ring-only.
+  // Amendment 2 resolution: a configured searxUrl leads EVERY chain except
+  // the explicit keyless ring (the user's self-hosted, private tier outranks
+  // the anonymous vendors; 'ring' stays ring-only as an explicit diagnostic
+  // pick). Otherwise the Amendment 1 chains are unchanged: auto runs
+  // ring→ddg; explicit keyed providers run themselves first with the ring as
+  // rescue; a keyed provider without a key falls straight to the ring;
+  // explicit ddg is rescued by the ring.
   List<_ChainAttempt> _resolveChain() {
     switch (provider) {
       case WebSearchProvider.auto:
-        return [_ringAttempt, _ddgAttempt];
+        return [..._searxPrefix(), _ringAttempt, _ddgAttempt];
+      case WebSearchProvider.searxng:
+        return [..._searxPrefix(), _ringAttempt, _ddgAttempt];
       case WebSearchProvider.keylessRing:
         return [_ringAttempt];
       case WebSearchProvider.ddgLite:
-        return [_ddgAttempt, _ringAttempt];
+        return [..._searxPrefix(), _ddgAttempt, _ringAttempt];
       case WebSearchProvider.tavily:
-        return _keyedChain((query, limit) => _searchTavily(query, limit));
+        return [
+          ..._searxPrefix(),
+          ..._keyedChain((query, limit) => _searchTavily(query, limit)),
+        ];
       case WebSearchProvider.brave:
-        return _keyedChain((query, limit) => _searchBrave(query, limit));
+        return [
+          ..._searxPrefix(),
+          ..._keyedChain((query, limit) => _searchBrave(query, limit)),
+        ];
       case WebSearchProvider.serper:
-        return _keyedChain((query, limit) => _searchSerper(query, limit));
+        return [
+          ..._searxPrefix(),
+          ..._keyedChain((query, limit) => _searchSerper(query, limit)),
+        ];
     }
   }
 
+  // The searx link exists only when a base URL is configured; an explicit
+  // 'searxng' pick without a URL defers to the ring chain instead of firing
+  // a request into the void.
+  List<_ChainAttempt> _searxPrefix() => searxUrl == null
+      ? const <_ChainAttempt>[]
+      : <_ChainAttempt>[_searxAttempt];
+
   List<_ChainAttempt> _keyedChain(_ChainAttempt request) =>
       apiKey == null ? [_ringAttempt] : [request, _ringAttempt];
+
+  Future<List<WebSearchResult>> _searxAttempt(String query, int limit) async {
+    try {
+      return await _searchSearxng(query, limit);
+    } on WebSearchBlockedException catch (error) {
+      _searxFailureMessage = error.message;
+      rethrow;
+    }
+  }
 
   Future<List<WebSearchResult>> _ringAttempt(String query, int limit) =>
       ring.search(query, numResults: limit);
@@ -402,6 +470,49 @@ class WebSearchService {
           (item['snippet'] ?? '').toString(),
         ),
     ].take(limit).toList();
+  }
+
+  // Self-hosted SearXNG JSON API (Amendment 2): GET <base>/search with the
+  // json format enabled on the user's own rig — no HTML scraping, no
+  // third-party key walls. The base URL is trimmed of a trailing slash so
+  // both 'http://rig:8888' and 'http://rig:8888/' work.
+  Future<List<WebSearchResult>> _searchSearxng(String query, int limit) async {
+    final base = searxUrl!.endsWith('/')
+        ? searxUrl!.substring(0, searxUrl!.length - 1)
+        : searxUrl!;
+    Response<dynamic> response;
+    try {
+      response = await dio.get<dynamic>(
+        '$base/search',
+        queryParameters: {
+          'q': query,
+          'format': 'json',
+          'language': 'en',
+          'safesearch': 1,
+        },
+      );
+    } on DioException {
+      throw WebSearchBlockedException(searxUnreachableMessage);
+    }
+    if ((response.statusCode ?? 0) != 200) {
+      throw WebSearchBlockedException(searxUnreachableMessage);
+    }
+    final data = _asMap(response.data);
+    final results = <WebSearchResult>[];
+    for (final item in _asList(data['results'])) {
+      // Non-standard rows (missing url/title) are ignored per SearXNG's
+      // response contract; content is nullable and maps to an empty snippet.
+      final title = item['title']?.toString() ?? '';
+      final url = item['url']?.toString() ?? '';
+      if (title.isEmpty || url.isEmpty) continue;
+      results.add(
+        WebSearchResult(title, url, item['content']?.toString() ?? ''),
+      );
+    }
+    if (results.isEmpty) {
+      throw WebSearchBlockedException(searxUnreachableMessage);
+    }
+    return results.take(limit).toList();
   }
 
   Map<String, dynamic> _asMap(Object? value) =>

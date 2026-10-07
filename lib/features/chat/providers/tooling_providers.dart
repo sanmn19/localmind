@@ -62,6 +62,8 @@ WebSearchProvider webSearchProviderFromName(String name) {
       return WebSearchProvider.brave;
     case 'serper':
       return WebSearchProvider.serper;
+    case 'searxng':
+      return WebSearchProvider.searxng;
     case 'ring':
       return WebSearchProvider.keylessRing;
     case 'auto':
@@ -91,6 +93,7 @@ final webServerRegistrationProvider = Provider<void>((ref) {
         search: WebSearchService(
           provider: webSearchProviderFromName(settings.webSearchProvider),
           apiKey: settings.webSearchApiKey,
+          searxUrl: settings.webSearxUrl,
           ring: ring,
         ),
         fetch: WebFetchService(fallbackRing: ring),

@@ -11,6 +11,7 @@ void main() {
       expect(settings.webToolsEnabled, isFalse);
       expect(settings.webSearchProvider, 'auto');
       expect(settings.webSearchApiKey, isNull);
+      expect(settings.webSearxUrl, isNull);
     },
   );
 
@@ -54,4 +55,42 @@ void main() {
       expect(kept.webSearchApiKey, 'k123');
     },
   );
+
+  test("fromMap maps 'searxng' to the searxng provider enum", () {
+    final restored = AppSettings.fromMap({'webSearchProvider': 'searxng'});
+    expect(
+      webSearchProviderFromName(restored.webSearchProvider),
+      WebSearchProvider.searxng,
+    );
+  });
+
+  test(
+    'copyWith sets and clears webSearxUrl on explicit null, keeps when omitted',
+    () {
+      final base = AppSettings().copyWith(webSearxUrl: 'http://rig:8888');
+      expect(base.webSearxUrl, 'http://rig:8888');
+      final cleared = base.copyWith(webSearxUrl: null);
+      expect(cleared.webSearxUrl, isNull);
+      final kept = base.copyWith(webToolsEnabled: true);
+      expect(kept.webSearxUrl, 'http://rig:8888');
+    },
+  );
+
+  test('webSearxUrl survives the toMap/fromMap round-trip', () {
+    final settings = AppSettings().copyWith(
+      webSearchProvider: 'searxng',
+      webSearxUrl: 'http://rig:8888',
+    );
+    final restored = AppSettings.fromMap(settings.toMap());
+    expect(restored.webSearchProvider, 'searxng');
+    expect(restored.webSearxUrl, 'http://rig:8888');
+  });
+
+  test('fromMap tolerates legacy maps without webSearxUrl', () {
+    final restored = AppSettings.fromMap({
+      'webSearchProvider': 'searxng',
+      'webSearchApiKey': 'k123',
+    });
+    expect(restored.webSearxUrl, isNull);
+  });
 }

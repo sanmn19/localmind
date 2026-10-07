@@ -3278,7 +3278,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get web_browser_card_desc =>
-      'Gives models two tools: web.search and web.fetch. DuckDuckGo needs no key and is best-effort; Tavily / Brave / Serper keys are more reliable.';
+      'Gives models two tools: web.search and web.fetch. SearXNG points at your own server and stays private; DuckDuckGo needs no key and is best-effort; Tavily / Brave / Serper keys are more reliable.';
 
   @override
   String get web_search_provider => 'Search provider';
@@ -3288,6 +3288,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get web_search_key_hint => 'API key…';
+
+  @override
+  String get searx_base_url_label => 'SearXNG server URL';
+
+  @override
+  String get searx_base_url_hint => 'http://your-rig:8888';
 }
 
 /// The translations for Chinese, as used in Taiwan (`zh_TW`).

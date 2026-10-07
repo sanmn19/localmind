@@ -6216,7 +6216,7 @@ abstract class AppLocalizations {
   /// No description provided for @web_browser_card_desc.
   ///
   /// In en, this message translates to:
-  /// **'Gives models two tools: web.search and web.fetch. DuckDuckGo needs no key and is best-effort; Tavily / Brave / Serper keys are more reliable.'**
+  /// **'Gives models two tools: web.search and web.fetch. SearXNG points at your own server and stays private; DuckDuckGo needs no key and is best-effort; Tavily / Brave / Serper keys are more reliable.'**
   String get web_browser_card_desc;
 
   /// No description provided for @web_search_provider.
@@ -6236,6 +6236,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'API key…'**
   String get web_search_key_hint;
+
+  /// No description provided for @searx_base_url_label.
+  ///
+  /// In en, this message translates to:
+  /// **'SearXNG server URL'**
+  String get searx_base_url_label;
+
+  /// No description provided for @searx_base_url_hint.
+  ///
+  /// In en, this message translates to:
+  /// **'http://your-rig:8888'**
+  String get searx_base_url_hint;
 }
 
 class _AppLocalizationsDelegate
