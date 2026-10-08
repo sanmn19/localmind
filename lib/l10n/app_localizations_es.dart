@@ -3422,4 +3422,35 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get searx_base_url_hint => 'http://your-rig:8888';
+
+  @override
+  String get device_card_title => 'Device';
+
+  @override
+  String get device_card_desc =>
+      'Gives models local device tools: list and launch installed apps, compose mail drafts, and search contacts. Everything runs through OS surfaces; actual sends stay user-tapped.';
+
+  @override
+  String get share_target_label => 'Receive shared content';
+
+  @override
+  String get mail_connectors_card_title => 'Mail connectors';
+
+  @override
+  String get mail_connectors_card_desc =>
+      'Connects a Gmail or Outlook account so the mail tools read, search and send with it. Tokens stay on-device and each connector can be disconnected at any time.';
+
+  @override
+  String get mail_connect_gmail => 'Connect Gmail';
+
+  @override
+  String get mail_connect_outlook => 'Connect Outlook';
+
+  @override
+  String mail_connected_as(String email) {
+    return 'Connected: $email';
+  }
+
+  @override
+  String get mail_disconnect => 'Disconnect';
 }
