@@ -32,8 +32,11 @@ class KeylessMcpRing {
       'All web-search vendors are throttled right now — try again shortly '
       'or configure a provider key';
 
+  // Rate-limit-shaped phrases only, and only ever matched on a FAILURE
+  // (HTTP status, rpc error envelope, or isError result). Page content that
+  // merely MENTIONS throttling must not rotate the ring.
   static const _rateLimitPattern =
-      'rate|quota|limit|exceeded|blocked|invalid session';
+      'too many requests|rate limit exceeded|quota exhausted|invalid session';
 
   final Map<_McpVendor, String> _sessions = {};
   int _cursor = 0;
@@ -127,11 +130,11 @@ class KeylessMcpRing {
       if (parsed == null) {
         throw _VendorFailureException('$tool returned no usable message');
       }
-      final text = _extractCardContent(vendor, parsed);
-      if (_matchesRateLimit(text)) {
-        throw const _RateLimitedException();
-      }
-      return text;
+      // Return the SUCCESS text untouched: throttle classification only
+      // ever reads failure branches (rpc error / isError), which
+      // `_extractCardContent` already routes. Scanning result content made
+      // any page merely MENTIONING a rate limit rotate the ring.
+      return _extractCardContent(vendor, parsed);
     }
   }
 
@@ -247,8 +250,9 @@ class KeylessMcpRing {
       (error.response?.data is String &&
           _asText(error.response?.data).contains('invalid session'));
 
-  // Any 429, or any failure/echo text with rate-limit-shaped wording, counts
-  // as throttling and rotates the ring.
+  // Failure-branch matcher: a 429 (classified before this runs) or an
+  // error/isError body with rate-limit-shaped wording counts as throttling.
+  // Never apply this to successful result content.
   bool _matchesRateLimit(String text) =>
       RegExp(_rateLimitPattern, caseSensitive: false).hasMatch(text);
 

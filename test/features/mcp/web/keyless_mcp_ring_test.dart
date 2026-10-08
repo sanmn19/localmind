@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:localmind/features/mcp/data/web/keyless_mcp_ring.dart';
@@ -304,4 +306,240 @@ void main() {
     final fetchHeaders = valueHeaders(captured[3].headers);
     expect(headerOf(fetchHeaders, 'Mcp-Session-Id'), 'sess-exa-1');
   });
+
+  test(
+    'throttle wording inside successful result text must not rotate the ring',
+    () async {
+      final captured = <RequestOptions>[];
+      final throttleSnippet =
+          'Title: Alpha\nURL: https://a.example/one\nprovider page notes '
+          'a rate limit exceeded message for busy accounts\n'
+          'Title: Beta\nURL: https://a.example/two\nsecond snippet';
+      final dio = Dio()
+        ..httpClientAdapter = StubAdapter(
+          {},
+          sequences: {
+            exaMcpUrl: [
+              StubResponse(
+                200,
+                sseEnvelope(0, mcpInitializeResult()),
+                headers: {
+                  'mcp-session-id': ['sess-exa-1'],
+                },
+              ),
+              StubResponse(202, ''),
+              StubResponse(200, sseEnvelope(1, mcpTextResult(throttleSnippet))),
+              StubResponse(
+                200,
+                sseEnvelope(
+                  2,
+                  mcpTextResult(
+                    'Title: Gamma\nURL: https://g.example\ngamma snippet',
+                  ),
+                ),
+              ),
+            ],
+          },
+          onRequest: captured.add,
+        );
+      final ring = KeylessMcpRing(dio: dio);
+
+      // The exa SUCCESS text merely mentions rate limits — that is page
+      // content, not the vendor throttling us.
+      final first = await ring.search('ddg rate limits', numResults: 2);
+      expect(first.map((r) => r.title), ['Alpha', 'Beta']);
+      expect(first.first.snippet, contains('rate limit exceeded'));
+
+      expect(captured, hasLength(3), reason: 'init + notification + call');
+      expect(captured.last.uri.toString(), exaMcpUrl);
+
+      // The cursor must NOT have rotated: the next search starts at exa
+      // again, reusing the cached session (a plain tools/call).
+      final second = await ring.search('follow-up query', numResults: 2);
+      expect(second.map((r) => r.title), ['Gamma']);
+      final secondSearch = captured.sublist(3);
+      expect(secondSearch, hasLength(1));
+      expect(secondSearch.single.uri.toString(), exaMcpUrl);
+      expect(secondSearch.single.data as String, contains('"web_search_exa"'));
+      expect(
+        headerOf(valueHeaders(secondSearch.single.headers), 'Mcp-Session-Id'),
+        'sess-exa-1',
+      );
+    },
+  );
+
+  test('an isError result with throttle phrasing still rotates', () async {
+    final captured = <RequestOptions>[];
+    final dio = Dio()
+      ..httpClientAdapter = StubAdapter(
+        {},
+        sequences: {
+          exaMcpUrl: [
+            StubResponse(
+              200,
+              jsonEnvelope(0, mcpInitializeResult()),
+              headers: {
+                'mcp-session-id': ['sess-exa-1'],
+              },
+            ),
+            StubResponse(202, ''),
+            // The MCP envelope carries isError:true — the FAILURE branch —
+            // with throttle phrasing inside: that IS throttling.
+            StubResponse(
+              200,
+              jsonEncode({
+                'jsonrpc': '2.0',
+                'id': 1,
+                'result': {
+                  'isError': true,
+                  'content': [
+                    {'type': 'text', 'text': 'rate limit exceeded'},
+                  ],
+                },
+              }),
+            ),
+          ],
+          parallelMcpUrl: [
+            StubResponse(
+              200,
+              jsonEnvelope(0, mcpInitializeResult(name: 'parallel')),
+              headers: {
+                'mcp-session-id': ['sess-parallel-1'],
+              },
+            ),
+            StubResponse(202, ''),
+            StubResponse(200, parallelSearchResultJson(text: mcpPairText)),
+          ],
+        },
+        onRequest: captured.add,
+      );
+    final ring = KeylessMcpRing(dio: dio);
+
+    final first = await ring.search('throttle envelope');
+    expect(first.map((r) => r.title), ['Alpha', 'Beta']);
+    expect(
+      captured.map((o) => o.uri.toString()).any((u) => u == exaMcpUrl),
+      isTrue,
+      reason: 'exa must have received the tools/call that failed',
+    );
+
+    // The next search must START at parallel: the failure-branch throttle
+    // rotated the cursor.
+    final requestsAfterFirstSearch = captured.length;
+    final second = await ring.search('rotated again');
+    expect(second.map((r) => r.title), ['Alpha', 'Beta']);
+    final secondSearchUris = captured
+        .sublist(requestsAfterFirstSearch)
+        .map((o) => o.uri.toString())
+        .toList();
+    expect(secondSearchUris.first, parallelMcpUrl);
+  });
+
+  test(
+    'isError without throttle phrasing falls through without rotating',
+    () async {
+      final captured = <RequestOptions>[];
+      final parallelResponses = [
+        StubResponse(
+          200,
+          jsonEnvelope(0, mcpInitializeResult(name: 'parallel')),
+          headers: {
+            'mcp-session-id': ['sess-parallel-1'],
+          },
+        ),
+        StubResponse(202, ''),
+        StubResponse(200, parallelSearchResultJson(text: mcpPairText)),
+      ];
+      final dio = Dio()
+        ..httpClientAdapter = StubAdapter(
+          {},
+          sequences: {
+            exaMcpUrl: [
+              StubResponse(
+                200,
+                jsonEnvelope(0, mcpInitializeResult()),
+                headers: {
+                  'mcp-session-id': ['sess-exa-1'],
+                },
+              ),
+              StubResponse(202, ''),
+              StubResponse(
+                200,
+                jsonEncode({
+                  'jsonrpc': '2.0',
+                  'id': 1,
+                  'result': {
+                    'isError': true,
+                    'content': [
+                      {'type': 'text', 'text': 'query rejected: bad arguments'},
+                    ],
+                  },
+                }),
+              ),
+            ],
+            parallelMcpUrl: parallelResponses,
+          },
+          onRequest: captured.add,
+        );
+      final ring = KeylessMcpRing(dio: dio);
+
+      final first = await ring.search('bad args turn');
+      expect(first.map((r) => r.title), ['Alpha', 'Beta']);
+
+      // A vendor failure is our error, not throttling: keep the cursor so the
+      // NEXT search starts at exa again.
+      final second = await ring.search('next query');
+      expect(second.map((r) => r.title), ['Alpha', 'Beta']);
+      final secondCall = captured
+          .where(
+            (o) =>
+                o.uri.toString() == exaMcpUrl &&
+                (o.data as String).contains('"tools/call"'),
+          )
+          .toList();
+      expect(
+        secondCall,
+        hasLength(2),
+        reason:
+            'exa retried first on the next search — an isError result without '
+            'throttle phrasing must not rotate the ring',
+      );
+    },
+  );
+
+  test(
+    'a 403 bot-block body is a vendor failure, not a ring rotation',
+    () async {
+      final captured = <RequestOptions>[];
+      final parallelResponses = [
+        StubResponse(
+          200,
+          jsonEnvelope(0, mcpInitializeResult(name: 'parallel')),
+          headers: {
+            'mcp-session-id': ['sess-parallel-1'],
+          },
+        ),
+        StubResponse(202, ''),
+        StubResponse(200, parallelSearchResultJson(text: mcpPairText)),
+      ];
+      final dio = Dio()
+        ..httpClientAdapter = StubAdapter(
+          {exaMcpUrl: StubResponse(403, 'Access Denied — request blocked')},
+          sequences: {parallelMcpUrl: parallelResponses},
+          onRequest: captured.add,
+        );
+      final ring = KeylessMcpRing(dio: dio);
+
+      final first = await ring.search('blocked vendor');
+      expect(first.map((r) => r.title), ['Alpha', 'Beta']);
+
+      // No rotation: the next search re-tries exa first (it fell through on a
+      // plain vendor failure, not a throttle).
+      await ring.search('next round');
+      final exaTraffic = captured
+          .where((o) => o.uri.toString() == exaMcpUrl)
+          .toList();
+      expect(exaTraffic, hasLength(2), reason: 'second search started at exa');
+    },
+  );
 }
