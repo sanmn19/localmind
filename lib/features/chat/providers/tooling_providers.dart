@@ -7,6 +7,7 @@ import '../data/tools/mcp_tool_provider.dart';
 import '../data/tools/tool_definition.dart';
 import '../data/mcp_server_manager.dart';
 import '../data/tool_budget.dart';
+import '../../mcp/data/device_contacts_repository.dart';
 import '../../mcp/data/device_mcp_server.dart';
 import '../../mcp/data/terminal_mcp_server.dart';
 import '../../mcp/data/web/keyless_mcp_ring.dart';
@@ -157,11 +158,13 @@ final webServerRegistrationProvider = Provider<void>((ref) {
     manager.removeServer(terminalMcpServerLabel);
   }
   if (settings.deviceToolsEnabled) {
-    // Routing goes through the method channel today; Task 2 fills the
-    // native handlers, Task 3 swaps contacts to the real repository.
+    // Launcher calls ride the method channel; contacts read straight from
+    // the flutter_contacts plugin with the READ_CONTACTS runtime permission
+    // gated inside the repository (Task 2 filled the native handlers,
+    // Task 3 swapped contacts to the real repository).
     manager.addDeviceServer(
       DeviceServices(
-        contacts: const MethodChannelDeviceContactsService(),
+        contacts: const DeviceContactsRepository(),
         launcher: const MethodChannelDeviceAppLauncher(),
       ),
     );

@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:localmind/core/services/device_tools_service.dart';
 import 'package:localmind/features/chat/data/mcp_client.dart';
 import 'package:localmind/features/chat/data/mcp_server_manager.dart';
+import 'package:localmind/features/mcp/data/device_contacts_repository.dart';
 import 'package:localmind/features/mcp/data/device_mcp_server.dart';
 
 class _FakeLauncher implements DeviceAppLauncher {
@@ -87,6 +88,17 @@ class _FakeContacts implements DeviceContactsService {
     byPhoneQueries.add(phone);
     return next;
   }
+}
+
+class _DeniedContactsPermission implements ContactsPermissionClient {
+  @override
+  Future<bool> isGranted() async => false;
+
+  @override
+  Future<bool> isPermanentlyDenied() async => true;
+
+  @override
+  Future<bool> request() async => false;
 }
 
 class _ThrowingContacts implements DeviceContactsService {
@@ -611,6 +623,33 @@ void main() {
         'ERROR: device channel unavailable',
       );
     });
+
+    test(
+      'a contacts permission rejection renders the settings-guidance line',
+      () async {
+        final manager = await _deviceManager(
+          launcher: _FakeLauncher(),
+          contacts: DeviceContactsRepository(
+            permissionClient: _DeniedContactsPermission(),
+          ),
+        );
+
+        for (final call in const [
+          ('contacts.search', {'query': 'x'}),
+          ('contacts.by_email', {'email': 'x@y.com'}),
+          ('contacts.by_phone', {'phone': '555'}),
+        ]) {
+          expect(
+            await manager.callTool(
+              deviceMcpServerLabel,
+              call.$1,
+              call.$2 as Map<String, dynamic>,
+            ),
+            'ERROR: contacts permission needed — grant it in system settings',
+          );
+        }
+      },
+    );
   });
 
   group('pure intent builders', () {

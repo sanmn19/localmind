@@ -2,6 +2,7 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:localmind/core/services/device_tools_service.dart';
+import 'package:localmind/features/mcp/data/device_contacts_repository.dart';
 import 'package:localmind/features/mcp/data/device_mcp_server.dart';
 import 'package:localmind/features/mcp/data/terminal_mcp_server.dart';
 import 'package:localmind/features/mcp/data/web/web_fetch_service.dart';
@@ -641,6 +642,11 @@ class McpServerManager {
         default:
           throw McpException('Device MCP tool not found: $toolName');
       }
+    } on ContactsPermissionDenied {
+      // Deliberate rejection surface for the denied READ_CONTACTS gate (the
+      // runtime prompt was refused or is permanently denied): guide the user
+      // to system settings instead of the generic channel line.
+      return 'ERROR: contacts permission needed — grant it in system settings';
     } on DeviceChannelUnavailable {
       return 'ERROR: device channel unavailable';
     }

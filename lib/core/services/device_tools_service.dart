@@ -3,9 +3,9 @@ import 'package:flutter/services.dart';
 /// Dart-side contract for the `local://device` MCP server's backing services.
 ///
 /// TASK-SPAN NOTE: the launcher methods (compose/open/list) answer native
-/// handlers on Android (MainActivity.kt, channel proven below). The contacts
-/// methods are Task 3 scope — until they exist the No handler case surfaces
-/// to the model via [DeviceChannelUnavailable], never a crash.
+/// handlers on Android (MainActivity.kt); the contacts pieces are bound to
+/// the real flutter_contacts-backed repository
+/// (features/mcp/data/device_contacts_repository.dart) as of Task 3.
 
 /// Method channel the native device-tools host answers on.
 const deviceToolsChannel = MethodChannel('localmind/device_tools');
@@ -84,8 +84,9 @@ class MethodChannelDeviceAppLauncher implements DeviceAppLauncher {
   }
 }
 
-/// Channel-backed contacts look-up. Task 3 swaps this for the real
-/// flutter_contacts-backed repository under the same interface.
+/// Channel-backed contacts look-up. Superseded in production by the
+/// flutter_contacts-backed repository (Task 3); kept for the pinned
+/// channel-shape tests and as a fallback wiring seam.
 class MethodChannelDeviceContactsService implements DeviceContactsService {
   const MethodChannelDeviceContactsService();
 
@@ -156,8 +157,9 @@ abstract class DeviceAppLauncher {
   Future<List<DeviceAppEntry>> listInstalled();
 }
 
-/// Contacts seam behind the `contacts.*` tools. Task 3 binds the real
-/// flutter_contacts-backed repository; tests fake it with fixture rows.
+/// Contacts seam behind the `contacts.*` tools. Bound to the real
+/// flutter_contacts-backed repository in production; tests fake it with
+/// fixture rows.
 abstract class DeviceContactsService {
   Future<List<ContactSummary>> search(String query);
   Future<List<ContactSummary>> byEmail(String email);
