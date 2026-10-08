@@ -1,5 +1,9 @@
 {
   "ar": [
+    "terminal_card_title",
+    "terminal_card_desc",
+    "terminal_whitelist_label",
+    "terminal_whitelist_hint",
     "assistant_screen_capture_disabled_snackbar",
     "assistant_screen_capture_failed_snackbar",
     "gguf_vision_projector",
@@ -37,6 +41,10 @@
   ],
 
   "bn": [
+    "terminal_card_title",
+    "terminal_card_desc",
+    "terminal_whitelist_label",
+    "terminal_whitelist_hint",
     "assistant_screen_capture_disabled_snackbar",
     "assistant_screen_capture_failed_snackbar",
     "gguf_vision_projector",
@@ -78,6 +86,10 @@
   ],
 
   "de": [
+    "terminal_card_title",
+    "terminal_card_desc",
+    "terminal_whitelist_label",
+    "terminal_whitelist_hint",
     "assistant_screen_capture_disabled_snackbar",
     "assistant_screen_capture_failed_snackbar",
     "gguf_vision_projector",
@@ -119,6 +131,10 @@
   ],
 
   "es": [
+    "terminal_card_title",
+    "terminal_card_desc",
+    "terminal_whitelist_label",
+    "terminal_whitelist_hint",
     "assistant_screen_capture_disabled_snackbar",
     "assistant_screen_capture_failed_snackbar",
     "gguf_vision_projector",
@@ -160,6 +176,10 @@
   ],
 
   "fr": [
+    "terminal_card_title",
+    "terminal_card_desc",
+    "terminal_whitelist_label",
+    "terminal_whitelist_hint",
     "assistant_screen_capture_disabled_snackbar",
     "assistant_screen_capture_failed_snackbar",
     "gguf_vision_projector",
@@ -201,6 +221,10 @@
   ],
 
   "hi": [
+    "terminal_card_title",
+    "terminal_card_desc",
+    "terminal_whitelist_label",
+    "terminal_whitelist_hint",
     "assistant_screen_capture_disabled_snackbar",
     "assistant_screen_capture_failed_snackbar",
     "gguf_vision_projector",
@@ -242,6 +266,10 @@
   ],
 
   "it": [
+    "terminal_card_title",
+    "terminal_card_desc",
+    "terminal_whitelist_label",
+    "terminal_whitelist_hint",
     "assistant_screen_capture_disabled_snackbar",
     "assistant_screen_capture_failed_snackbar",
     "gguf_vision_projector",
@@ -283,6 +311,10 @@
   ],
 
   "ja": [
+    "terminal_card_title",
+    "terminal_card_desc",
+    "terminal_whitelist_label",
+    "terminal_whitelist_hint",
     "assistant_screen_capture_disabled_snackbar",
     "assistant_screen_capture_failed_snackbar",
     "gguf_vision_projector",
@@ -324,6 +356,10 @@
   ],
 
   "ko": [
+    "terminal_card_title",
+    "terminal_card_desc",
+    "terminal_whitelist_label",
+    "terminal_whitelist_hint",
     "assistant_screen_capture_disabled_snackbar",
     "assistant_screen_capture_failed_snackbar",
     "gguf_vision_projector",
@@ -351,6 +387,10 @@
   ],
 
   "pt": [
+    "terminal_card_title",
+    "terminal_card_desc",
+    "terminal_whitelist_label",
+    "terminal_whitelist_hint",
     "assistant_screen_capture_disabled_snackbar",
     "assistant_screen_capture_failed_snackbar",
     "gguf_vision_projector",
@@ -378,6 +418,10 @@
   ],
 
   "ru": [
+    "terminal_card_title",
+    "terminal_card_desc",
+    "terminal_whitelist_label",
+    "terminal_whitelist_hint",
     "assistant_screen_capture_disabled_snackbar",
     "assistant_screen_capture_failed_snackbar",
     "gguf_vision_projector",
@@ -419,6 +463,10 @@
   ],
 
   "tr": [
+    "terminal_card_title",
+    "terminal_card_desc",
+    "terminal_whitelist_label",
+    "terminal_whitelist_hint",
     "assistant_screen_capture_disabled_snackbar",
     "assistant_screen_capture_failed_snackbar",
     "gguf_vision_projector",
@@ -460,6 +508,10 @@
   ],
 
   "zh": [
+    "terminal_card_title",
+    "terminal_card_desc",
+    "terminal_whitelist_label",
+    "terminal_whitelist_hint",
     "assistant_screen_capture_disabled_snackbar",
     "assistant_screen_capture_failed_snackbar",
     "gguf_vision_projector",
@@ -501,6 +553,10 @@
   ],
 
   "zh_TW": [
+    "terminal_card_title",
+    "terminal_card_desc",
+    "terminal_whitelist_label",
+    "terminal_whitelist_hint",
     "assistant_screen_capture_disabled_snackbar",
     "assistant_screen_capture_failed_snackbar",
     "gguf_vision_projector",

@@ -87,54 +87,60 @@ void main() {
       );
     }
 
+    Future<bool> approve(
+      String toolName, {
+      required bool web,
+      required ToolRegistry registry,
+    }) => shouldAutoApproveTool(
+      toolName,
+      webToolsEnabled: web,
+      terminalToolsEnabled: false,
+      registry: registry,
+      whitelist: null,
+    );
+
     test(
       'auto-approves local://web tools while web tools are enabled',
       () async {
         final registry = await localWebRegistry();
-        expect(
-          await shouldAutoApproveTool('web.search', true, registry),
-          isTrue,
-        );
-        expect(
-          await shouldAutoApproveTool('web.fetch', true, registry),
-          isTrue,
-        );
+        expect(await approve('web.search', web: true, registry: registry), isTrue);
+        expect(await approve('web.fetch', web: true, registry: registry), isTrue);
       },
     );
 
     test('never auto-approves while web tools are disabled', () async {
       final registry = await localWebRegistry();
       expect(
-        await shouldAutoApproveTool('web.search', false, registry),
+        await approve('web.search', web: false, registry: registry),
         isFalse,
       );
       expect(
-        await shouldAutoApproveTool('web.fetch', false, registry),
+        await approve('web.fetch', web: false, registry: registry),
         isFalse,
       );
     });
 
     test('a remote-only shadowed web.fetch still requires approval', () async {
       final registry = ToolRegistry(providers: [_RemoteToolProvider()]);
-      expect(await shouldAutoApproveTool('web.fetch', true, registry), isFalse);
+      expect(await approve('web.fetch', web: true, registry: registry), isFalse);
     });
 
     test('non-web tools do not leak into web auto-approval', () async {
       final registry = await localWebRegistry();
       expect(
-        await shouldAutoApproveTool('example.echo', true, registry),
+        await approve('example.echo', web: true, registry: registry),
         isFalse,
       );
       expect(
-        await shouldAutoApproveTool('calendar.get_events', true, registry),
+        await approve('calendar.get_events', web: true, registry: registry),
         isFalse,
       );
       expect(
-        await shouldAutoApproveTool('location.current', true, registry),
+        await approve('location.current', web: true, registry: registry),
         isFalse,
       );
       expect(
-        await shouldAutoApproveTool('web.unknown', true, registry),
+        await approve('web.unknown', web: true, registry: registry),
         isFalse,
       );
     });

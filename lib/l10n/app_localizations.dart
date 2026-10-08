@@ -123,6 +123,30 @@ abstract class AppLocalizations {
     Locale('zh', 'TW'),
   ];
 
+  /// Terminal tools card title
+  ///
+  /// In en, this message translates to:
+  /// **'Terminal'**
+  String get terminal_card_title;
+
+  /// Terminal tools card description
+  ///
+  /// In en, this message translates to:
+  /// **'Sandboxed shell + HTTP tool for models. Whitelisted first commands run without asking; everything else requires approval each time.'**
+  String get terminal_card_desc;
+
+  /// Terminal whitelist editor label
+  ///
+  /// In en, this message translates to:
+  /// **'Whitelisted commands'**
+  String get terminal_whitelist_label;
+
+  /// Terminal whitelist editor hint
+  ///
+  /// In en, this message translates to:
+  /// **'Comma-separated first commands (curl, ping, net.http)'**
+  String get terminal_whitelist_hint;
+
   /// Application display name
   ///
   /// In en, this message translates to:

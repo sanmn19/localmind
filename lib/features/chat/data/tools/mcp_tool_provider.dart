@@ -1,4 +1,5 @@
 import 'package:localmind/features/chat/data/mcp_server_manager.dart';
+import 'package:localmind/features/mcp/data/terminal_mcp_server.dart';
 
 import 'tool_definition.dart';
 import 'tool_registry.dart';
@@ -46,13 +47,15 @@ class McpToolProvider implements ToolProvider {
       return const ToolExecutionResult.failure('MCP tool not found');
     }
     // Several servers may expose the same tool name (user-configured
-    // remote integrations can shadow the built-in web tools). ROUTE to
-    // the local in-process web server when it owns the name:
-    // serverLabels is insertion order and addWebServer re-inserts the web
-    // server on every settings rebuild, so first-match alone would let a
-    // remote registered earlier hijack execution.
+    // remote integrations can shadow the built-in web/terminal tools).
+    // ROUTE to a local in-process server when it owns the name:
+    // serverLabels is insertion order and the local re-registration on
+    // every settings rebuild can reorder, so first-match alone would let
+    // a remote registered earlier hijack execution.
     final label = owners.firstWhere(
-      (candidate) => serverManager.getServerUrl(candidate) == webMcpServerUrl,
+      (candidate) => localServerManagerUrls.contains(
+        serverManager.getServerUrl(candidate),
+      ),
       orElse: () => owners.first,
     );
     try {
@@ -63,3 +66,5 @@ class McpToolProvider implements ToolProvider {
     }
   }
 }
+
+const localServerManagerUrls = {webMcpServerUrl, terminalMcpServerUrl};
