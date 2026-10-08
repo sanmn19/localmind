@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 
 /// Supported mail connector providers (Tier 2 of the device/mail feature).
-enum MailProvider { gmail, outlook }
+/// `imap` covers Gmail-via-app-password plus any standard IMAP provider;
+/// Outlook stays OAuth-only because Microsoft removed IMAP basic auth.
+enum MailProvider { gmail, outlook, imap }
 
 enum MailProviderStatus { unconfigured, notConnected, connected }
 
@@ -10,13 +12,18 @@ class MailProviderName {
 
   static const gmail = 'gmail';
   static const outlook = 'outlook';
+  static const imap = 'imap';
 
-  static MailProvider fromName(String? name) =>
-      name == outlook ? MailProvider.outlook : MailProvider.gmail;
+  static MailProvider fromName(String? name) => switch (name) {
+    outlook => MailProvider.outlook,
+    imap => MailProvider.imap,
+    _ => MailProvider.gmail,
+  };
 
   static String? nameOf(MailProvider provider) => switch (provider) {
     MailProvider.gmail => gmail,
     MailProvider.outlook => outlook,
+    MailProvider.imap => imap,
   };
 }
 

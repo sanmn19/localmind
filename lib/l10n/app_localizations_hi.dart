@@ -3439,4 +3439,27 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get mail_disconnect => 'Disconnect';
+
+  @override
+  String get mail_connect_imap => 'Connect IMAP account';
+
+  @override
+  String get imap_hint =>
+      'Uses an e-mail address plus app password. Gmail needs an app password (Google Account → Security → 2-Step Verification → App passwords); Microsoft consumer accounts no longer allow this — use the Outlook connector.';
+
+  @override
+  String get imap_email_hint => 'you@example.com';
+
+  @override
+  String get imap_password_hint => 'App password';
+
+  @override
+  String get imap_host_hint => 'Host (auto unless the provider is unknown)';
+
+  @override
+  String get imap_connect => 'Connect';
+
+  @override
+  String get imap_fields_required =>
+      'Enter an e-mail and an app password to connect.';
 }

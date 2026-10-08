@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:localmind/features/chat/providers/tooling_providers.dart';
+import 'package:localmind/features/mail/data/mail_common.dart';
 import 'package:localmind/features/mcp/data/web/web_search_service.dart';
 import 'package:localmind/features/settings/data/models/app_settings.dart';
 
@@ -131,5 +132,36 @@ void main() {
   test('fromMap tolerates missing shareTargetEnabled (upgrade path)', () {
     final restored = AppSettings.fromMap({'themeMode': 2});
     expect(restored.shareTargetEnabled, isTrue);
+  });
+
+  test('mail connector rows round-trip, including imap host overrides', () {
+    final rows = [
+      {'provider': 'gmail', 'email': 'g@gmail.com'},
+      {
+        'provider': 'imap',
+        'email': 'i@example.org',
+        'host': 'imap.example.org',
+      },
+    ];
+    final settings = AppSettings().copyWith(mailConnectorAccounts: rows);
+    final restored = AppSettings.fromMap(settings.toMap());
+    expect(restored.mailConnectorAccounts, rows);
+
+    final imap = MailAccount.fromMap(rows.last);
+    expect(imap.provider, MailProvider.imap);
+    expect(imap.email, 'i@example.org');
+  });
+
+  test('MailAccount.fromMap maps unknown providers to gmail (legacy '
+      'tolerance, imap exact)', () {
+    expect(
+      MailAccount.fromMap({'provider': 'imap'}).provider,
+      MailProvider.imap,
+    );
+    expect(MailAccount.fromMap({'provider': 'imap'}).email, '');
+    expect(
+      MailAccount.fromMap({'provider': 'yahoo', 'email': 'x@y'}).provider,
+      MailProvider.gmail,
+    );
   });
 }
