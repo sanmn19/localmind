@@ -75,6 +75,11 @@ class AppSettings {
   /// matching terminal tool calls skip the approval dialog. Empty by
   /// default — nothing auto-runs until the user opt-ins.
   final List<String> toolWhitelist;
+
+  /// Whether the named markdown skills feature injects its context section
+  /// into every chat's system prompt. Default ON — the injection is the
+  /// feature.
+  final bool skillsEnabled;
   final bool autoCollapseThinking;
 
   /// Whether `temperature` / `top_p` are sent to remote APIs. Some providers
@@ -140,6 +145,7 @@ class AppSettings {
     this.webSearxUrl,
     this.terminalToolsEnabled = false,
     this.toolWhitelist = const [],
+    this.skillsEnabled = true,
     this.autoCollapseThinking = false,
     this.sendTemperature = true,
     this.sendTopP = true,
@@ -200,6 +206,7 @@ class AppSettings {
     Object? webSearxUrl = _unset,
     bool? terminalToolsEnabled,
     List<String>? toolWhitelist,
+    bool? skillsEnabled,
     bool? autoCollapseThinking,
     bool? sendTemperature,
     bool? sendTopP,
@@ -286,6 +293,7 @@ class AppSettings {
           : webSearxUrl as String?,
       terminalToolsEnabled: terminalToolsEnabled ?? this.terminalToolsEnabled,
       toolWhitelist: toolWhitelist ?? this.toolWhitelist,
+      skillsEnabled: skillsEnabled ?? this.skillsEnabled,
       autoCollapseThinking: autoCollapseThinking ?? this.autoCollapseThinking,
       sendTemperature: sendTemperature ?? this.sendTemperature,
       sendTopP: sendTopP ?? this.sendTopP,
@@ -348,6 +356,7 @@ class AppSettings {
       'webSearxUrl': webSearxUrl,
       'terminalToolsEnabled': terminalToolsEnabled,
       'toolWhitelist': toolWhitelist,
+      'skillsEnabled': skillsEnabled,
       'autoCollapseThinking': autoCollapseThinking,
       'sendTemperature': sendTemperature,
       'sendTopP': sendTopP,
@@ -413,7 +422,9 @@ class AppSettings {
       webSearchApiKey: map['webSearchApiKey'] as String?,
       webSearxUrl: map['webSearxUrl'] as String?,
       terminalToolsEnabled: map['terminalToolsEnabled'] ?? false,
-      toolWhitelist: (map['toolWhitelist'] as List?)?.cast<String>() ?? const [],
+      toolWhitelist:
+          (map['toolWhitelist'] as List?)?.cast<String>() ?? const [],
+      skillsEnabled: map['skillsEnabled'] ?? true,
       autoCollapseThinking: map['autoCollapseThinking'] ?? false,
       sendTemperature: map['sendTemperature'] ?? true,
       sendTopP: map['sendTopP'] ?? true,

@@ -153,6 +153,8 @@ class SettingsNotifier extends Notifier<AppSettings> {
       _update(state.copyWith(terminalToolsEnabled: value));
   void setToolWhitelist(List<String> value) =>
       _update(state.copyWith(toolWhitelist: value));
+  void setSkillsEnabled(bool value) =>
+      _update(state.copyWith(skillsEnabled: value));
   void setAutoCollapseThinking(bool value) =>
       _update(state.copyWith(autoCollapseThinking: value));
   void setSendTemperature(bool value) =>
