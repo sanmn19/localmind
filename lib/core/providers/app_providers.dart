@@ -151,8 +151,14 @@ class SettingsNotifier extends Notifier<AppSettings> {
       _update(state.copyWith(webSearxUrl: value));
   void setTerminalToolsEnabled(bool value) =>
       _update(state.copyWith(terminalToolsEnabled: value));
+  void setDeviceToolsEnabled(bool value) =>
+      _update(state.copyWith(deviceToolsEnabled: value));
   void setToolWhitelist(List<String> value) =>
       _update(state.copyWith(toolWhitelist: value));
+  void setMailConnectorAccounts(List<Map<String, dynamic>> value) =>
+      _update(state.copyWith(mailConnectorAccounts: value));
+  void setShareTargetEnabled(bool value) =>
+      _update(state.copyWith(shareTargetEnabled: value));
   void setAutoCollapseThinking(bool value) =>
       _update(state.copyWith(autoCollapseThinking: value));
   void setSendTemperature(bool value) =>

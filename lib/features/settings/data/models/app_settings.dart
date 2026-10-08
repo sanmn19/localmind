@@ -71,10 +71,27 @@ class AppSettings {
   /// net.http) is registered at all.
   final bool terminalToolsEnabled;
 
+  /// Whether the in-process `local://device` MCP server (apps.* +
+  /// contacts.*) is registered at all. Device tools only act through OS
+  /// surfaces (launcher, mail app, ContactsProvider), so this toggle gates
+  /// registration; the actionable sends stay user-tapped in the OS app.
+  final bool deviceToolsEnabled;
+
+  /// Whether share-sheet content from other apps is landed into a new chat.
+  /// Defaults to TRUE: once the share intent-filter exists the OS lists the
+  /// app as a target regardless, so this toggle only gates the Dart-side
+  /// handling (payloads are then ignored/discarded) — it never changes the
+  /// visible share-target list itself.
+  final bool shareTargetEnabled;
+
   /// First-command entries (e.g. `curl`, `ping`, `net.http`) that let
   /// matching terminal tool calls skip the approval dialog. Empty by
   /// default — nothing auto-runs until the user opt-ins.
   final List<String> toolWhitelist;
+
+  /// Connected mail connector accounts as raw maps (provider/email only —
+  /// non-secret identity rows; tokens never live in here).
+  final List<Map<String, dynamic>> mailConnectorAccounts;
   final bool autoCollapseThinking;
 
   /// Whether `temperature` / `top_p` are sent to remote APIs. Some providers
@@ -139,7 +156,10 @@ class AppSettings {
     this.webSearchApiKey,
     this.webSearxUrl,
     this.terminalToolsEnabled = false,
+    this.deviceToolsEnabled = false,
+    this.shareTargetEnabled = true,
     this.toolWhitelist = const [],
+    this.mailConnectorAccounts = const [],
     this.autoCollapseThinking = false,
     this.sendTemperature = true,
     this.sendTopP = true,
@@ -199,7 +219,10 @@ class AppSettings {
     Object? webSearchApiKey = _unset,
     Object? webSearxUrl = _unset,
     bool? terminalToolsEnabled,
+    bool? deviceToolsEnabled,
+    bool? shareTargetEnabled,
     List<String>? toolWhitelist,
+    List<Map<String, dynamic>>? mailConnectorAccounts,
     bool? autoCollapseThinking,
     bool? sendTemperature,
     bool? sendTopP,
@@ -285,7 +308,11 @@ class AppSettings {
           ? this.webSearxUrl
           : webSearxUrl as String?,
       terminalToolsEnabled: terminalToolsEnabled ?? this.terminalToolsEnabled,
+      deviceToolsEnabled: deviceToolsEnabled ?? this.deviceToolsEnabled,
+      shareTargetEnabled: shareTargetEnabled ?? this.shareTargetEnabled,
       toolWhitelist: toolWhitelist ?? this.toolWhitelist,
+      mailConnectorAccounts:
+          mailConnectorAccounts ?? this.mailConnectorAccounts,
       autoCollapseThinking: autoCollapseThinking ?? this.autoCollapseThinking,
       sendTemperature: sendTemperature ?? this.sendTemperature,
       sendTopP: sendTopP ?? this.sendTopP,
@@ -347,7 +374,10 @@ class AppSettings {
       'webSearchApiKey': webSearchApiKey,
       'webSearxUrl': webSearxUrl,
       'terminalToolsEnabled': terminalToolsEnabled,
+      'deviceToolsEnabled': deviceToolsEnabled,
+      'shareTargetEnabled': shareTargetEnabled,
       'toolWhitelist': toolWhitelist,
+      'mailConnectorAccounts': mailConnectorAccounts,
       'autoCollapseThinking': autoCollapseThinking,
       'sendTemperature': sendTemperature,
       'sendTopP': sendTopP,
@@ -413,7 +443,16 @@ class AppSettings {
       webSearchApiKey: map['webSearchApiKey'] as String?,
       webSearxUrl: map['webSearxUrl'] as String?,
       terminalToolsEnabled: map['terminalToolsEnabled'] ?? false,
-      toolWhitelist: (map['toolWhitelist'] as List?)?.cast<String>() ?? const [],
+      deviceToolsEnabled: map['deviceToolsEnabled'] ?? false,
+      shareTargetEnabled: map['shareTargetEnabled'] ?? true,
+      toolWhitelist:
+          (map['toolWhitelist'] as List?)?.cast<String>() ?? const [],
+      mailConnectorAccounts:
+          (map['mailConnectorAccounts'] as List?)
+              ?.whereType<Map>()
+              .map((entry) => entry.cast<String, dynamic>())
+              .toList() ??
+          const [],
       autoCollapseThinking: map['autoCollapseThinking'] ?? false,
       sendTemperature: map['sendTemperature'] ?? true,
       sendTopP: map['sendTopP'] ?? true,

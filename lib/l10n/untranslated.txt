@@ -37,7 +37,16 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect"
   ],
 
   "bn": [
@@ -82,7 +91,16 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect"
   ],
 
   "de": [
@@ -127,7 +145,16 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect"
   ],
 
   "es": [
@@ -172,7 +199,16 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect"
   ],
 
   "fr": [
@@ -217,7 +253,16 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect"
   ],
 
   "hi": [
@@ -262,7 +307,16 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect"
   ],
 
   "it": [
@@ -307,7 +361,16 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect"
   ],
 
   "ja": [
@@ -352,7 +415,16 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect"
   ],
 
   "ko": [
@@ -383,7 +455,16 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect"
   ],
 
   "pt": [
@@ -414,7 +495,16 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect"
   ],
 
   "ru": [
@@ -459,7 +549,16 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect"
   ],
 
   "tr": [
@@ -504,7 +603,16 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect"
   ],
 
   "zh": [
@@ -549,7 +657,16 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect"
   ],
 
   "zh_TW": [
@@ -594,6 +711,15 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect"
   ]
 }

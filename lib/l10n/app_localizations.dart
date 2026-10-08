@@ -6272,6 +6272,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'http://your-rig:8888'**
   String get searx_base_url_hint;
+
+  /// Device tools card title
+  ///
+  /// In en, this message translates to:
+  /// **'Device'**
+  String get device_card_title;
+
+  /// Device tools card description
+  ///
+  /// In en, this message translates to:
+  /// **'Gives models local device tools: list and launch installed apps, compose mail drafts, and search contacts. Everything runs through OS surfaces; actual sends stay user-tapped.'**
+  String get device_card_desc;
+
+  /// Toggle label for landing share-sheet content into a chat
+  ///
+  /// In en, this message translates to:
+  /// **'Receive shared content'**
+  String get share_target_label;
+
+  /// Mail connectors card title
+  ///
+  /// In en, this message translates to:
+  /// **'Mail connectors'**
+  String get mail_connectors_card_title;
+
+  /// Mail connectors card description
+  ///
+  /// In en, this message translates to:
+  /// **'Connects a Gmail or Outlook account so the mail tools read, search and send with it. Tokens stay on-device and each connector can be disconnected at any time.'**
+  String get mail_connectors_card_desc;
+
+  /// Action to connect a Gmail account
+  ///
+  /// In en, this message translates to:
+  /// **'Connect Gmail'**
+  String get mail_connect_gmail;
+
+  /// Action to connect an Outlook account
+  ///
+  /// In en, this message translates to:
+  /// **'Connect Outlook'**
+  String get mail_connect_outlook;
+
+  /// Row status showing the connected mail account
+  ///
+  /// In en, this message translates to:
+  /// **'Connected: {email}'**
+  String mail_connected_as(String email);
+
+  /// Action to disconnect a mail account
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect'**
+  String get mail_disconnect;
 }
 
 class _AppLocalizationsDelegate

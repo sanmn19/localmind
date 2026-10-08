@@ -1,11 +1,23 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../../core/services/device_tools_service.dart';
 import '../data/tools/tool_registry.dart';
 import '../data/tools/builtin_tool_provider.dart';
 import '../data/tools/mcp_tool_provider.dart';
 import '../data/tools/tool_definition.dart';
 import '../data/mcp_server_manager.dart';
+import 'package:localmind/features/mail/data/google_auth_client.dart';
+import 'package:localmind/features/mail/data/gmail_repository.dart';
+import 'package:localmind/features/mail/data/mail_connector_config.dart';
+import 'package:localmind/features/mail/data/mail_common.dart';
+import 'package:localmind/features/mail/data/mail_token_store.dart';
+import 'package:localmind/features/mail/data/outlook_auth_client.dart';
+import 'package:localmind/features/mail/data/outlook_repository.dart';
+import 'package:localmind/features/mail/mail_mcp_server.dart';
+import 'package:dio/dio.dart';
 import '../data/tool_budget.dart';
+import '../../mcp/data/device_contacts_repository.dart';
+import '../../mcp/data/device_mcp_server.dart';
 import '../../mcp/data/terminal_mcp_server.dart';
 import '../../mcp/data/web/keyless_mcp_ring.dart';
 import '../../mcp/data/web/web_fetch_service.dart';
@@ -54,6 +66,8 @@ Future<bool> shouldAutoApproveTool(
   Map<String, dynamic> args = const {},
   required bool webToolsEnabled,
   required bool terminalToolsEnabled,
+  bool deviceToolsEnabled = false,
+  bool mailAccountsConnected = false,
   required ToolRegistry registry,
   required TerminalWhitelist? whitelist,
 }) async {
@@ -61,6 +75,18 @@ Future<bool> shouldAutoApproveTool(
 
   if (await registry.isLocalTool(toolName, {webMcpServerUrl})) {
     return webToolsEnabled;
+  }
+
+  if (await registry.isLocalTool(toolName, {deviceMcpServerUrl})) {
+    // The whole apps.*/contacts.* surface auto-runs while locally owned:
+    // every tool ends in the OS itself (mail app review, launcher, contact
+    // read-only look-up), so the toggle — not a per-tool whitelist — gates.
+    return deviceToolsEnabled;
+  }
+
+  if (await registry.isLocalTool(toolName, {mailMcpServerUrl})) {
+    if (toolName == 'mail.send') return false;
+    return mailAccountsConnected && toolName.startsWith('mail.');
   }
 
   if (await registry.isLocalTool(toolName, {terminalMcpServerUrl})) {
@@ -146,6 +172,66 @@ final webServerRegistrationProvider = Provider<void>((ref) {
   } else if (manager.hasTerminalServer()) {
     manager.removeServer(terminalMcpServerLabel);
   }
+  if (settings.deviceToolsEnabled) {
+    // Launcher calls ride the method channel; contacts read straight from
+    // the flutter_contacts plugin with the READ_CONTACTS runtime permission
+    // gated inside the repository (Task 2 filled the native handlers,
+    // Task 3 swapped contacts to the real repository).
+    manager.addDeviceServer(
+      DeviceServices(
+        contacts: const DeviceContactsRepository(),
+        launcher: const MethodChannelDeviceAppLauncher(),
+      ),
+    );
+  } else if (manager.hasDeviceServer()) {
+    manager.removeServer(deviceMcpServerLabel);
+  }
+  // Mail connectors register from the connected accounts list (provider +
+  // email rows) — the connected toggle lives with the account, and each
+  // repository owns the token gateway for its account.
+  if (settings.mailConnectorAccounts.isNotEmpty) {
+    final store = ref.watch(mailTokenStoreProvider);
+    final gmailAccount = settings.mailConnectorAccounts
+        .map(MailAccount.fromMap)
+        .firstWhere(
+          (account) => account.provider == MailProvider.gmail,
+          orElse: () =>
+              const MailAccount(provider: MailProvider.gmail, email: ''),
+        );
+    final outlookAccount = settings.mailConnectorAccounts
+        .map(MailAccount.fromMap)
+        .firstWhere(
+          (account) => account.provider == MailProvider.outlook,
+          orElse: () => MailAccount(provider: MailProvider.outlook, email: ''),
+        );
+    manager.addMailServer(
+      MailServices(
+        gmail: GmailRepository(
+          accountEmail: gmailAccount.email,
+          dio: Dio(),
+          tokens: store,
+          gateway: GoogleMailAuthGateway(
+            serverClientId: MailConnectorConfig.googleServerClientId.isEmpty
+                ? null
+                : MailConnectorConfig.googleServerClientId,
+          ),
+        ),
+        outlook: outlookAccount.email.isEmpty
+            ? null
+            : OutlookRepository(
+                accountEmail: outlookAccount.email,
+                dio: Dio(),
+                tokens: store,
+                gateway: MsalOutlookAuthGateway(
+                  clientId: MailConnectorConfig.outlookClientId,
+                  tokens: store,
+                ),
+              ),
+      ),
+    );
+  } else if (manager.hasMailServer()) {
+    manager.removeServer(mailMcpServerLabel);
+  }
   ref.onDispose(() {
     if (manager.hasWebServer()) {
       // Not awaited — teardown best-effort.
@@ -153,6 +239,9 @@ final webServerRegistrationProvider = Provider<void>((ref) {
     }
     if (manager.hasTerminalServer()) {
       manager.removeServer(terminalMcpServerLabel);
+    }
+    if (manager.hasDeviceServer()) {
+      manager.removeServer(deviceMcpServerLabel);
     }
   });
 });

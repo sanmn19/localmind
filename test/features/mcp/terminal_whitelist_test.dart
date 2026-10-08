@@ -24,9 +24,13 @@ void main() {
     });
 
     test('entries are trimmed and blank/comment entries are ignored', () {
-      final whitelist = TerminalWhitelist(
-        const ['', '   ', '# comment', 'ping', '#even with text'],
-      );
+      final whitelist = TerminalWhitelist(const [
+        '',
+        '   ',
+        '# comment',
+        'ping',
+        '#even with text',
+      ]);
       expect(whitelist.entries, ['ping']);
       expect(whitelist.allows('ping -c 1 host'), isTrue);
       expect(whitelist.allows('# comment'), isFalse);
@@ -92,14 +96,16 @@ void main() {
       expect(whitelist.allowsTool('terminal.run'), isFalse);
     });
 
-    test('dollar-sign parameter expansion alone stays allowed outside quotes',
-        () {
-      // Only `$(`-style substitution and backticks are flagged; a plain
-      // `$var` tail is ordinary text. Conservative enough: it may read env
-      // vars the app sandbox already exposes, so it goes through only when
-      // the first token is whitelisted AND the line has no other metachars.
-      final whitelist = TerminalWhitelist(const ['echo']);
-      expect(whitelist.allows(r'echo $HOME'), isTrue);
-    });
+    test(
+      'dollar-sign parameter expansion alone stays allowed outside quotes',
+      () {
+        // Only `$(`-style substitution and backticks are flagged; a plain
+        // `$var` tail is ordinary text. Conservative enough: it may read env
+        // vars the app sandbox already exposes, so it goes through only when
+        // the first token is whitelisted AND the line has no other metachars.
+        final whitelist = TerminalWhitelist(const ['echo']);
+        expect(whitelist.allows(r'echo $HOME'), isTrue);
+      },
+    );
   });
 }

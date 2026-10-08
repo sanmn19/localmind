@@ -2471,6 +2471,8 @@ class ChatNotifier extends Notifier<ChatState> {
               args: call.arguments,
               webToolsEnabled: settings.webToolsEnabled,
               terminalToolsEnabled: settings.terminalToolsEnabled,
+              deviceToolsEnabled: settings.deviceToolsEnabled,
+              mailAccountsConnected: settings.mailConnectorAccounts.isNotEmpty,
               registry: registry,
               whitelist: TerminalWhitelist(settings.toolWhitelist),
             )) {

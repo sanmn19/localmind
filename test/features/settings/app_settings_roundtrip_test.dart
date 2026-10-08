@@ -93,4 +93,43 @@ void main() {
     });
     expect(restored.webSearxUrl, isNull);
   });
+
+  test('device tool settings default to disabled', () {
+    final settings = AppSettings();
+    expect(settings.deviceToolsEnabled, isFalse);
+  });
+
+  test('deviceToolsEnabled survives the toMap/fromMap round-trip', () {
+    final settings = AppSettings().copyWith(deviceToolsEnabled: true);
+    final map = settings.toMap();
+    expect(map['deviceToolsEnabled'], isTrue);
+    final restored = AppSettings.fromMap(map);
+    expect(restored.deviceToolsEnabled, isTrue);
+  });
+
+  test('fromMap tolerates missing deviceToolsEnabled (upgrade path)', () {
+    final restored = AppSettings.fromMap({'themeMode': 2});
+    expect(restored.deviceToolsEnabled, isFalse);
+  });
+
+  // Share-target receiving is ON by default: adding the intent-filter makes
+  // the app a share target no matter what, so the toggle only gates the
+  // Dart-side handling and must not silently flip off on upgrade.
+  test('shareTargetEnabled defaults to enabled', () {
+    final settings = AppSettings();
+    expect(settings.shareTargetEnabled, isTrue);
+  });
+
+  test('shareTargetEnabled survives the toMap/fromMap round-trip', () {
+    final settings = AppSettings().copyWith(shareTargetEnabled: false);
+    final map = settings.toMap();
+    expect(map['shareTargetEnabled'], isFalse);
+    final restored = AppSettings.fromMap(map);
+    expect(restored.shareTargetEnabled, isFalse);
+  });
+
+  test('fromMap tolerates missing shareTargetEnabled (upgrade path)', () {
+    final restored = AppSettings.fromMap({'themeMode': 2});
+    expect(restored.shareTargetEnabled, isTrue);
+  });
 }

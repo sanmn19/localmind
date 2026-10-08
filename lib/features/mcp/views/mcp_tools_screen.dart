@@ -11,6 +11,12 @@ import '../../chat/data/tools/location_service.dart';
 import '../../chat/data/tools/tool_definition.dart';
 import '../../chat/providers/chat_mcp_providers.dart';
 import '../../chat/providers/tooling_providers.dart';
+import '../../mail/data/google_auth_client.dart';
+import '../../mail/data/mail_common.dart';
+import '../../mail/data/mail_connector_config.dart';
+import '../../mail/data/mail_token_store.dart';
+import '../../mail/data/outlook_auth_client.dart';
+import '../../settings/data/models/app_settings.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/utils/system_insets.dart';
@@ -206,6 +212,10 @@ class McpToolsScreen extends ConsumerWidget {
                           const _WebBrowserCard(),
                           const SizedBox(height: 16),
                           const _TerminalCard(),
+                          const SizedBox(height: 16),
+                          const _DeviceCard(),
+                          const SizedBox(height: 16),
+                          const _MailConnectorsCard(),
                           if (settings.mcpEnabled) ...[
                             const SizedBox(height: 16),
                             _ConfiguredMcpServersCard(
@@ -1197,6 +1207,310 @@ class __TerminalCardState extends ConsumerState<_TerminalCard> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _DeviceCard extends ConsumerWidget {
+  const _DeviceCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final settings = ref.watch(settingsProvider);
+    final enabled = settings.deviceToolsEnabled;
+
+    return _McpSectionCard(
+      title: l10n.device_card_title,
+      accent: const Color(0xFF8B5CF6),
+      icon: HugeIcons.strokeRoundedSmartPhone01,
+      trailing: ShadSwitch(
+        key: const Key('device_tools_toggle'),
+        value: enabled,
+        onChanged: (value) {
+          ref.read(settingsProvider.notifier).setDeviceToolsEnabled(value);
+          ref.invalidate(availableToolsProvider);
+        },
+      ),
+      children: [
+        Text(
+          l10n.device_card_desc,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        // Share-target landing rides on device tooling: gated + dimmed with
+        // the same filtered pattern the web/browser card uses.
+        Opacity(
+          opacity: enabled ? 1.0 : 0.55,
+          child: IgnorePointer(
+            ignoring: !enabled,
+            child: _McpPanel(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      l10n.share_target_label,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ShadSwitch(
+                    key: const Key('share_target_toggle'),
+                    value: settings.shareTargetEnabled,
+                    onChanged: (value) => ref
+                        .read(settingsProvider.notifier)
+                        .setShareTargetEnabled(value),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MailConnectorsCard extends ConsumerStatefulWidget {
+  const _MailConnectorsCard();
+
+  @override
+  ConsumerState<_MailConnectorsCard> createState() =>
+      _MailConnectorsCardState();
+}
+
+class _MailConnectorsCardState extends ConsumerState<_MailConnectorsCard> {
+  /// Provider whose sign-in round-trip is in flight; drives the row's
+  /// spinner and disables re-triggering while awaiting the consent sheet.
+  MailProvider? _connecting;
+
+  MailAccount? _accountFor(MailProvider provider, AppSettings settings) {
+    for (final row in settings.mailConnectorAccounts) {
+      final account = MailAccount.fromMap(row);
+      if (account.provider == provider && account.email.isNotEmpty) {
+        return account;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _connect(MailProvider provider) async {
+    setState(() => _connecting = provider);
+    try {
+      // The gateway surfaces misconfiguration (SHA-1 / OAuth client, Azure
+      // registration) through MailConnectorException — the UI only renders
+      // its message here; successful sign-in yields the account identity.
+      final email = await _signInEmail(provider);
+      if (!mounted) return;
+      if (email.isEmpty) {
+        // Backed out of the consent sheet — nothing to persist, silently.
+        return;
+      }
+      _storeAccount(provider, email);
+    } on MailConnectorException catch (error) {
+      _toast(error.message);
+    } catch (error) {
+      _toast(error.toString());
+    } finally {
+      if (mounted) setState(() => _connecting = null);
+    }
+  }
+
+  /// Interactive sign-in; null/empty email = user backed out of consent.
+  Future<String> _signInEmail(MailProvider provider) {
+    switch (provider) {
+      case MailProvider.gmail:
+        final clientId = MailConnectorConfig.googleServerClientId;
+        return GoogleMailAuthGateway(
+          serverClientId: clientId.isEmpty ? null : clientId,
+        ).signIn().then((token) => token?.email ?? '');
+      case MailProvider.outlook:
+        return MsalOutlookAuthGateway(
+          clientId: MailConnectorConfig.outlookClientId,
+          tokens: ref.read(mailTokenStoreProvider),
+        ).signIn().then((token) => token?.email ?? '');
+    }
+  }
+
+  /// Upserts the provider's identity row (settings only carry provider +
+  /// email; tokens live in the platform caches + token store).
+  void _storeAccount(MailProvider provider, String email) {
+    final rows = ref
+        .read(settingsProvider)
+        .mailConnectorAccounts
+        .where(
+          (row) =>
+              MailProviderName.fromName(row['provider']?.toString()) !=
+              provider,
+        )
+        .toList();
+    rows.add({'provider': MailProviderName.nameOf(provider), 'email': email});
+    ref
+        .read(settingsProvider.notifier)
+        .setMailConnectorAccounts(List.unmodifiable(rows));
+    ref.invalidate(availableToolsProvider);
+  }
+
+  Future<void> _disconnect(MailProvider provider) async {
+    final rows = ref
+        .read(settingsProvider)
+        .mailConnectorAccounts
+        .where(
+          (row) =>
+              MailProviderName.fromName(row['provider']?.toString()) !=
+              provider,
+        )
+        .toList();
+    ref
+        .read(settingsProvider.notifier)
+        .setMailConnectorAccounts(List.unmodifiable(rows));
+    ref.invalidate(availableToolsProvider);
+    // Removing the identity row first (it is what gates registration);
+    // platform-cache sign-out is best-effort afterwards.
+    try {
+      switch (provider) {
+        case MailProvider.gmail:
+          final clientId = MailConnectorConfig.googleServerClientId;
+          await GoogleMailAuthGateway(
+            serverClientId: clientId.isEmpty ? null : clientId,
+          ).signOut();
+        case MailProvider.outlook:
+          await MsalOutlookAuthGateway(
+            clientId: MailConnectorConfig.outlookClientId,
+            tokens: ref.read(mailTokenStoreProvider),
+          ).signOut();
+      }
+    } catch (_) {}
+  }
+
+  void _toast(String message) {
+    ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final settings = ref.watch(settingsProvider);
+
+    return _McpSectionCard(
+      title: l10n.mail_connectors_card_title,
+      accent: const Color(0xFF2563EB),
+      icon: HugeIcons.strokeRoundedMail01,
+      children: [
+        Text(
+          l10n.mail_connectors_card_desc,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        _providerRow(
+          context,
+          MailProvider.gmail,
+          HugeIcons.strokeRoundedMail01,
+          account: _accountFor(MailProvider.gmail, settings),
+          connectLabel: l10n.mail_connect_gmail,
+        ),
+        _providerRow(
+          context,
+          MailProvider.outlook,
+          HugeIcons.strokeRoundedMicrosoft,
+          account: _accountFor(MailProvider.outlook, settings),
+          connectLabel: l10n.mail_connect_outlook,
+        ),
+      ],
+    );
+  }
+
+  Widget _providerRow(
+    BuildContext context,
+    MailProvider provider,
+    List<List<dynamic>> icon, {
+    required MailAccount? account,
+    required String connectLabel,
+  }) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final accent = const Color(0xFF2563EB);
+    final connecting = _connecting == provider;
+
+    return _McpPanel(
+      child: account == null
+          ? InkWell(
+              onTap: connecting ? null : () => _connect(provider),
+              borderRadius: BorderRadius.circular(10),
+              child: Row(
+                children: [
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(
+                      child: HugeIcon(icon: icon, color: accent, size: 15),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      connectLabel,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  connecting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : HugeIcon(
+                          icon: HugeIcons.strokeRoundedArrowRight01,
+                          size: 16,
+                          color: theme.colorScheme.outline,
+                        ),
+                ],
+              ),
+            )
+          : Row(
+              children: [
+                Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Center(
+                    child: HugeIcon(icon: icon, color: accent, size: 15),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    l10n.mail_connected_as(account.email),
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ShadButton.ghost(
+                  size: ShadButtonSize.sm,
+                  onPressed: () => _disconnect(provider),
+                  child: Text(l10n.mail_disconnect),
+                ),
+              ],
+            ),
     );
   }
 }

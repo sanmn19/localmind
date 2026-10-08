@@ -1,4 +1,5 @@
 import '../mcp_server_manager.dart';
+import '../../../mcp/data/device_mcp_server.dart';
 import '../../../mcp/data/terminal_mcp_server.dart';
 import 'tool_definition.dart';
 
@@ -32,9 +33,7 @@ class ToolRegistry {
     for (final provider in providers) {
       final tools = await provider.listTools();
       if (!tools.any((t) => t.name == name)) continue;
-      if (tools.any(
-        (t) => t.name == name && _isLocalUrl(t.providerRef),
-      )) {
+      if (tools.any((t) => t.name == name && _isLocalUrl(t.providerRef))) {
         owner = provider;
         break;
       }
@@ -73,5 +72,7 @@ class ToolRegistry {
       isLocalTool(name, {terminalMcpServerUrl});
 
   static bool _isLocalUrl(String? providerRef) =>
-      providerRef == webMcpServerUrl || providerRef == terminalMcpServerUrl;
+      providerRef == webMcpServerUrl ||
+      providerRef == terminalMcpServerUrl ||
+      providerRef == deviceMcpServerUrl;
 }
