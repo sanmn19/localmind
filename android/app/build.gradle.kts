@@ -51,6 +51,14 @@ android {
         }
     }
 
+    packaging {
+        resources {
+            // MSAL/Apache jars arrive with colliding META-INF/DEPENDENCIES
+            // resources; they carry no behavior for this app.
+            excludes += "/META-INF/DEPENDENCIES"
+        }
+    }
+
     buildTypes {
         release {
             // Use the release signing config when key.properties is provided,
