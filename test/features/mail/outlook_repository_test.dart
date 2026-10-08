@@ -31,9 +31,8 @@ class _RecordingAdapter implements HttpClientAdapter {
 }
 
 class _CannedGateway implements OutlookAuthGateway {
-  _CannedGateway(this.token, {this.silentCount = 0});
+  _CannedGateway(this.token);
   OutlookToken? token;
-  int silentCount;
   int signOuts = 0;
   int signInCalls = 0;
 
@@ -45,7 +44,6 @@ class _CannedGateway implements OutlookAuthGateway {
 
   @override
   Future<OutlookToken?> silentToken() async {
-    silentCount++;
     return token;
   }
 
@@ -54,8 +52,6 @@ class _CannedGateway implements OutlookAuthGateway {
     signOuts++;
   }
 }
-
-const _farFutureSec = 9999999999;
 
 OutlookRepository _repository(
   _RecordingAdapter adapter, {
