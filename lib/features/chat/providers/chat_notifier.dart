@@ -44,6 +44,8 @@ import 'chat_service_providers.dart';
 import 'generation_session.dart';
 import 'message_selection_provider.dart';
 import 'model_selection_providers.dart';
+import '../../mcp/data/terminal_mcp_server.dart';
+
 import 'tooling_providers.dart';
 import '../utils/message_variants.dart';
 import '../../tts/providers/tts_providers.dart';
@@ -2463,10 +2465,14 @@ class ChatNotifier extends Notifier<ChatState> {
           adapter: adapter,
           registry: registry,
           onRequestApproval: (call) async {
+            final settings = ref.read(settingsProvider);
             if (await shouldAutoApproveTool(
               call.name,
-              ref.read(settingsProvider).webToolsEnabled,
-              registry,
+              args: call.arguments,
+              webToolsEnabled: settings.webToolsEnabled,
+              terminalToolsEnabled: settings.terminalToolsEnabled,
+              registry: registry,
+              whitelist: TerminalWhitelist(settings.toolWhitelist),
             )) {
               return true;
             }

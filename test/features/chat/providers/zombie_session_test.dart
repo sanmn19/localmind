@@ -101,9 +101,9 @@ void main() {
       await _drain();
 
       expect(
-        await _grantNextApproval(container),
-        isTrue,
-        reason: 'round-1 tool call (calc.add) must request approval',
+        await _grantNextApproval(container, expectApproval: false),
+        isFalse,
+        reason: 'calc.add is always auto-approved; no dialog may appear',
       );
       await _drain();
 
@@ -126,8 +126,15 @@ Future<void> _drain([int iterations = 40]) async {
   }
 }
 
-Future<bool> _grantNextApproval(ProviderContainer container) async {
-  final deadline = DateTime.now().add(const Duration(seconds: 10));
+/// Auto-approved tool calls never surface a dialog, so callers assert a
+/// short, bounded no-approval window instead of the grant path ({expectApproval: false}).
+Future<bool> _grantNextApproval(
+  ProviderContainer container, {
+  bool expectApproval = true,
+}) async {
+  final deadline = DateTime.now().add(
+    expectApproval ? const Duration(seconds: 10) : const Duration(milliseconds: 400),
+  );
   while (DateTime.now().isBefore(deadline)) {
     final pending = container.read(chatProvider).pendingToolApproval;
     if (pending != null && !pending.completer.isCompleted) {

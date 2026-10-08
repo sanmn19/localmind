@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:collection/collection.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:localmind/l10n/app_localizations.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -203,6 +204,8 @@ class McpToolsScreen extends ConsumerWidget {
                           mcpCard,
                           const SizedBox(height: 16),
                           const _WebBrowserCard(),
+                          const SizedBox(height: 16),
+                          const _TerminalCard(),
                           if (settings.mcpEnabled) ...[
                             const SizedBox(height: 16),
                             _ConfiguredMcpServersCard(
@@ -1087,6 +1090,111 @@ class __ConfiguredMcpServersCardState
               onPressed: _addServer,
             ),
           ],
+        ),
+      ],
+    );
+  }
+}
+
+class _TerminalCard extends ConsumerStatefulWidget {
+  const _TerminalCard();
+
+  @override
+  ConsumerState<_TerminalCard> createState() => __TerminalCardState();
+}
+
+class __TerminalCardState extends ConsumerState<_TerminalCard> {
+  final _whitelistController = TextEditingController();
+  final _whitelistFocusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _whitelistController.text = ref
+        .read(settingsProvider)
+        .toolWhitelist
+        .join(', ');
+    _whitelistFocusNode.addListener(_onWhitelistFocusChange);
+  }
+
+  @override
+  void dispose() {
+    _whitelistFocusNode.removeListener(_onWhitelistFocusChange);
+    _whitelistFocusNode.dispose();
+    _whitelistController.dispose();
+    super.dispose();
+  }
+
+  void _onWhitelistFocusChange() {
+    if (!_whitelistFocusNode.hasFocus) _saveWhitelist();
+  }
+
+  void _saveWhitelist() {
+    final entries = _whitelistController.text
+        .split(RegExp(r'[,\n]'))
+        .map((entry) => entry.trim())
+        .where((entry) => entry.isNotEmpty && !entry.startsWith('#'))
+        .toList();
+    final current = ref.read(settingsProvider).toolWhitelist;
+    if (const ListEquality<String>().equals(entries, current)) return;
+    ref.read(settingsProvider.notifier).setToolWhitelist(entries);
+    ref.invalidate(availableToolsProvider);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final settings = ref.watch(settingsProvider);
+    final enabled = settings.terminalToolsEnabled;
+
+    return _McpSectionCard(
+      title: l10n.terminal_card_title,
+      accent: const Color(0xFF10B981),
+      icon: HugeIcons.strokeRoundedTerminal,
+      trailing: ShadSwitch(
+        key: const Key('terminal_tools_toggle'),
+        value: enabled,
+        onChanged: (value) {
+          ref.read(settingsProvider.notifier).setTerminalToolsEnabled(value);
+          ref.invalidate(availableToolsProvider);
+        },
+      ),
+      children: [
+        Text(
+          l10n.terminal_card_desc,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Opacity(
+          opacity: enabled ? 1.0 : 0.55,
+          child: IgnorePointer(
+            ignoring: !enabled,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  l10n.terminal_whitelist_label,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                ShadInput(
+                  key: const Key('terminal_whitelist_input'),
+                  controller: _whitelistController,
+                  focusNode: _whitelistFocusNode,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  placeholder: Text(l10n.terminal_whitelist_hint),
+                  onSubmitted: (_) => _saveWhitelist(),
+                  onEditingComplete: () => _saveWhitelist(),
+                ),
+              ],
+            ),
+          ),
         ),
       ],
     );

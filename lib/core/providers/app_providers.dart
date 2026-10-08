@@ -149,6 +149,10 @@ class SettingsNotifier extends Notifier<AppSettings> {
       _update(state.copyWith(webSearchApiKey: value));
   void setWebSearxUrl(String? value) =>
       _update(state.copyWith(webSearxUrl: value));
+  void setTerminalToolsEnabled(bool value) =>
+      _update(state.copyWith(terminalToolsEnabled: value));
+  void setToolWhitelist(List<String> value) =>
+      _update(state.copyWith(toolWhitelist: value));
   void setAutoCollapseThinking(bool value) =>
       _update(state.copyWith(autoCollapseThinking: value));
   void setSendTemperature(bool value) =>

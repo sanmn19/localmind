@@ -1,4 +1,12 @@
 {
+  "terminal_card_title": "Terminal",
+  "terminal_card_desc": "Sandboxed shell + HTTP tool for models. Whitelisted first commands run without asking; everything else requires approval each time.",
+  "terminal_whitelist_label": "Whitelisted commands",
+  "terminal_whitelist_hint": "Comma-separated first commands (curl, ping, net.http)",
+  "@terminal_card_title": {"description": "Terminal tools card title"},
+  "@terminal_card_desc": {"description": "Terminal tools card description"},
+  "@terminal_whitelist_label": {"description": "Terminal whitelist editor label"},
+  "@terminal_whitelist_hint": {"description": "Terminal whitelist editor hint"},
   "@@locale": "en",
   "app_name": "LocalMind",
   "@app_name": {

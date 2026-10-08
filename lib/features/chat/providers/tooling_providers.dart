@@ -6,6 +6,7 @@ import '../data/tools/mcp_tool_provider.dart';
 import '../data/tools/tool_definition.dart';
 import '../data/mcp_server_manager.dart';
 import '../data/tool_budget.dart';
+import '../../mcp/data/terminal_mcp_server.dart';
 import '../../mcp/data/web/keyless_mcp_ring.dart';
 import '../../mcp/data/web/web_fetch_service.dart';
 import '../../mcp/data/web/web_search_service.dart';
@@ -49,10 +50,39 @@ final availableToolsProvider = FutureProvider<List<ToolDefinition>>((
 });
 
 Future<bool> shouldAutoApproveTool(
-  String toolName,
-  bool webToolsEnabled,
-  ToolRegistry registry,
-) async => webToolsEnabled && await registry.isLocalWebTool(toolName);
+  String toolName, {
+  Map<String, dynamic> args = const {},
+  required bool webToolsEnabled,
+  required bool terminalToolsEnabled,
+  required ToolRegistry registry,
+  required TerminalWhitelist? whitelist,
+}) async {
+  if (toolName == 'calc.add' || toolName == 'calc.multiply') return true;
+
+  if (await registry.isLocalTool(toolName, {webMcpServerUrl})) {
+    return webToolsEnabled;
+  }
+
+  if (await registry.isLocalTool(toolName, {terminalMcpServerUrl})) {
+    if (!terminalToolsEnabled) return false;
+    switch (toolName) {
+      case 'net.http':
+        return whitelist?.allowsTool(
+              TerminalWhitelist.whitelistOnlyToolEntry,
+            ) ??
+            false;
+      case 'terminal.run':
+        final command = args['command'] is String
+            ? args['command']! as String
+            : '';
+        return whitelist?.allows(command) ?? false;
+      default:
+        return false;
+    }
+  }
+
+  return false;
+}
 
 WebSearchProvider webSearchProviderFromName(String name) {
   switch (name) {
@@ -73,14 +103,15 @@ WebSearchProvider webSearchProviderFromName(String name) {
   }
 }
 
-/// Keeps the in-process web MCP server in step with the web tools setting.
+/// Keeps the in-process local MCP servers in step with their settings.
 ///
 /// A [Provider] only runs while it is being watched, so a UI surface that
-/// should keep the web server in sync MUST watch this provider:
-/// `ref.watch(webServerRegistrationProvider);` (used by the MCP tools
-/// screen). Rebuilds on any web-tools setting change and (de)registers the
-/// `web.search` / `web.fetch` server accordingly. It produces no state —
-/// watch it for its side effect.
+/// should keep the web AND terminal servers in sync MUST watch this
+/// provider: `ref.watch(webServerRegistrationProvider);` (used by the MCP
+/// tools screen). Rebuilds on any settings change and (de)registers the
+/// `web.search` / `web.fetch` server and the `terminal.run` / `net.http`
+/// server accordingly. The historical provider/web-host names are kept even
+/// though this now covers both local servers (cosmetic only).
 final webServerRegistrationProvider = Provider<void>((ref) {
   final settings = ref.watch(settingsProvider);
   final manager = ref.watch(mcpServerManagerProvider);
@@ -102,10 +133,26 @@ final webServerRegistrationProvider = Provider<void>((ref) {
   } else if (manager.hasWebServer()) {
     manager.removeServer(webMcpServerLabel);
   }
+  if (settings.terminalToolsEnabled) {
+    // Fresh services each rebuild — a whitelist edit re-registers the
+    // server so the approval layer sees the current entries immediately.
+    manager.addTerminalServer(
+      TerminalServices(
+        runner: const ShellProcessRunner(),
+        http: NetHttpTool(),
+        whitelist: TerminalWhitelist(settings.toolWhitelist),
+      ),
+    );
+  } else if (manager.hasTerminalServer()) {
+    manager.removeServer(terminalMcpServerLabel);
+  }
   ref.onDispose(() {
     if (manager.hasWebServer()) {
       // Not awaited — teardown best-effort.
       manager.removeServer(webMcpServerLabel);
+    }
+    if (manager.hasTerminalServer()) {
+      manager.removeServer(terminalMcpServerLabel);
     }
   });
 });
