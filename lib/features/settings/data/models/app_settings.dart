@@ -88,6 +88,10 @@ class AppSettings {
   /// matching terminal tool calls skip the approval dialog. Empty by
   /// default — nothing auto-runs until the user opt-ins.
   final List<String> toolWhitelist;
+
+  /// Connected mail connector accounts as raw maps (provider/email only —
+  /// non-secret identity rows; tokens never live in here).
+  final List<Map<String, dynamic>> mailConnectorAccounts;
   final bool autoCollapseThinking;
 
   /// Whether `temperature` / `top_p` are sent to remote APIs. Some providers
@@ -155,6 +159,7 @@ class AppSettings {
     this.deviceToolsEnabled = false,
     this.shareTargetEnabled = true,
     this.toolWhitelist = const [],
+    this.mailConnectorAccounts = const [],
     this.autoCollapseThinking = false,
     this.sendTemperature = true,
     this.sendTopP = true,
@@ -217,6 +222,7 @@ class AppSettings {
     bool? deviceToolsEnabled,
     bool? shareTargetEnabled,
     List<String>? toolWhitelist,
+    List<Map<String, dynamic>>? mailConnectorAccounts,
     bool? autoCollapseThinking,
     bool? sendTemperature,
     bool? sendTopP,
@@ -305,6 +311,8 @@ class AppSettings {
       deviceToolsEnabled: deviceToolsEnabled ?? this.deviceToolsEnabled,
       shareTargetEnabled: shareTargetEnabled ?? this.shareTargetEnabled,
       toolWhitelist: toolWhitelist ?? this.toolWhitelist,
+      mailConnectorAccounts:
+          mailConnectorAccounts ?? this.mailConnectorAccounts,
       autoCollapseThinking: autoCollapseThinking ?? this.autoCollapseThinking,
       sendTemperature: sendTemperature ?? this.sendTemperature,
       sendTopP: sendTopP ?? this.sendTopP,
@@ -369,6 +377,7 @@ class AppSettings {
       'deviceToolsEnabled': deviceToolsEnabled,
       'shareTargetEnabled': shareTargetEnabled,
       'toolWhitelist': toolWhitelist,
+      'mailConnectorAccounts': mailConnectorAccounts,
       'autoCollapseThinking': autoCollapseThinking,
       'sendTemperature': sendTemperature,
       'sendTopP': sendTopP,
@@ -438,6 +447,12 @@ class AppSettings {
       shareTargetEnabled: map['shareTargetEnabled'] ?? true,
       toolWhitelist:
           (map['toolWhitelist'] as List?)?.cast<String>() ?? const [],
+      mailConnectorAccounts:
+          (map['mailConnectorAccounts'] as List?)
+              ?.whereType<Map>()
+              .map((entry) => entry.cast<String, dynamic>())
+              .toList() ??
+          const [],
       autoCollapseThinking: map['autoCollapseThinking'] ?? false,
       sendTemperature: map['sendTemperature'] ?? true,
       sendTopP: map['sendTopP'] ?? true,

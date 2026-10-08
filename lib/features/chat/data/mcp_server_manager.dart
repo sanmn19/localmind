@@ -460,6 +460,12 @@ class McpServerManager {
               'type': 'string',
               'description': 'Plain-text body of the e-mail.',
             },
+            'provider': {
+              'type': 'string',
+              'description':
+                  "Which connected account to send with ('gmail' or "
+                  "'outlook'). Optional when only one account is connected.",
+            },
           },
           'required': ['to', 'subject', 'body'],
         },
@@ -581,6 +587,43 @@ class McpServerManager {
     return value.clamp(min, max);
   }
 
+  /// The mail tools dispatch across every connected account. A single
+  /// connected provider keeps the bare rows; multiple add `[provider]`
+  /// section headers so message ids stay provider-attributable, which is
+  /// what read/send's `provider` argument consumes.
+  /// Connected-repository selection honoring an optional `provider` arg.
+  List<(MailProvider, MailMessageApi)> _mailApisFor(
+    MailServices services,
+    String? providerFilter,
+  ) {
+    final wanted = providerFilter == null || providerFilter.isEmpty
+        ? null
+        : MailProviderName.fromName(providerFilter);
+    final apis = <(MailProvider, MailMessageApi)>[
+      if (wanted == null || wanted == MailProvider.gmail)
+        (MailProvider.gmail, services.gmail),
+      if (services.outlook != null &&
+          (wanted == null || wanted == MailProvider.outlook))
+        (MailProvider.outlook, services.outlook!),
+    ];
+    return apis;
+  }
+
+  Future<String> _renderPerProvider(
+    List<(MailProvider, MailMessageApi)> apis,
+    Future<List<MailMessageSummary>> Function(MailMessageApi api) fetch,
+  ) async {
+    final rendered = <String>[];
+    final multiProvider = apis.length > 1;
+    for (final (provider, api) in apis) {
+      final rows = mailListRender(await fetch(api));
+      rendered.add(
+        multiProvider ? '[${MailProviderName.nameOf(provider)}]\n$rows' : rows,
+      );
+    }
+    return rendered.join('\n\n');
+  }
+
   Future<String> _callMailTool(
     String toolName,
     Map<String, dynamic> args,
@@ -589,31 +632,42 @@ class McpServerManager {
     if (services == null) {
       throw McpException('Mail server is not connected');
     }
+
+    final apis = _mailApisFor(services, args['provider']?.toString());
+    if (apis.isEmpty) {
+      throw McpException('No mail account matches the requested provider');
+    }
     try {
       switch (toolName) {
         case 'mail.list_messages':
         case 'mail.search':
           final limit = _clampInt(args, 'limit', 1, 10, 10);
-          final MailMessageApi mailApi = services.gmail;
           if (toolName == 'mail.search') {
             final query = args['query'];
             if (query is! String || query.trim().isEmpty) {
               throw McpException('mail.search requires a query string');
             }
             return mailToolOutput(
-              mailListRender(await mailApi.search(query, limit: limit)),
+              await _renderPerProvider(
+                apis,
+                (api) => api.search(query, limit: limit),
+              ),
             );
           }
           return mailToolOutput(
-            mailListRender(await mailApi.listMessages(limit: limit)),
+            await _renderPerProvider(
+              apis,
+              (api) => api.listMessages(limit: limit),
+            ),
           );
         case 'mail.read_message':
           final id = args['id'];
           if (id is! String || id.trim().isEmpty) {
             throw McpException('mail.read_message requires a message id');
           }
-          final message = await services.gmail.readMessage(id);
-          return mailReadRender(message);
+          final (_, MailMessageApi sendTarget) = apis.first;
+          final message = await sendTarget.readMessage(id);
+          return mailToolOutput(mailReadRender(message));
         case 'mail.send':
           final to = args['to'];
           final subject = args['subject'];
@@ -627,7 +681,8 @@ class McpServerManager {
           if (body is! String || body.isEmpty) {
             throw McpException('mail.send requires a body');
           }
-          final id = await services.gmail.send(to, subject, body);
+          final (MailProvider provider, MailMessageApi sendApi) = apis.first;
+          final id = await sendApi.send(to, subject, body);
           return 'Sent e-mail to $to (id $id)';
         default:
           throw McpException('Mail MCP tool not found: $toolName');
