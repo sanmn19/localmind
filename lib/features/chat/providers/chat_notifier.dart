@@ -1509,6 +1509,11 @@ class ChatNotifier extends Notifier<ChatState> {
   /// them back, in order, right before the tail. A tail whose content is
   /// still empty (the follow-up stream has just started) is replaced by the
   /// chain rows, matching what the model received before consolidation.
+  ///
+  /// Round rows the resolved timeline already surfaces (legacy parent-chain
+  /// conversations mark every chain step active, so the walk shows them) are
+  /// skipped: re-splicing those would duplicate tool_call_ids on the wire,
+  /// which OpenAI-compatible servers reject as a protocol violation.
   List<Message> spliceToolChainContext(
     List<Message> resolvedTimeline,
     List<Message> allMessages,
@@ -1516,6 +1521,10 @@ class ChatNotifier extends Notifier<ChatState> {
     if (resolvedTimeline.isEmpty || allMessages.isEmpty) {
       return resolvedTimeline;
     }
+
+    // What the request wire already shows: any family row with one of these
+    // ids is already present — splicing it again would duplicate it.
+    final presentIds = {for (final message in resolvedTimeline) message.id};
 
     final spliced = <Message>[];
     for (final message in resolvedTimeline) {
@@ -1527,8 +1536,11 @@ class ChatNotifier extends Notifier<ChatState> {
         spliced.add(message);
         continue;
       }
-      final family = _toolChainFamily(message, allMessages);
-      if (family == null) {
+      final family = _toolChainFamily(
+        message,
+        allMessages,
+      )?.where((row) => !presentIds.contains(row.id)).toList();
+      if (family == null || family.isEmpty) {
         spliced.add(message);
         continue;
       }
