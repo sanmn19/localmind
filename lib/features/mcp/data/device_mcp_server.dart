@@ -11,9 +11,14 @@ const deviceMaxChars = 6000;
 /// always refreshes it; the interfaces stay injectable so tests (and the
 /// not-yet-native channels) can pass fakes.
 class DeviceServices {
-  const DeviceServices({required this.contacts, required this.launcher});
+  const DeviceServices({
+    required this.contacts,
+    required this.launcher,
+    required this.screenshot,
+  });
   final DeviceContactsService contacts;
   final DeviceAppLauncher launcher;
+  final DeviceScreenshotService screenshot;
 }
 
 /// Pure intent builder: the mailto: URI the mail app receives. `to` stays
@@ -73,4 +78,14 @@ String formatContactSummaries(List<ContactSummary> contacts) {
     );
   }
   return truncateDeviceOutput(lines.join('\n'));
+}
+
+final _screenshotPathPattern = RegExp(r'\[path=([^\]]+)\]');
+
+/// Extracts the `[path=<abs path>]` marker the `apps.screenshot` result
+/// embeds. The chat layer uses the (absolute, existing) path to attach the
+/// screenshot image to the follow-up request; null when the result carries
+/// no marker (e.g. an error line).
+String? parseScreenshotAttachPath(String result) {
+  return _screenshotPathPattern.firstMatch(result)?.group(1);
 }

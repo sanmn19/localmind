@@ -181,6 +181,7 @@ final webServerRegistrationProvider = Provider<void>((ref) {
       DeviceServices(
         contacts: const DeviceContactsRepository(),
         launcher: const MethodChannelDeviceAppLauncher(),
+        screenshot: const MethodChannelDeviceScreenshotService(),
       ),
     );
   } else if (manager.hasDeviceServer()) {

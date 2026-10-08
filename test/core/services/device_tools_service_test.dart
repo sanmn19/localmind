@@ -283,4 +283,93 @@ void main() {
       },
     );
   });
+
+  group('MethodChannelDeviceScreenshotService', () {
+    test(
+      'screenshot invokes the screenshot method with package and scroll',
+      () async {
+        final calls = <MethodCall>[];
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(deviceToolsChannel, (call) async {
+              calls.add(call);
+              return {'path': '/cache/tool_1759920000000.png', 'frames': 3};
+            });
+
+        final result = await const MethodChannelDeviceScreenshotService()
+            .screenshot(package: 'com.example.app', scroll: true);
+
+        expect(calls, hasLength(1));
+        expect(calls.single.method, deviceToolsMethodNameScreenshot);
+        expect(calls.single.arguments, {
+          'package': 'com.example.app',
+          'scroll': true,
+        });
+        expect(
+          result,
+          'Screenshot captured (3 screens stitched)\n'
+          '[path=/cache/tool_1759920000000.png]\n'
+          '[frames=3]',
+        );
+      },
+    );
+
+    test(
+      'a package-less capture omits the package key and reads as one screen',
+      () async {
+        final calls = <MethodCall>[];
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(deviceToolsChannel, (call) async {
+              calls.add(call);
+              return {'path': '/cache/tool_1759920000001.png', 'frames': 1};
+            });
+
+        final result = await const MethodChannelDeviceScreenshotService()
+            .screenshot();
+
+        expect(calls.single.arguments, {'scroll': false});
+        expect(
+          result,
+          'Screenshot captured (1 screen)\n'
+          '[path=/cache/tool_1759920000001.png]\n'
+          '[frames=1]',
+        );
+      },
+    );
+
+    test(
+      'a native payload without a path renders a model-readable failure',
+      () async {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(deviceToolsChannel, (call) async {
+              return {'path': '', 'frames': 0};
+            });
+
+        final result = await const MethodChannelDeviceScreenshotService()
+            .screenshot(scroll: true);
+
+        expect(result, 'ERROR: screenshot capture failed');
+      },
+    );
+
+    test(
+      'the service-off error code carries through as the exception reason',
+      () async {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(deviceToolsChannel, (call) async {
+              throw PlatformException(code: 'screen_capture_service_off');
+            });
+
+        await expectLater(
+          const MethodChannelDeviceScreenshotService().screenshot(),
+          throwsA(
+            isA<DeviceChannelUnavailable>().having(
+              (failure) => failure.reason,
+              'reason',
+              deviceToolsErrorScreenCaptureServiceOff,
+            ),
+          ),
+        );
+      },
+    );
+  });
 }

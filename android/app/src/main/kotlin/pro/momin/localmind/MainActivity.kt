@@ -178,6 +178,7 @@ class MainActivity : AudioServiceActivity() {
                 "composeEmail" -> composeDeviceEmail(call, result)
                 "openApp" -> openDeviceApp(call, result)
                 "listInstalledApps" -> listInstalledDeviceApps(result)
+                "screenshot" -> screenshotDeviceTools(call, result)
                 else -> result.notImplemented()
             }
         }
@@ -410,16 +411,7 @@ class MainActivity : AudioServiceActivity() {
      *  handlers surface `app_not_installed` in both cases. */
     private fun openDeviceApp(call: MethodCall, result: MethodChannel.Result) {
         val target = call.argument<String>("target") ?: ""
-        val launch = if (target.matches(PACKAGE_NAME_PATTERN.toRegex())) {
-            packageManager.getLaunchIntentForPackage(target)
-        } else {
-            val link = Uri.parse(target)
-            if (link.scheme.isNullOrBlank()) {
-                null
-            } else {
-                Intent(Intent.ACTION_VIEW, link)
-            }
-        }
+        val launch = resolveOpenIntent(target)
 
         if (launch == null) {
             result.error(
@@ -446,6 +438,121 @@ class MainActivity : AudioServiceActivity() {
                 null
             )
         }
+    }
+
+    /** Launch-intent carrier shared by [openDeviceApp] and the
+     *  `apps.screenshot` package pre-launch: packages resolve through the
+     *  launcher, scheme-carrying targets through an action-view intent. */
+    private fun resolveOpenIntent(target: String): Intent? {
+        return if (target.matches(PACKAGE_NAME_PATTERN.toRegex())) {
+            packageManager.getLaunchIntentForPackage(target)
+        } else {
+            val link = Uri.parse(target)
+            if (link.scheme.isNullOrBlank()) {
+                null
+            } else {
+                Intent(Intent.ACTION_VIEW, link)
+            }
+        }
+    }
+
+    /** `apps.screenshot` host. Optionally launches [package] first and lets
+     *  it settle, then captures through the accessibility service — one
+     *  frame, or a scroll-and-stitch tall capture when `scroll` is true.
+     *  The accessibility instance is an in-process singleton, so the
+     *  capture callback completes the pending Flutter method call directly.
+     *  Error codes: `screen_capture_service_off`, `app_not_installed`,
+     *  `security_exception`, `screenshot_failed`. */
+    private fun screenshotDeviceTools(call: MethodCall, result: MethodChannel.Result) {
+        val packageArg = call.argument<String>("package")?.trim()
+        val scroll = call.argument<Boolean>("scroll") ?: false
+        var settled = false
+
+        fun replySuccess(path: String, frames: Int) {
+            if (settled) return
+            settled = true
+            result.success(mapOf("path" to path, "frames" to frames))
+        }
+
+        fun replyCaptureFailed() {
+            if (settled) return
+            settled = true
+            result.error(
+                SCREENSHOT_FAILED_CODE,
+                "Screen capture failed on this device.",
+                null
+            )
+        }
+
+        fun performCapture() {
+            val service = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                ScreenCaptureAccessibilityService.instance
+            } else {
+                null
+            }
+            if (service == null) {
+                if (settled) return
+                settled = true
+                result.error(
+                    SCREEN_CAPTURE_OFF_CODE,
+                    "LocalMind's Screen Capture accessibility service is not enabled.",
+                    null
+                )
+                return
+            }
+            if (scroll) {
+                service.captureScrollingScreens { path, frames ->
+                    if (path == null) replyCaptureFailed() else replySuccess(path, frames)
+                }
+            } else {
+                service.captureScreenTo(
+                    ScreenCaptureAccessibilityService.TOOL_SCREENSHOTS_DIR,
+                    "tool"
+                ) { path ->
+                    if (path == null) replyCaptureFailed() else replySuccess(path, 1)
+                }
+            }
+        }
+
+        if (packageArg.isNullOrEmpty()) {
+            performCapture()
+            return
+        }
+
+        val launch = resolveOpenIntent(packageArg)
+        if (launch == null) {
+            if (settled) return
+            settled = true
+            result.error(
+                "app_not_installed",
+                "No app installed for this target: $packageArg",
+                null
+            )
+            return
+        }
+        try {
+            startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (error: ActivityNotFoundException) {
+            if (settled) return
+            settled = true
+            result.error(
+                "app_not_installed",
+                "No app installed to handle this target: $packageArg",
+                null
+            )
+            return
+        } catch (error: SecurityException) {
+            if (settled) return
+            settled = true
+            result.error(
+                "security_exception",
+                error.message ?: "Opening this app was not allowed.",
+                null
+            )
+            return
+        }
+        // Let the app render before the screen is captured.
+        mainHandler.postDelayed(::performCapture, SCREENSHOT_LAUNCH_SETTLE_MS)
     }
 
     /** [label, package] rows for the model, ordered alphabetically by label.
@@ -592,6 +699,9 @@ class MainActivity : AudioServiceActivity() {
     companion object {
         private const val ASSISTANT_ROLE_REQUEST_CODE = 4101
         private const val SCREENSHOT_TIMEOUT_MS = 2000L
+        private const val SCREENSHOT_LAUNCH_SETTLE_MS = 1200L
+        private const val SCREEN_CAPTURE_OFF_CODE = "screen_capture_service_off"
+        private const val SCREENSHOT_FAILED_CODE = "screenshot_failed"
         private const val PACKAGE_NAME_PATTERN = "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)+\$"
         private const val URI_COMPONENT_LEAVE_CHARS = "-_.!~*'()"
     }

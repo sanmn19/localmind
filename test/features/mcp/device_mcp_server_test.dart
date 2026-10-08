@@ -65,6 +65,38 @@ class _ThrowingLauncher implements DeviceAppLauncher {
   }
 }
 
+class _FakeScreenshotService implements DeviceScreenshotService {
+  final calls = <({String? package, bool scroll})>[];
+
+  /// The canned contract line the chat layer later parses `[path=…]` from.
+  String next =
+      'Screenshot captured (3 screens stitched)\n'
+      '[path=/tmp/tool_x.png]\n'
+      '[frames=3]';
+
+  @override
+  Future<String> screenshot({String? package, bool scroll = false}) async {
+    calls.add((package: package, scroll: scroll));
+    return next;
+  }
+}
+
+/// Screenshot boundary that always fails with the service-off code — the
+/// native contract for "the accessibility capture service is not enabled".
+class _ServiceOffScreenshotService implements DeviceScreenshotService {
+  @override
+  Future<String> screenshot({String? package, bool scroll = false}) async {
+    throw DeviceChannelUnavailable(deviceToolsErrorScreenCaptureServiceOff);
+  }
+}
+
+class _ThrowingScreenshotService implements DeviceScreenshotService {
+  @override
+  Future<String> screenshot({String? package, bool scroll = false}) async {
+    throw DeviceChannelUnavailable();
+  }
+}
+
 class _FakeContacts implements DeviceContactsService {
   final searchQueries = <String>[];
   final byEmailQueries = <String>[];
@@ -121,12 +153,14 @@ class _ThrowingContacts implements DeviceContactsService {
 Future<McpServerManager> _deviceManager({
   DeviceAppLauncher? launcher,
   DeviceContactsService? contacts,
+  DeviceScreenshotService? screenshot,
 }) async {
   final manager = McpServerManager();
   await manager.addDeviceServer(
     DeviceServices(
       contacts: contacts ?? _FakeContacts(),
       launcher: launcher ?? _FakeLauncher(),
+      screenshot: screenshot ?? _FakeScreenshotService(),
     ),
   );
   return manager;
@@ -151,6 +185,7 @@ void main() {
           'apps.compose_email',
           'apps.open',
           'apps.list_installed',
+          'apps.screenshot',
           'contacts.search',
           'contacts.by_email',
           'contacts.by_phone',
@@ -164,13 +199,21 @@ void main() {
     test('re-registration replaces without duplicating', () async {
       final manager = McpServerManager();
       await manager.addDeviceServer(
-        DeviceServices(contacts: _FakeContacts(), launcher: _FakeLauncher()),
+        DeviceServices(
+          contacts: _FakeContacts(),
+          launcher: _FakeLauncher(),
+          screenshot: _FakeScreenshotService(),
+        ),
       );
       await manager.addDeviceServer(
-        DeviceServices(contacts: _FakeContacts(), launcher: _FakeLauncher()),
+        DeviceServices(
+          contacts: _FakeContacts(),
+          launcher: _FakeLauncher(),
+          screenshot: _FakeScreenshotService(),
+        ),
       );
 
-      expect(manager.getTools(deviceMcpServerLabel), hasLength(6));
+      expect(manager.getTools(deviceMcpServerLabel), hasLength(7));
       expect(manager.getDeviceServices(), isNotNull);
       expect(manager.serverCount, 1);
     });
@@ -383,6 +426,107 @@ void main() {
         {},
       );
       expect(result, 'No installed apps reported.');
+    });
+  });
+
+  group('apps.screenshot dispatch', () {
+    test(
+      'passes package+scroll through and returns the boundary string with a parseable path marker',
+      () async {
+        final fake = _FakeScreenshotService();
+        final manager = await _deviceManager(screenshot: fake);
+
+        final result = await manager.callTool(
+          deviceMcpServerLabel,
+          'apps.screenshot',
+          {'package': 'com.example.app', 'scroll': true},
+        );
+
+        expect(fake.calls.single.package, 'com.example.app');
+        expect(fake.calls.single.scroll, isTrue);
+        expect(result, fake.next);
+        // The `[path=…]` marker must parse — the chat layer attaches the
+        // image to the follow-up turn based on this marker.
+        expect(parseScreenshotAttachPath(result), '/tmp/tool_x.png');
+      },
+    );
+
+    test('scroll defaults to false and package may be omitted', () async {
+      final fake = _FakeScreenshotService()
+        ..next =
+            'Screenshot captured (1 screen)\n'
+            '[path=/tmp/tool_single.png]\n'
+            '[frames=1]';
+      final manager = await _deviceManager(screenshot: fake);
+
+      final result = await manager.callTool(
+        deviceMcpServerLabel,
+        'apps.screenshot',
+        {},
+      );
+
+      expect(fake.calls.single.scroll, isFalse);
+      expect(fake.calls.single.package, isNull);
+      expect(parseScreenshotAttachPath(result), '/tmp/tool_single.png');
+    });
+
+    test('a non-string package rejects with McpException', () async {
+      final manager = await _deviceManager();
+      await expectLater(
+        manager.callTool(deviceMcpServerLabel, 'apps.screenshot', {
+          'package': 7,
+        }),
+        throwsA(isA<McpException>()),
+      );
+    });
+
+    test(
+      'a missing capture service renders the accessibility-settings guidance',
+      () async {
+        final manager = await _deviceManager(
+          screenshot: _ServiceOffScreenshotService(),
+        );
+
+        final result = await manager.callTool(
+          deviceMcpServerLabel,
+          'apps.screenshot',
+          {},
+        );
+
+        expect(
+          result,
+          "ERROR: enable LocalMind's Screen Capture in Accessibility settings",
+        );
+      },
+    );
+
+    test('generic channel failures keep the generic ERROR line', () async {
+      final manager = await _deviceManager(
+        screenshot: _ThrowingScreenshotService(),
+      );
+
+      expect(
+        await manager.callTool(deviceMcpServerLabel, 'apps.screenshot', {}),
+        'ERROR: device channel unavailable',
+      );
+    });
+  });
+
+  group('screenshot marker parse helpers', () {
+    test('parseScreenshotAttachPath extracts the bracketed marker only', () {
+      expect(
+        parseScreenshotAttachPath(
+          'Screenshot captured (3 screens stitched)\n'
+          '[path=/data/user/0/pro.momin.localmind/cache/tool_screenshots/tool_1.png]\n'
+          '[frames=3]',
+        ),
+        '/data/user/0/pro.momin.localmind/cache/tool_screenshots/tool_1.png',
+      );
+      expect(
+        parseScreenshotAttachPath('ERROR: screenshot capture failed'),
+        isNull,
+      );
+      expect(parseScreenshotAttachPath(''), isNull);
     });
   });
 
