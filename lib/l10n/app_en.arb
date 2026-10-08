@@ -2903,6 +2903,17 @@
   "tool_status_running": "Running",
   "tool_status_done": "Done",
   "tool_status_failed": "Failed",
+  "tool_activity_title": "Web activity",
+  "@tool_activity_title": {
+    "description": "Header of the collapsed card summarizing a tool chain's web searches and fetches"
+  },
+  "tool_activity_calls": "{count, plural, =1{{count} call} other{{count} calls}}",
+  "@tool_activity_calls": {
+    "description": "Badge counting the tool calls inside the web activity card",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
   "model_favorite_toggle": "Toggle favorite",
   "@model_favorite_toggle": {
     "description": "Long-press menu option to favorite a model"
@@ -3523,5 +3534,12 @@
   "settings_group_composer": "Composer",
   "sidebar_section_chats": "Chats",
   "sidebar_section_models": "Models",
-  "sidebar_section_app": "App"
+  "sidebar_section_app": "App",
+  "web_browser_card_title": "Web Browser",
+  "web_browser_card_desc": "Gives models two tools: web.search and web.fetch. SearXNG points at your own server and stays private; DuckDuckGo needs no key and is best-effort; Tavily / Brave / Serper keys are more reliable.",
+  "web_search_provider": "Search provider",
+  "web_search_provider_key": "Provider API key",
+  "web_search_key_hint": "API key…",
+  "searx_base_url_label": "SearXNG server URL",
+  "searx_base_url_hint": "http://your-rig:8888"
 }

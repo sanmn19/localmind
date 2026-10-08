@@ -13,6 +13,8 @@
     "gguf_projector_url_label",
     "gguf_projector_url_hint",
     "gguf_vision_not_supported_error",
+    "tool_activity_title",
+    "tool_activity_calls",
     "model_vision_support_label",
     "model_vision_support_desc",
     "calendar_access",
@@ -24,7 +26,14 @@
     "builtin_ai_not_supported",
     "builtin_ai_unsupported_desc",
     "builtin_ai_unsupported_chip",
-    "builtin_ai_enable"
+    "builtin_ai_enable",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ],
 
   "bn": [
@@ -41,6 +50,8 @@
     "gguf_projector_url_label",
     "gguf_projector_url_hint",
     "gguf_vision_not_supported_error",
+    "tool_activity_title",
+    "tool_activity_calls",
     "model_vision_support_label",
     "model_vision_support_desc",
     "file_explorer_not_found",
@@ -56,7 +67,14 @@
     "builtin_ai_not_supported",
     "builtin_ai_unsupported_desc",
     "builtin_ai_unsupported_chip",
-    "builtin_ai_enable"
+    "builtin_ai_enable",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ],
 
   "de": [
@@ -73,6 +91,8 @@
     "gguf_projector_url_label",
     "gguf_projector_url_hint",
     "gguf_vision_not_supported_error",
+    "tool_activity_title",
+    "tool_activity_calls",
     "model_vision_support_label",
     "model_vision_support_desc",
     "file_explorer_not_found",
@@ -88,7 +108,14 @@
     "builtin_ai_not_supported",
     "builtin_ai_unsupported_desc",
     "builtin_ai_unsupported_chip",
-    "builtin_ai_enable"
+    "builtin_ai_enable",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ],
 
   "es": [
@@ -105,6 +132,8 @@
     "gguf_projector_url_label",
     "gguf_projector_url_hint",
     "gguf_vision_not_supported_error",
+    "tool_activity_title",
+    "tool_activity_calls",
     "model_vision_support_label",
     "model_vision_support_desc",
     "file_explorer_not_found",
@@ -120,7 +149,14 @@
     "builtin_ai_not_supported",
     "builtin_ai_unsupported_desc",
     "builtin_ai_unsupported_chip",
-    "builtin_ai_enable"
+    "builtin_ai_enable",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ],
 
   "fr": [
@@ -137,6 +173,8 @@
     "gguf_projector_url_label",
     "gguf_projector_url_hint",
     "gguf_vision_not_supported_error",
+    "tool_activity_title",
+    "tool_activity_calls",
     "model_vision_support_label",
     "model_vision_support_desc",
     "file_explorer_not_found",
@@ -152,7 +190,14 @@
     "builtin_ai_not_supported",
     "builtin_ai_unsupported_desc",
     "builtin_ai_unsupported_chip",
-    "builtin_ai_enable"
+    "builtin_ai_enable",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ],
 
   "hi": [
@@ -169,6 +214,8 @@
     "gguf_projector_url_label",
     "gguf_projector_url_hint",
     "gguf_vision_not_supported_error",
+    "tool_activity_title",
+    "tool_activity_calls",
     "model_vision_support_label",
     "model_vision_support_desc",
     "file_explorer_not_found",
@@ -184,7 +231,14 @@
     "builtin_ai_not_supported",
     "builtin_ai_unsupported_desc",
     "builtin_ai_unsupported_chip",
-    "builtin_ai_enable"
+    "builtin_ai_enable",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ],
 
   "it": [
@@ -201,6 +255,8 @@
     "gguf_projector_url_label",
     "gguf_projector_url_hint",
     "gguf_vision_not_supported_error",
+    "tool_activity_title",
+    "tool_activity_calls",
     "model_vision_support_label",
     "model_vision_support_desc",
     "file_explorer_not_found",
@@ -216,7 +272,14 @@
     "builtin_ai_not_supported",
     "builtin_ai_unsupported_desc",
     "builtin_ai_unsupported_chip",
-    "builtin_ai_enable"
+    "builtin_ai_enable",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ],
 
   "ja": [
@@ -233,6 +296,8 @@
     "gguf_projector_url_label",
     "gguf_projector_url_hint",
     "gguf_vision_not_supported_error",
+    "tool_activity_title",
+    "tool_activity_calls",
     "model_vision_support_label",
     "model_vision_support_desc",
     "file_explorer_not_found",
@@ -248,7 +313,14 @@
     "builtin_ai_not_supported",
     "builtin_ai_unsupported_desc",
     "builtin_ai_unsupported_chip",
-    "builtin_ai_enable"
+    "builtin_ai_enable",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ],
 
   "ko": [
@@ -265,8 +337,17 @@
     "gguf_projector_url_label",
     "gguf_projector_url_hint",
     "gguf_vision_not_supported_error",
+    "tool_activity_title",
+    "tool_activity_calls",
     "model_vision_support_label",
-    "model_vision_support_desc"
+    "model_vision_support_desc",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ],
 
   "pt": [
@@ -283,8 +364,17 @@
     "gguf_projector_url_label",
     "gguf_projector_url_hint",
     "gguf_vision_not_supported_error",
+    "tool_activity_title",
+    "tool_activity_calls",
     "model_vision_support_label",
-    "model_vision_support_desc"
+    "model_vision_support_desc",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ],
 
   "ru": [
@@ -301,6 +391,8 @@
     "gguf_projector_url_label",
     "gguf_projector_url_hint",
     "gguf_vision_not_supported_error",
+    "tool_activity_title",
+    "tool_activity_calls",
     "model_vision_support_label",
     "model_vision_support_desc",
     "file_explorer_not_found",
@@ -316,7 +408,14 @@
     "builtin_ai_not_supported",
     "builtin_ai_unsupported_desc",
     "builtin_ai_unsupported_chip",
-    "builtin_ai_enable"
+    "builtin_ai_enable",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ],
 
   "tr": [
@@ -333,6 +432,8 @@
     "gguf_projector_url_label",
     "gguf_projector_url_hint",
     "gguf_vision_not_supported_error",
+    "tool_activity_title",
+    "tool_activity_calls",
     "model_vision_support_label",
     "model_vision_support_desc",
     "file_explorer_not_found",
@@ -348,7 +449,14 @@
     "builtin_ai_not_supported",
     "builtin_ai_unsupported_desc",
     "builtin_ai_unsupported_chip",
-    "builtin_ai_enable"
+    "builtin_ai_enable",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ],
 
   "zh": [
@@ -365,6 +473,8 @@
     "gguf_projector_url_label",
     "gguf_projector_url_hint",
     "gguf_vision_not_supported_error",
+    "tool_activity_title",
+    "tool_activity_calls",
     "model_vision_support_label",
     "model_vision_support_desc",
     "file_explorer_not_found",
@@ -380,7 +490,14 @@
     "builtin_ai_not_supported",
     "builtin_ai_unsupported_desc",
     "builtin_ai_unsupported_chip",
-    "builtin_ai_enable"
+    "builtin_ai_enable",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ],
 
   "zh_TW": [
@@ -397,6 +514,8 @@
     "gguf_projector_url_label",
     "gguf_projector_url_hint",
     "gguf_vision_not_supported_error",
+    "tool_activity_title",
+    "tool_activity_calls",
     "model_vision_support_label",
     "model_vision_support_desc",
     "file_explorer_not_found",
@@ -412,6 +531,13 @@
     "builtin_ai_not_supported",
     "builtin_ai_unsupported_desc",
     "builtin_ai_unsupported_chip",
-    "builtin_ai_enable"
+    "builtin_ai_enable",
+    "web_browser_card_title",
+    "web_browser_card_desc",
+    "web_search_provider",
+    "web_search_provider_key",
+    "web_search_key_hint",
+    "searx_base_url_label",
+    "searx_base_url_hint"
   ]
 }

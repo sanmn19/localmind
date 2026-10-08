@@ -31,6 +31,7 @@ class AssistantBubble extends StatelessWidget {
     this.onShare,
     this.allMessages = const [],
     this.isStreaming = false,
+    this.showReasoning = true,
   });
 
   final Message message;
@@ -48,6 +49,11 @@ class AssistantBubble extends StatelessWidget {
   final void Function(int direction)? onCycleVariant;
   final bool isStreaming;
 
+  /// Whether the bubble renders its own expandable reasoning block. Set to
+  /// false when a chain's web activity card above the bubble already shows
+  /// this round's thinking.
+  final bool showReasoning;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -60,7 +66,8 @@ class AssistantBubble extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (message.reasoningContent != null &&
+          if (showReasoning &&
+              message.reasoningContent != null &&
               message.reasoningContent!.isNotEmpty)
             ReasoningWidget(
               reasoningContent: message.reasoningContent,

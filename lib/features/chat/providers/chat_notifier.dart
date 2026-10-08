@@ -25,10 +25,12 @@ import 'package:localmind/features/servers/data/models/server.dart';
 import 'package:localmind/features/servers/providers/server_providers.dart';
 import 'package:localmind/objectbox.g.dart';
 import '../data/chat_service.dart';
+import '../data/mcp_server_manager.dart' show webMcpServerUrl;
 import '../data/models/chat_parameters.dart';
 import '../data/models/message.dart' hide ToolCallData;
 import '../data/models/message.dart' as msg_model show ToolCallData;
 import '../data/title_generation_service.dart';
+import '../data/tool_budget.dart';
 import '../data/tools/tool_definition.dart';
 import '../data/tools/tool_event.dart';
 import '../data/tools/tool_execution_loop.dart';
@@ -53,6 +55,21 @@ class PendingToolApproval {
   final Completer<bool> completer;
 
   PendingToolApproval({required this.toolCall, required this.completer});
+}
+
+/// What one turn's collected tool calls led to, shared by the first-turn
+/// send and multi-hop continuation streams. `finalMessage` is the finalized
+/// assistant message with the executed tool events merged in; when
+/// `followUpStarted` is true the follow-up stream owns the rest of the chain
+/// and the caller must bail out of its own post-stream bookkeeping.
+class CollectedToolCallsOutcome {
+  const CollectedToolCallsOutcome({
+    required this.finalMessage,
+    required this.followUpStarted,
+  });
+
+  final Message finalMessage;
+  final bool followUpStarted;
 }
 
 bool shouldIncludeMessageInChatContext(Message message) {
@@ -1189,162 +1206,30 @@ class ChatNotifier extends Notifier<ChatState> {
                     session: session,
                   );
 
-                  if (mcpConfig.enabled && collectedToolCalls.isNotEmpty) {
-                    try {
-                      // Split collected tool calls into:
-                      //  - `serverExecuted`: calls whose output the server
-                      //    already populated (e.g. LM Studio's native
-                      //    /api/v1/chat runs MCP tools server-side). These
-                      //    must NOT be re-executed by the client.
-                      //  - `clientExecuted`: calls that arrived without
-                      //    output (OpenAI-compatible streaming tool calls).
-                      //    These are run by ToolExecutionLoop as before.
-                      final dedupedCalls = <String, ToolCallData>{};
-                      for (final tc in collectedToolCalls) {
-                        dedupedCalls[tc.tool] = tc;
-                      }
-                      final allCalls = dedupedCalls.values.toList();
-                      final serverExecuted = allCalls
-                          .where((tc) => tc.output != null)
-                          .toList();
-                      final clientExecuted = allCalls
-                          .where((tc) => tc.output == null)
-                          .toList();
-
-                      final toolEvents = <ToolEvent>[];
-
-                      if (serverExecuted.isNotEmpty) {
-                        final sessionId = DateTime.now().millisecondsSinceEpoch
-                            .toString();
-                        for (final tc in serverExecuted) {
-                          final eventId =
-                              '${sessionId}_1_${tc.tool}.server_executed';
-                          toolEvents.add(
-                            ToolEvent(
-                              eventId: eventId,
-                              timestamp: DateTime.now(),
-                              status: ToolEventStatus.completed,
-                              toolName: tc.tool,
-                              providerType: ToolProviderType.lmStudioServer,
-                              arguments: tc.arguments,
-                              result: tc.output,
-                            ),
-                          );
-                        }
-                      }
-
-                      if (clientExecuted.isNotEmpty && ref.mounted) {
-                        final registry = ref.read(toolRegistryProvider);
-                        final adapter = createAdapterForServerType(server.type);
-
-                        final preParsedCalls = clientExecuted
-                            .map(
-                              (tc) => ParsedToolCall(
-                                id: tc.tool,
-                                name: tc.tool,
-                                arguments: tc.arguments,
-                              ),
-                            )
-                            .toList();
-
-                        final loop = ToolExecutionLoop(
-                          adapter: adapter,
-                          registry: registry,
-                          onRequestApproval: (call) async {
-                            final completer = Completer<bool>();
-                            final approval = PendingToolApproval(
-                              toolCall: call,
-                              completer: completer,
-                            );
-                            _pendingToolApproval = approval;
-                            if (ref.mounted) {
-                              state = state.copyWith(
-                                pendingToolApproval: approval,
-                              );
-                            }
-
-                            final result = await completer.future;
-
-                            _pendingToolApproval = null;
-                            if (ref.mounted) {
-                              state = state.copyWith(
-                                clearPendingApproval: true,
-                              );
-                            }
-
-                            return result;
-                          },
-                        );
-
-                        final loopResult = await loop.run(
-                          initialUserMessage: content,
-                          assistantContent: streamingAssistantMessage.content,
-                          preParsedCalls: preParsedCalls,
-                        );
-
-                        if (loopResult.events.isNotEmpty) {
-                          toolEvents.addAll(loopResult.events);
-                        }
-                      }
-
-                      if (toolEvents.isNotEmpty) {
-                        finalMessage = finalMessage.copyWith(
-                          toolEvents: toolEvents,
-                        );
-                      }
-
-                      // After successful tool execution the chat must
-                      // continue: the model has emitted a tool call, the
-                      // client (or server) executed it, and now we need to
-                      // send a follow-up chat completion containing the
-                      // tool-role result(s) so the model can produce the
-                      // final answer. Without this, the conversation just
-                      // ends as soon as the tool returns — see issue #77.
-                      final completedResults = toolEvents
-                          .where((e) => e.status == ToolEventStatus.completed)
-                          .toList();
-                      if (ref.mounted && completedResults.isNotEmpty) {
-                        await _sendFollowupWithToolResults(
-                          previousAssistant: finalMessage,
-                          toolEvents: toolEvents,
-                          server: server,
-                          selectedModel: selectedModel,
-                          effectiveModelId: effectiveModelId,
-                          chatService: chatService,
-                          chatParams: chatParams,
-                          tools: tools,
-                          integrations: integrations,
-                          streamConvId: streamConvId,
-                          isCurrentContext: isCurrentContext,
-                        );
-                        // After the follow-up the original `finalMessage`
-                        // already contains its `toolEvents` and is on disk;
-                        // mark it as final and bail out of the rest of the
-                        // post-stream bookkeeping that was meant for the
-                        // first turn only.
-                        if (ref.mounted) {
-                          await _saveMessage(
-                            finalMessage,
-                            persist: session.persisted,
-                          );
-                          if (isCurrentContext) {
-                            _replaceMessageInState(
-                              finalMessage,
-                              clearStreaming: true,
-                            );
-                          }
-                        }
-                        return;
-                      }
-                    } catch (e) {
-                      Log.error('Tool execution loop failed: $e');
-                      // A follow-up that failed after registering its own
-                      // session must not leave it running forever.
-                      final followUp = _sessions[session.conversationId];
-                      if (followUp != null && !identical(followUp, session)) {
-                        await followUp.detach();
-                        _endSession(followUp);
-                      }
+                  final toolOutcome = await _executeCollectedToolCalls(
+                    collectedToolCalls: collectedToolCalls,
+                    finalizedMessage: finalMessage,
+                    isChainStart: true,
+                    mcpEnabled: mcpConfig.enabled,
+                    initialUserMessage: content,
+                    session: session,
+                    server: server,
+                    selectedModel: selectedModel,
+                    effectiveModelId: effectiveModelId,
+                    chatService: chatService,
+                    chatParams: chatParams,
+                    tools: tools,
+                    integrations: integrations,
+                    streamConvId: streamConvId,
+                    isCurrentContext: isCurrentContext,
+                  );
+                  if (toolOutcome != null) {
+                    finalMessage = toolOutcome.finalMessage;
+                    if (toolOutcome.followUpStarted) {
+                      // Tool calls executed and the follow-up stream now
+                      // owns the chain — bail out of the post-stream
+                      // bookkeeping that was meant for the first turn only.
+                      return;
                     }
                   }
 
@@ -1604,8 +1489,106 @@ class ChatNotifier extends Notifier<ChatState> {
       }
     }
 
+    // Tool-chain turns resolve to a single assistant tail in
+    // `resolveActiveTimeline` (chain rounds are timeline steps, not
+    // variants). The model still needs every round's
+    // assistant(tool_calls) + tool(result) protocol pair, so splice those
+    // rows back in from allMessages ahead of the turn's tail.
+    final spliced = spliceToolChainContext(messages, state.allMessages);
+
     final contextLength = ref.read(chatParamsProvider).contextLength;
-    return _truncateToContextWindow(messages, contextLength);
+    return _truncateToContextWindow(spliced, contextLength);
+  }
+
+  /// Re-inserts a tool-chain turn's history ahead of its assistant tail.
+  ///
+  /// [resolvedTimeline] comes from the active-timeline resolver, which shows
+  /// exactly one assistant row (the tail) per tool chain. Each chain's
+  /// assistant(tool_calls) and tool(result) rows live on in `allMessages`,
+  /// so for every resolved assistant whose group carries such rows we splice
+  /// them back, in order, right before the tail. A tail whose content is
+  /// still empty (the follow-up stream has just started) is replaced by the
+  /// chain rows, matching what the model received before consolidation.
+  ///
+  /// Round rows the resolved timeline already surfaces (legacy parent-chain
+  /// conversations mark every chain step active, so the walk shows them) are
+  /// skipped: re-splicing those would duplicate tool_call_ids on the wire,
+  /// which OpenAI-compatible servers reject as a protocol violation.
+  List<Message> spliceToolChainContext(
+    List<Message> resolvedTimeline,
+    List<Message> allMessages,
+  ) {
+    if (resolvedTimeline.isEmpty || allMessages.isEmpty) {
+      return resolvedTimeline;
+    }
+
+    // What the request wire already shows: any family row with one of these
+    // ids is already present — splicing it again would duplicate it.
+    final presentIds = {for (final message in resolvedTimeline) message.id};
+
+    final spliced = <Message>[];
+    for (final message in resolvedTimeline) {
+      if (message.role != MessageRole.assistant ||
+          message.toolCalls?.isNotEmpty == true) {
+        // Round rows that are themselves resolved (legacy timelines, or a
+        // user-cycled mix) already carry their protocol position — leave
+        // them untouched.
+        spliced.add(message);
+        continue;
+      }
+      final family = _toolChainFamily(
+        message,
+        allMessages,
+      )?.where((row) => !presentIds.contains(row.id)).toList();
+      if (family == null || family.isEmpty) {
+        spliced.add(message);
+        continue;
+      }
+      if (message.content.trim().isNotEmpty) {
+        spliced.addAll(family);
+        spliced.add(message);
+      } else {
+        spliced.addAll(family);
+      }
+    }
+    return spliced;
+  }
+
+  /// The tool-call history of the chain [tail] belongs to: this turn's
+  /// assistant(tool_calls) rows plus their tool(result) rows — everything
+  /// in [tail]'s variant group chronologically before it, paired by
+  /// `toolCallId`. Returns null when the turn has no tool history (plain
+  /// answer turns pass through untouched).
+  List<Message>? _toolChainFamily(Message tail, List<Message> allMessages) {
+    final groupId = tail.variantGroupId;
+    if (groupId == null || groupId.isEmpty) return null;
+
+    final family = <Message>[
+      for (final message in allMessages)
+        if (message.id != tail.id &&
+            MessageVariants.groupId(message) == groupId &&
+            _isChainRow(message, tail))
+          message,
+    ];
+    if (family.isEmpty) return null;
+    family.sort((a, b) {
+      final orderCompare = a.threadOrder.compareTo(b.threadOrder);
+      if (orderCompare != 0) return orderCompare;
+      final createdAtCompare = a.createdAt.compareTo(b.createdAt);
+      if (createdAtCompare != 0) return createdAtCompare;
+      return a.id.compareTo(b.id);
+    });
+    return family;
+  }
+
+  bool _isChainRow(Message row, Message tail) {
+    if (row.role == MessageRole.tool) return true;
+    if (row.role != MessageRole.assistant) return false;
+    if (row.toolCalls?.isNotEmpty != true) return false;
+    // Rounds of a flat chain are ordered by threadOrder, each continuation
+    // taking nextThreadOrder. Rows at or below the tail's order that their
+    // group pairs with it belong to the chain leading to this tail.
+    return row.threadOrder <= tail.threadOrder;
   }
 
   List<Message> _buildMessagesForContinue(
@@ -2029,6 +2012,7 @@ class ChatNotifier extends Notifier<ChatState> {
       target.selectedModel,
       effectiveModelId: effectiveModelId,
       continueGeneration: true,
+      isChainStart: true,
     );
   }
 
@@ -2182,12 +2166,15 @@ class ChatNotifier extends Notifier<ChatState> {
       assistantMessage,
       selectedModel,
       effectiveModelId: effectiveModelId,
+      isChainStart: true,
     );
   }
 
   /// After successful tool execution (issue #77), build `tool` role messages
-  /// for each completed tool event, persist them, and re-issue the chat
-  /// completion so the model can produce the final answer.
+  /// for each completed tool event — plus the per-chain web budget skip
+  /// failures whose error text tells the model to wrap up — persist them,
+  /// and re-issue the chat completion so the model can produce the final
+  /// answer.
   ///
   /// The assistant message emitted in the first turn has its `toolCalls`
   /// field populated with the executed results, plus matching `MessageRole.tool`
@@ -2209,10 +2196,18 @@ class ChatNotifier extends Notifier<ChatState> {
   }) async {
     if (!ref.mounted) return;
 
-    final completed = toolEvents
-        .where((e) => e.status == ToolEventStatus.completed)
+    // Feedback rows: completed results AND the per-chain web budget skip
+    // failures — the overdrawn call's error text tells the model to wrap
+    // the turn up with what it already fetched. Everything else (plain
+    // loop failures, rejections) stays out of the feedback path.
+    final feedback = toolEvents
+        .where(
+          (e) =>
+              e.status == ToolEventStatus.completed ||
+              isWebBudgetSkipFailure(e),
+        )
         .toList();
-    if (completed.isEmpty) return;
+    if (feedback.isEmpty) return;
 
     // Synthesize stable tool-call IDs that match between the assistant
     // message's `tool_calls[].id` and the tool role message's `tool_call_id`.
@@ -2225,7 +2220,7 @@ class ChatNotifier extends Notifier<ChatState> {
       return 'call_${uniqueSuffix}_completed';
     }
 
-    final toolCallEntries = completed
+    final toolCallEntries = feedback
         .map(
           (e) => msg_model.ToolCallData(
             id: toolCallIdFor(e),
@@ -2246,7 +2241,7 @@ class ChatNotifier extends Notifier<ChatState> {
       _replaceMessageInAll(assistantWithToolCalls, clearStreaming: true);
     }
 
-    final toolMessages = completed.map((e) {
+    final toolMessages = feedback.map((e) {
       final callId = toolCallIdFor(e);
       return Message(
         id: 'tool_${callId}_${e.timestamp.microsecondsSinceEpoch}',
@@ -2261,6 +2256,7 @@ class ChatNotifier extends Notifier<ChatState> {
         threadOrder: previousAssistant.threadOrder + 0,
         variantGroupId: previousAssistant.variantGroupId,
         variantIndex: previousAssistant.variantIndex,
+        isActiveVariant: false,
       );
     }).toList();
 
@@ -2270,18 +2266,38 @@ class ChatNotifier extends Notifier<ChatState> {
 
     if (!ref.mounted) return;
 
+    // The chain tail REPLACES the turn's answer in the variant system:
+    // tool-chain rounds are timeline steps, not variants. Demote the round
+    // this chain continues so the resolver keeps exactly one visible
+    // assistant row per turn — the newest one. The persisted row already
+    // carries this round's `toolCalls` (saved above).
+    final demotedRound = assistantWithToolCalls.copyWith(
+      isActiveVariant: false,
+    );
+    await _saveMessage(demotedRound);
+    if (!ref.mounted) return;
+
     // Persist the assistant+tool messages into state.allMessages so future
     // `_buildMessagesForApi(selectedModel)` calls (used by the follow-up
     // stream) include them. Without this the next request would be missing
     // the tool history and the model would re-emit the same tool call.
-    final newAll = [...state.allMessages, ...toolMessages];
+    final newAll = [
+      ...state.allMessages.map(
+        (m) => m.id == demotedRound.id ? demotedRound : m,
+      ),
+      ...toolMessages,
+    ];
     final activeTimeline = MessageVariants.resolveActiveTimeline(newAll);
     state = state.copyWith(allMessages: newAll, messages: activeTimeline);
 
     // Create a new assistant message that will receive the model's final
-    // answer. It shares the variant group with the previous assistant turn
-    // so users see a single grouped assistant card that contains both the
-    // tool-call turn and the follow-up answer.
+    // answer. It shares the variant group AND variant index with the round
+    // it continues: the resolver's convention is one active row per group,
+    // so this tail (already the only active row of the group once the
+    // previous round is demoted) becomes the turn's single answer.
+    // Its parent points at the round's own parent, keeping the chain flat —
+    // every round of the turn sits beside the others as a sibling so
+    // "one active per group" is what actually hides the older rounds.
     final continuationThreadOrder = MessageVariants.nextThreadOrder(
       state.allMessages,
     );
@@ -2294,10 +2310,10 @@ class ChatNotifier extends Notifier<ChatState> {
       status: MessageStatus.streaming,
       modelId: effectiveModelId,
       variantGroupId: previousAssistant.variantGroupId,
-      variantIndex: previousAssistant.variantIndex + 1,
+      variantIndex: previousAssistant.variantIndex,
       threadOrder: continuationThreadOrder,
       isActiveVariant: true,
-      parentMessageId: previousAssistant.id,
+      parentMessageId: previousAssistant.parentMessageId,
     );
 
     final newAllWithAssistant = [...newAll, continuationMessage];
@@ -2330,12 +2346,266 @@ class ChatNotifier extends Notifier<ChatState> {
     );
   }
 
+  /// Executes the tool calls collected from one assistant turn's stream.
+  /// The first send collects them locally; continuation streams collect
+  /// them on `session.collectedToolCalls`. Completed results — plus the
+  /// per-chain web budget skip failures — are fed back via
+  /// `_sendFollowupWithToolResults` so multi-hop chains (search ->
+  /// fetch -> answer) keep running the model's next tool calls.
+  ///
+  /// Returns null when MCP is off or nothing was collected (caller proceeds
+  /// with its own bookkeeping), otherwise the possibly toolEvents-merged
+  /// final message plus `followUpStarted`.
+  Future<CollectedToolCallsOutcome?> _executeCollectedToolCalls({
+    required List<ToolCallData> collectedToolCalls,
+    required Message finalizedMessage,
+    required bool isChainStart,
+    required bool mcpEnabled,
+    required String initialUserMessage,
+    required GenerationSession session,
+    required Server server,
+    required ModelInfo? selectedModel,
+    required String effectiveModelId,
+    required ChatService chatService,
+    required ChatParameters chatParams,
+    required List<ToolDefinition> tools,
+    required List<McpIntegration>? integrations,
+    required String streamConvId,
+    required bool isCurrentContext,
+  }) async {
+    if (!mcpEnabled || collectedToolCalls.isEmpty) return null;
+
+    var finalMessage = finalizedMessage;
+    try {
+      // Split collected tool calls into:
+      //  - `serverExecuted`: calls whose output the server already
+      //    populated (e.g. LM Studio's native /api/v1/chat runs MCP tools
+      //    server-side). These must NOT be re-executed by the client.
+      //  - `clientExecuted`: calls that arrived without output
+      //    (OpenAI-compatible streaming tool calls). These are run by
+      //    ToolExecutionLoop as before.
+      final dedupedCalls = <String, ToolCallData>{};
+      for (final tc in collectedToolCalls) {
+        dedupedCalls[tc.tool] = tc;
+      }
+      final allCalls = dedupedCalls.values.toList();
+      final serverExecuted = allCalls.where((tc) => tc.output != null).toList();
+      final clientExecuted = allCalls.where((tc) => tc.output == null).toList();
+
+      final toolEvents = <ToolEvent>[];
+
+      if (serverExecuted.isNotEmpty) {
+        final sessionId = DateTime.now().millisecondsSinceEpoch.toString();
+        for (final tc in serverExecuted) {
+          final eventId = '${sessionId}_1_${tc.tool}.server_executed';
+          toolEvents.add(
+            ToolEvent(
+              eventId: eventId,
+              timestamp: DateTime.now(),
+              status: ToolEventStatus.completed,
+              toolName: tc.tool,
+              providerType: ToolProviderType.lmStudioServer,
+              arguments: tc.arguments,
+              result: tc.output,
+            ),
+          );
+        }
+      }
+
+      if (clientExecuted.isNotEmpty && ref.mounted) {
+        final registry = ref.read(toolRegistryProvider);
+        final adapter = createAdapterForServerType(server.type);
+
+        final preParsedCalls = clientExecuted
+            .map(
+              (tc) => ParsedToolCall(
+                id: tc.tool,
+                name: tc.tool,
+                arguments: tc.arguments,
+              ),
+            )
+            .toList();
+
+        // Per-chain web-turn budget: one reply (the head assistant row and
+        // its continuation rounds) shares counters keyed by the chain
+        // token. A chain start resets; continuations inherit the budget so
+        // over-burning chains stop at the lookup layer instead of draining
+        // anonymous keyless vendors. Non-local-web names pass through.
+        final chainKey = WebToolBudget.chainKeyFor(finalMessage);
+        final budget = ref.read(webToolBudgetProvider);
+        if (isChainStart) budget.reset(chainKey);
+
+        final ownedTools = {
+          for (final tool in await registry.listTools()) tool.name: tool,
+        };
+        bool isLocalWebSearch(String name) =>
+            name == 'web.search' &&
+            ownedTools[name]?.providerRef == webMcpServerUrl;
+        bool isLocalWebFetch(String name) =>
+            name == 'web.fetch' &&
+            ownedTools[name]?.providerRef == webMcpServerUrl;
+
+        final executableCalls = <ParsedToolCall>[];
+        final overdrawnCalls = <ParsedToolCall>[];
+        for (final call in preParsedCalls) {
+          final isSearch = isLocalWebSearch(call.name);
+          final isWeb = isSearch || isLocalWebFetch(call.name);
+          if (!isWeb || budget.allow(chainKey, isSearch: isSearch)) {
+            executableCalls.add(call);
+          } else {
+            // Denied WITHOUT executing: nothing is recorded, but the model
+            // still gets a readable failure instead of a network call.
+            overdrawnCalls.add(call);
+          }
+        }
+
+        final loop = ToolExecutionLoop(
+          adapter: adapter,
+          registry: registry,
+          onRequestApproval: (call) async {
+            if (await shouldAutoApproveTool(
+              call.name,
+              ref.read(settingsProvider).webToolsEnabled,
+              registry,
+            )) {
+              return true;
+            }
+            final completer = Completer<bool>();
+            final approval = PendingToolApproval(
+              toolCall: call,
+              completer: completer,
+            );
+            _pendingToolApproval = approval;
+            if (ref.mounted) {
+              state = state.copyWith(pendingToolApproval: approval);
+            }
+
+            final result = await completer.future;
+
+            _pendingToolApproval = null;
+            if (ref.mounted) {
+              state = state.copyWith(clearPendingApproval: true);
+            }
+
+            return result;
+          },
+        );
+
+        final loopResult = await loop.run(
+          initialUserMessage: initialUserMessage,
+          assistantContent: finalMessage.content,
+          preParsedCalls: executableCalls,
+        );
+
+        // Every EXECUTED call consumes budget — successful or failed.
+        for (final call in executableCalls) {
+          if (isLocalWebSearch(call.name)) {
+            budget.record(chainKey, isSearch: true);
+          } else if (isLocalWebFetch(call.name)) {
+            budget.record(chainKey, isSearch: false);
+          }
+        }
+
+        if (loopResult.events.isNotEmpty) {
+          toolEvents.addAll(loopResult.events);
+        }
+
+        // Skipped overdraws surface as failed tool events so the tool rows
+        // stay readable AND the failure text flows to the model through
+        // the same tool-message feedback path.
+        for (final call in overdrawnCalls) {
+          final counts = budget.countsFor(chainKey);
+          toolEvents.add(
+            ToolEvent(
+              eventId:
+                  '${chainKey}_skip_${call.name}'
+                  '_${budget.nextSkipSequence(chainKey)}',
+              timestamp: DateTime.now(),
+              status: ToolEventStatus.failed,
+              toolName: call.name,
+              providerType: ToolProviderType.mcp,
+              providerRef: webMcpServerUrl,
+              arguments: call.arguments,
+              error: webBudgetExhaustedMessage(
+                searches: counts.searches,
+                fetches: counts.fetches,
+              ),
+            ),
+          );
+        }
+      }
+
+      if (toolEvents.isNotEmpty) {
+        finalMessage = finalMessage.copyWith(toolEvents: toolEvents);
+      }
+
+      // After successful tool execution the chat must continue: the model
+      // has emitted a tool call, the client (or server) executed it, and now
+      // we need to send a follow-up chat completion containing the tool-role
+      // result(s) so the model can produce the final answer. Without this,
+      // the conversation just ends as soon as the tool returns — issue #77.
+      final completedResults = toolEvents
+          .where((e) => e.status == ToolEventStatus.completed)
+          .toList();
+      final budgetSkips = toolEvents.where(isWebBudgetSkipFailure).toList();
+      if (ref.mounted &&
+          (completedResults.isNotEmpty || budgetSkips.isNotEmpty)) {
+        await _sendFollowupWithToolResults(
+          previousAssistant: finalMessage,
+          toolEvents: toolEvents,
+          server: server,
+          selectedModel: selectedModel,
+          effectiveModelId: effectiveModelId,
+          chatService: chatService,
+          chatParams: chatParams,
+          tools: tools,
+          integrations: integrations,
+          streamConvId: streamConvId,
+          isCurrentContext: isCurrentContext,
+        );
+        // The follow-up owns this turn from here on: it already persisted
+        // the final round (toolCalls + demoted variant flag) itself and
+        // re-issuing `_saveMessage(finalMessage)` here would overwrite that
+        // row with the stale active copy, resurrecting the demoted round.
+        //
+        // This turn's stream is done and the follow-up owns the chain on its
+        // own session — `_sendFollowupWithToolResults` already began it via
+        // `_beginSession`, which REPLACED this session's map entry (and
+        // detached it). End this turn's session once the handoff has
+        // happened: the `identical` guard in `_endSession` protects the
+        // newer follow-up session from being removed. Without this, a
+        // handoff that did not reach the follow-up's `_beginSession` (e.g.
+        // an unmounted notifier) would leave this session mapped forever.
+        _endSession(session);
+        session.latestMessage = null;
+        return CollectedToolCallsOutcome(
+          finalMessage: finalMessage,
+          followUpStarted: true,
+        );
+      }
+    } catch (e) {
+      Log.error('Tool execution loop failed: $e');
+      // A follow-up that failed after registering its own session must not
+      // leave it running forever.
+      final followUp = _sessions[session.conversationId];
+      if (followUp != null && !identical(followUp, session)) {
+        await followUp.detach();
+        _endSession(followUp);
+      }
+    }
+    return CollectedToolCallsOutcome(
+      finalMessage: finalMessage,
+      followUpStarted: false,
+    );
+  }
+
   Future<void> _runAssistantStream(
     GenerationSession session,
     Message assistantMessage,
     ModelInfo? selectedModel, {
     required String effectiveModelId,
     bool continueGeneration = false,
+    bool isChainStart = false,
   }) async {
     final server = session.server;
     final chatService = session.chatService;
@@ -2491,6 +2761,17 @@ class ChatNotifier extends Notifier<ChatState> {
                     _endSession(session);
                   }
                   break;
+                case ChatResponseType.toolCall:
+                  // Multi-hop: a continuation stream can emit NEW tool
+                  // calls. Accumulate them on the session exactly like the
+                  // first send does, so onDone executes them instead of
+                  // silently dropping them.
+                  if (response.toolCall != null) {
+                    final calls = session.collectedToolCalls ??=
+                        <ToolCallData>[];
+                    calls.add(response.toolCall!);
+                  }
+                  break;
                 case ChatResponseType.done:
                   if (response.stats != null) {
                     session.stats = response.stats;
@@ -2511,7 +2792,7 @@ class ChatNotifier extends Notifier<ChatState> {
               final streamConvId = assistantMessage.conversationId;
               final isCurrentContext = _activeConversationId == streamConvId;
 
-              final finalMessage = _finalizeStreamMessage(
+              var finalMessage = _finalizeStreamMessage(
                 streamingAssistantMessage.copyWith(
                   status: MessageStatus.complete,
                   isProcessing: false,
@@ -2519,6 +2800,36 @@ class ChatNotifier extends Notifier<ChatState> {
                 stopReason: 'complete',
                 session: session,
               );
+
+              // Multi-hop: the continuation stream may have emitted NEW
+              // tool calls. Run the same shared tool-execution block the
+              // first send uses and, when its follow-up takes over the
+              // chain, bail out of this turn's own bookkeeping.
+              final toolOutcome = await _executeCollectedToolCalls(
+                collectedToolCalls:
+                    session.collectedToolCalls ?? const <ToolCallData>[],
+                finalizedMessage: finalMessage,
+                isChainStart: isChainStart,
+                mcpEnabled: mcpConfig.enabled,
+                initialUserMessage: finalMessage.content,
+                session: session,
+                server: server,
+                selectedModel: selectedModel,
+                effectiveModelId: effectiveModelId,
+                chatService: chatService,
+                chatParams: chatParams,
+                tools: tools,
+                integrations: integrations,
+                streamConvId: streamConvId,
+                isCurrentContext: isCurrentContext,
+              );
+              if (toolOutcome != null) {
+                finalMessage = toolOutcome.finalMessage;
+                if (toolOutcome.followUpStarted) {
+                  return;
+                }
+              }
+
               await _saveMessage(finalMessage, persist: session.persisted);
               if (!ref.mounted) return;
               if (isCurrentContext) {

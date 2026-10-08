@@ -4401,6 +4401,18 @@ abstract class AppLocalizations {
   /// **'Failed'**
   String get tool_status_failed;
 
+  /// Header of the collapsed card summarizing a tool chain's web searches and fetches
+  ///
+  /// In en, this message translates to:
+  /// **'Web activity'**
+  String get tool_activity_title;
+
+  /// Badge counting the tool calls inside the web activity card
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{{count} call} other{{count} calls}}'**
+  String tool_activity_calls(int count);
+
   /// Long-press menu option to favorite a model
   ///
   /// In en, this message translates to:
@@ -6194,6 +6206,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'App'**
   String get sidebar_section_app;
+
+  /// No description provided for @web_browser_card_title.
+  ///
+  /// In en, this message translates to:
+  /// **'Web Browser'**
+  String get web_browser_card_title;
+
+  /// No description provided for @web_browser_card_desc.
+  ///
+  /// In en, this message translates to:
+  /// **'Gives models two tools: web.search and web.fetch. SearXNG points at your own server and stays private; DuckDuckGo needs no key and is best-effort; Tavily / Brave / Serper keys are more reliable.'**
+  String get web_browser_card_desc;
+
+  /// No description provided for @web_search_provider.
+  ///
+  /// In en, this message translates to:
+  /// **'Search provider'**
+  String get web_search_provider;
+
+  /// No description provided for @web_search_provider_key.
+  ///
+  /// In en, this message translates to:
+  /// **'Provider API key'**
+  String get web_search_provider_key;
+
+  /// No description provided for @web_search_key_hint.
+  ///
+  /// In en, this message translates to:
+  /// **'API key…'**
+  String get web_search_key_hint;
+
+  /// No description provided for @searx_base_url_label.
+  ///
+  /// In en, this message translates to:
+  /// **'SearXNG server URL'**
+  String get searx_base_url_label;
+
+  /// No description provided for @searx_base_url_hint.
+  ///
+  /// In en, this message translates to:
+  /// **'http://your-rig:8888'**
+  String get searx_base_url_hint;
 }
 
 class _AppLocalizationsDelegate

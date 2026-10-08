@@ -1,5 +1,6 @@
 import 'package:hugeicons/hugeicons.dart';
 import 'package:flutter/material.dart';
+import 'package:localmind/core/models/enums.dart';
 import 'package:localmind/core/theme/colors.dart';
 import 'package:localmind/features/chat/data/models/message.dart';
 import 'package:localmind/features/chat/utils/message_variants.dart';
@@ -18,7 +19,20 @@ class MessageVariantNavigator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final variants = MessageVariants.variantsForMessage(allMessages, message);
+    // Tool-chain rounds (assistant rows carrying tool calls) and the
+    // chain's tool-row results are timeline steps of one turn, not
+    // user-cyclable variants — pages count answer rounds only.
+    final variantCandidates = MessageVariants.variantsForMessage(
+      allMessages,
+      message,
+    );
+    final variants = variantCandidates
+        .where(
+          (candidate) =>
+              candidate.role != MessageRole.tool &&
+              candidate.toolCalls?.isNotEmpty != true,
+        )
+        .toList();
     if (variants.length <= 1) return const SizedBox.shrink();
 
     final currentIndex = MessageVariants.activeVariantIndex(variants);

@@ -1,0 +1,21 @@
+{
+  "results": [
+    {
+      "title": "Rig docs",
+      "url": "https://rig.local/docs",
+      "content": "self-hosted search tier"
+    },
+    {
+      "url": "https://no-title.example/row"
+    },
+    {
+      "title": "No url here",
+      "content": "also ignored"
+    },
+    {
+      "title": "Null snippet",
+      "url": "https://rig.local/2",
+      "content": null
+    }
+  ]
+}

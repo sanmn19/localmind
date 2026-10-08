@@ -58,3 +58,6 @@ docs/marketing/
 .opencode/
 .config/
 RELEASE.md
+
+# superpowers subagent workspaces (scratch)
+.superpowers/

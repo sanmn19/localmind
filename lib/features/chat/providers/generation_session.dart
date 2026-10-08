@@ -55,6 +55,13 @@ class GenerationSession {
   /// Set once the reply is cancelled or replaced; late events are ignored.
   bool cancelled = false;
 
+  /// Tool calls the model streamed during THIS turn (continuation streams
+  /// built by `_runAssistantStream`). Accumulated while the stream runs and
+  /// executed from `onDone`, so multi-hop chains (search -> fetch -> answer)
+  /// keep executing the model's next tool calls instead of dropping them.
+  /// Null until the first tool call arrives.
+  List<ToolCallData>? collectedToolCalls;
+
   int chunkCount = 0;
   DateTime? lastCheckpointTime;
   int lastSavedContentLength = 0;

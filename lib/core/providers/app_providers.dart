@@ -141,6 +141,14 @@ class SettingsNotifier extends Notifier<AppSettings> {
       _update(state.copyWith(calendarToolsEnabled: value));
   void setLocationToolsEnabled(bool value) =>
       _update(state.copyWith(locationToolsEnabled: value));
+  void setWebToolsEnabled(bool value) =>
+      _update(state.copyWith(webToolsEnabled: value));
+  void setWebSearchProvider(String value) =>
+      _update(state.copyWith(webSearchProvider: value));
+  void setWebSearchApiKey(String? value) =>
+      _update(state.copyWith(webSearchApiKey: value));
+  void setWebSearxUrl(String? value) =>
+      _update(state.copyWith(webSearxUrl: value));
   void setAutoCollapseThinking(bool value) =>
       _update(state.copyWith(autoCollapseThinking: value));
   void setSendTemperature(bool value) =>

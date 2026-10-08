@@ -2371,6 +2371,20 @@ class AppLocalizationsRu extends AppLocalizations {
   String get tool_status_failed => 'Неуспешный';
 
   @override
+  String get tool_activity_title => 'Web activity';
+
+  @override
+  String tool_activity_calls(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count calls',
+      one: '$count call',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get model_favorite_toggle => 'Добавить в избранное';
 
   @override
@@ -3371,4 +3385,26 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get sidebar_section_app => 'Приложение';
+
+  @override
+  String get web_browser_card_title => 'Web Browser';
+
+  @override
+  String get web_browser_card_desc =>
+      'Gives models two tools: web.search and web.fetch. SearXNG points at your own server and stays private; DuckDuckGo needs no key and is best-effort; Tavily / Brave / Serper keys are more reliable.';
+
+  @override
+  String get web_search_provider => 'Search provider';
+
+  @override
+  String get web_search_provider_key => 'Provider API key';
+
+  @override
+  String get web_search_key_hint => 'API key…';
+
+  @override
+  String get searx_base_url_label => 'SearXNG server URL';
+
+  @override
+  String get searx_base_url_hint => 'http://your-rig:8888';
 }

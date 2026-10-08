@@ -7,6 +7,7 @@ import 'package:localmind/core/providers/service_providers.dart';
 import 'package:localmind/features/chat/providers/chat_params_providers.dart';
 import 'package:localmind/features/chat/providers/chat_reasoning_providers.dart';
 import 'package:localmind/features/chat/providers/model_loading_providers.dart';
+import 'package:localmind/features/models/data/model_vision_overrides.dart';
 import 'package:localmind/features/models/data/models/model_info.dart';
 import 'package:localmind/features/models/utils/model_instance_utils.dart';
 import 'package:localmind/features/on_device/data/models/on_device_model.dart';
@@ -44,6 +45,10 @@ class ActiveChatTarget {
 /// Remote servers retain their existing `default` model routing when no
 /// explicit model is selected.
 final activeChatTargetProvider = Provider<ActiveChatTarget>((ref) {
+  final visionOverrides = ref.watch(modelVisionOverridesProvider);
+  ModelInfo? applyVision(ModelInfo? model) =>
+      model == null ? null : applyVisionOverride(model, visionOverrides);
+
   final server = ref.watch(activeServerProvider);
   if (server == null) {
     return const ActiveChatTarget(
@@ -54,7 +59,7 @@ final activeChatTargetProvider = Provider<ActiveChatTarget>((ref) {
     );
   }
 
-  final selected = ref.watch(selectedModelProvider);
+  final selected = applyVision(ref.watch(selectedModelProvider));
   final selectedForServer = selected?.serverId == server.id ? selected : null;
   if (server.isOnDevice) {
     final engine = ref.watch(onDeviceEngineProvider);

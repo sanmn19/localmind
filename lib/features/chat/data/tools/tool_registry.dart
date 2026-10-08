@@ -1,3 +1,4 @@
+import '../mcp_server_manager.dart';
 import 'tool_definition.dart';
 
 abstract class ToolProvider {
@@ -23,12 +24,38 @@ class ToolRegistry {
     String name,
     Map<String, dynamic> args,
   ) async {
+    // Prefer ROUTING to the local in-process web server when it owns the
+    // name: a user-configured remote MCP integration exposing a tool with
+    // the same name (e.g. `web.search`) must never hijack execution.
+    ToolProvider? owner;
     for (final provider in providers) {
       final tools = await provider.listTools();
-      if (tools.any((t) => t.name == name)) {
-        return provider.execute(name, args);
+      if (!tools.any((t) => t.name == name)) continue;
+      if (tools.any(
+        (t) => t.name == name && t.providerRef == webMcpServerUrl,
+      )) {
+        owner = provider;
+        break;
+      }
+      owner ??= provider;
+    }
+    if (owner == null) {
+      return const ToolExecutionResult.failure('Tool not found');
+    }
+    return owner.execute(name, args);
+  }
+
+  /// True iff [name] is currently advertised with
+  /// `providerRef == webMcpServerUrl` (the in-process web server).
+  Future<bool> isLocalWebTool(String name) async {
+    for (final provider in providers) {
+      final tools = await provider.listTools();
+      if (tools.any(
+        (t) => t.name == name && t.providerRef == webMcpServerUrl,
+      )) {
+        return true;
       }
     }
-    return const ToolExecutionResult.failure('Tool not found');
+    return false;
   }
 }

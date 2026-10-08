@@ -12,6 +12,7 @@ import 'core/routes/shell_back_scope.dart';
 import 'core/theme/app_theme.dart';
 import 'core/utils/locale_utils.dart';
 import 'core/widgets/android_assistant_invocation_host.dart';
+import 'core/widgets/web_server_registration_host.dart';
 import 'features/chat/providers/chat_providers.dart';
 import 'features/conversations/providers/conversation_providers.dart' as conv;
 import 'features/chat/views/chat_screen.dart';
@@ -104,8 +105,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         navigatorKey: _shellNavigatorKey,
         builder: (context, state, child) {
           return OsWidgetInvocationHost(
-            child: AndroidAssistantInvocationHost(
-              child: AppShell(child: child),
+            child: WebServerRegistrationHost(
+              child: AndroidAssistantInvocationHost(
+                child: AppShell(child: child),
+              ),
             ),
           );
         },

@@ -5,6 +5,7 @@ import 'package:localmind/core/models/enums.dart';
 import 'package:localmind/core/providers/storage_providers.dart';
 import 'package:localmind/features/chat/data/models/message.dart';
 import 'package:localmind/features/chat/views/components/chat_bubble/assistant_bubble.dart';
+import 'package:localmind/features/chat/views/components/reasoning_widget.dart';
 import 'package:localmind/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -17,6 +18,7 @@ void main() {
     required SharedPreferences prefs,
     required Message message,
     required bool isStreaming,
+    bool showReasoning = true,
   }) {
     return ProviderScope(
       overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
@@ -24,7 +26,11 @@ void main() {
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
-          body: AssistantBubble(message: message, isStreaming: isStreaming),
+          body: AssistantBubble(
+            message: message,
+            isStreaming: isStreaming,
+            showReasoning: showReasoning,
+          ),
         ),
       ),
     );
@@ -77,4 +83,39 @@ void main() {
       expect(find.text('Final completed response.'), findsOneWidget);
     },
   );
+
+  testWidgets('showReasoning false hides the reasoning block (chain tails fold '
+      'their thinking into the web activity card above the bubble)', (
+    tester,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final message = Message(
+      id: 'msg-reasoned',
+      conversationId: 'conv-1',
+      role: MessageRole.assistant,
+      content: 'Answer with hidden reasoning.',
+      reasoningContent: 'line of chain thinking',
+      status: MessageStatus.complete,
+      createdAt: DateTime.now(),
+    );
+
+    await tester.pumpWidget(
+      buildHarness(
+        prefs: prefs,
+        message: message,
+        isStreaming: false,
+        showReasoning: false,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(ReasoningWidget), findsNothing);
+    expect(find.text('Answer with hidden reasoning.'), findsOneWidget);
+    // The default keeps showing reasoning.
+    await tester.pumpWidget(
+      buildHarness(prefs: prefs, message: message, isStreaming: false),
+    );
+    await tester.pump();
+    expect(find.byType(ReasoningWidget), findsOneWidget);
+  });
 }
