@@ -77,6 +77,13 @@ class AppSettings {
   /// registration; the actionable sends stay user-tapped in the OS app.
   final bool deviceToolsEnabled;
 
+  /// Whether share-sheet content from other apps is landed into a new chat.
+  /// Defaults to TRUE: once the share intent-filter exists the OS lists the
+  /// app as a target regardless, so this toggle only gates the Dart-side
+  /// handling (payloads are then ignored/discarded) — it never changes the
+  /// visible share-target list itself.
+  final bool shareTargetEnabled;
+
   /// First-command entries (e.g. `curl`, `ping`, `net.http`) that let
   /// matching terminal tool calls skip the approval dialog. Empty by
   /// default — nothing auto-runs until the user opt-ins.
@@ -146,6 +153,7 @@ class AppSettings {
     this.webSearxUrl,
     this.terminalToolsEnabled = false,
     this.deviceToolsEnabled = false,
+    this.shareTargetEnabled = true,
     this.toolWhitelist = const [],
     this.autoCollapseThinking = false,
     this.sendTemperature = true,
@@ -207,6 +215,7 @@ class AppSettings {
     Object? webSearxUrl = _unset,
     bool? terminalToolsEnabled,
     bool? deviceToolsEnabled,
+    bool? shareTargetEnabled,
     List<String>? toolWhitelist,
     bool? autoCollapseThinking,
     bool? sendTemperature,
@@ -294,6 +303,7 @@ class AppSettings {
           : webSearxUrl as String?,
       terminalToolsEnabled: terminalToolsEnabled ?? this.terminalToolsEnabled,
       deviceToolsEnabled: deviceToolsEnabled ?? this.deviceToolsEnabled,
+      shareTargetEnabled: shareTargetEnabled ?? this.shareTargetEnabled,
       toolWhitelist: toolWhitelist ?? this.toolWhitelist,
       autoCollapseThinking: autoCollapseThinking ?? this.autoCollapseThinking,
       sendTemperature: sendTemperature ?? this.sendTemperature,
@@ -357,6 +367,7 @@ class AppSettings {
       'webSearxUrl': webSearxUrl,
       'terminalToolsEnabled': terminalToolsEnabled,
       'deviceToolsEnabled': deviceToolsEnabled,
+      'shareTargetEnabled': shareTargetEnabled,
       'toolWhitelist': toolWhitelist,
       'autoCollapseThinking': autoCollapseThinking,
       'sendTemperature': sendTemperature,
@@ -424,6 +435,7 @@ class AppSettings {
       webSearxUrl: map['webSearxUrl'] as String?,
       terminalToolsEnabled: map['terminalToolsEnabled'] ?? false,
       deviceToolsEnabled: map['deviceToolsEnabled'] ?? false,
+      shareTargetEnabled: map['shareTargetEnabled'] ?? true,
       toolWhitelist:
           (map['toolWhitelist'] as List?)?.cast<String>() ?? const [],
       autoCollapseThinking: map['autoCollapseThinking'] ?? false,

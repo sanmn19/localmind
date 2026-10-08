@@ -13,6 +13,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
@@ -27,11 +28,16 @@ class MainActivity : AudioServiceActivity() {
     private val CHANNEL = "localmind/chat_background"
     private val MEMORY_CHANNEL = "localmind/device_memory"
     private val ASSISTANT_CHANNEL = "localmind/android_assistant"
+    private val SHARE_CHANNEL = "localmind/share_receive"
     private val DEVICE_TOOLS_CHANNEL = "localmind/device_tools"
 
     private var assistantChannel: MethodChannel? = null
     private var pendingAssistantInvocation = false
     private var pendingRoleRequest: MethodChannel.Result? = null
+    private var shareChannel: MethodChannel? = null
+    private var pendingSharePayload: Map<String, Any?>? = null
+    private val shareIoExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val shareMainHandler = Handler(Looper.getMainLooper())
 
     // Assistant screen-capture staging: the capture is requested on the
     // invocation itself so it reflects the screen the assistant was fired
@@ -44,6 +50,7 @@ class MainActivity : AudioServiceActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         captureAssistantInvocation(intent)
+        captureSharePayload(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -51,6 +58,8 @@ class MainActivity : AudioServiceActivity() {
         setIntent(intent)
         captureAssistantInvocation(intent)
         deliverAssistantInvocation()
+        captureSharePayload(intent)
+        deliverSharePayload()
     }
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
@@ -171,6 +180,29 @@ class MainActivity : AudioServiceActivity() {
                 "openApp" -> openDeviceApp(call, result)
                 "listInstalledApps" -> listInstalledDeviceApps(result)
                 else -> result.notImplemented()
+            }
+        }
+    }
+
+
+        shareChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            SHARE_CHANNEL
+        ).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "consumePendingShare" -> {
+                        val payload = pendingSharePayload
+                        pendingSharePayload = null
+                        result.success(
+                            if (payload != null) mapOf(
+                                "pending" to true,
+                                "payload" to payload
+                            ) else mapOf("pending" to false)
+                        )
+                    }
+                    else -> result.notImplemented()
+                }
             }
         }
     }
@@ -439,6 +471,123 @@ class MainActivity : AudioServiceActivity() {
                 null
             )
         }
+    }
+
+
+    /** Receive a share-sheet payload from another app; files get copied into
+     *  the app cache so the sender can be released, delivery waits for Dart. */
+    private fun captureSharePayload(intent: Intent?) {
+        val action = intent?.action
+        val payloadMap: MutableMap<String, Any?> = mutableMapOf()
+        when (action) {
+            Intent.ACTION_SEND -> {
+                val text: CharSequence? = intent.getStringExtra(Intent.EXTRA_TEXT)
+                val stream: Uri? = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                } else {
+                    @Suppress("DEPRECATION") intent.getParcelableExtra(Intent.EXTRA_STREAM)
+                }
+                when {
+                    stream != null -> {
+                        val type = intent.type ?: "application/octet-stream"
+                        val path = copyStreamToShareCache(stream, type) ?: return
+                        payloadMap["kind"] = "file"
+                        payloadMap["path"] = path
+                        payloadMap["mimeType"] = type
+                    }
+                    text != null && text.isNotBlank() -> {
+                        payloadMap["kind"] = "text"
+                        payloadMap["text"] = text.toString()
+                    }
+                    else -> return
+                }
+            }
+            Intent.ACTION_SEND_MULTIPLE -> {
+                val streams: ArrayList<Uri>? = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                } else {
+                    @Suppress("DEPRECATION") intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM)
+                }
+                val uris = streams ?: return
+                val copied = mutableListOf<String>()
+                val types = mutableListOf<String>()
+                for (uri in uris) {
+                    val type = contentResolver.getType(uri) ?: "application/octet-stream"
+                    val path = copyStreamToShareCache(uri, type) ?: continue
+                    copied.add(path)
+                    types.add(type)
+                }
+                if (copied.isEmpty()) return
+                payloadMap["kind"] = "files"
+                payloadMap["paths"] = copied
+                payloadMap["mimeTypes"] = types
+            }
+            else -> return
+        }
+
+        // Newest share wins: a superseded stash (text or copied files) is
+        // released before being replaced.
+        pendingSharePayload?.let { releaseSharePayload(it) }
+        pendingSharePayload = payloadMap
+    }
+
+    private fun copyStreamToShareCache(source: Uri, mimeType: String): String? {
+        return try {
+            shareIoExecutor.submit<String?> {
+                val dir = java.io.File(cacheDir, "share")
+                if (!dir.exists()) dir.mkdirs()
+                val extension = when {
+                    mimeType.endsWith("jpeg") || mimeType.endsWith("jpg") -> ".jpg"
+                    mimeType.endsWith("png") -> ".png"
+                    mimeType.endsWith("gif") -> ".gif"
+                    mimeType.endsWith("webp") -> ".webp"
+                    mimeType.endsWith("pdf") -> ".pdf"
+                    mimeType.endsWith("text") -> ".txt"
+                    else -> ""
+                }
+                val target = java.io.File(dir, "shared_${System.currentTimeMillis()}$extension")
+                contentResolver.openInputStream(source)?.use { input ->
+                    target.outputStream().use { output -> input.copyTo(output) }
+                } ?: return@submit null
+                target.absolutePath
+            }.get()
+        } catch (error: Exception) {
+            Log.w("LocalMindShare", "Share copy failed: $error")
+            null
+        }
+    }
+
+    private fun releaseSharePayload(payload: Map<String, Any?>) {
+        val paths = mutableListOf<String>()
+        (payload["path"] as? String)?.let(paths::add)
+        (payload["paths"] as? List<*>)?.forEach { (it as? String)?.let(paths::add) }
+        for (path in paths) {
+            try {
+                java.io.File(path).delete()
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    private fun deliverSharePayload() {
+        val payload = pendingSharePayload ?: return
+        val channel = shareChannel ?: return
+
+        channel.invokeMethod(
+            "shareReceived",
+            mapOf("payload" to payload),
+            object : MethodChannel.Result {
+                override fun success(result: Any?) {
+                    if (result != null) {
+                        pendingSharePayload = null
+                    }
+                }
+
+                override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) = Unit
+
+                override fun notImplemented() = Unit
+            }
+        )
     }
 
     companion object {
