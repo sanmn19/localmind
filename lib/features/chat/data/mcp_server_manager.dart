@@ -5,6 +5,8 @@ import 'package:localmind/core/services/device_tools_service.dart';
 import 'package:localmind/features/mcp/data/device_contacts_repository.dart';
 import 'package:localmind/features/mcp/data/device_mcp_server.dart';
 import 'package:localmind/features/mcp/data/terminal_mcp_server.dart';
+import 'package:localmind/features/mail/data/mail_common.dart';
+import 'package:localmind/features/mail/mail_mcp_server.dart';
 import 'package:localmind/features/mcp/data/web/web_fetch_service.dart';
 import 'package:localmind/features/mcp/data/web/web_search_service.dart';
 
@@ -46,6 +48,7 @@ class McpServerManager {
   final Map<String, WebServices> _webServices = {};
   final Map<String, TerminalServices> _terminalServices = {};
   final Map<String, DeviceServices> _deviceServices = {};
+  final Map<String, MailServices> _mailServices = {};
   final Set<String> _localExampleServers = {};
   final Set<String> _pendingLabels = {};
 
@@ -96,6 +99,7 @@ class McpServerManager {
     _webServices.remove(label);
     _terminalServices.remove(label);
     _deviceServices.remove(label);
+    _mailServices.remove(label);
     _localExampleServers.remove(label);
   }
 
@@ -376,6 +380,100 @@ class McpServerManager {
     _serverUrls[deviceMcpServerLabel] = deviceMcpServerUrl;
   }
 
+  /// Registers the in-process mail MCP server (`mail.*`): dispatches to the
+  /// connected accounts' repositories. Re-add replaces the bundle (new
+  /// account/token material), mirroring [addWebServer].
+  Future<void> addMailServer(MailServices services) async {
+    await removeServer(mailMcpServerLabel);
+
+    _mailServices[mailMcpServerLabel] = services;
+    _capabilities[mailMcpServerLabel] = const McpCapabilities(tools: true);
+    _tools[mailMcpServerLabel] = const [
+      McpTool(
+        name: 'mail.list_messages',
+        description:
+            'List recent messages from the connected mail account. Returns '
+            'numbered rows: sender — subject, snippet, ISO date.',
+        inputSchema: {
+          'type': 'object',
+          'properties': {
+            'query': {
+              'type': 'string',
+              'description':
+                  'Optional mail search query (Gmail-style operators apply). '
+                  'Defaults to the most recent inbox messages.',
+            },
+            'limit': {
+              'type': 'integer',
+              'description': 'How many messages (1-10). Defaults to 10.',
+            },
+          },
+        },
+      ),
+      McpTool(
+        name: 'mail.search',
+        description:
+            'Search the connected mail account. Returns the same '
+            'numbered rows as mail.list_messages.',
+        inputSchema: {
+          'type': 'object',
+          'properties': {
+            'query': {
+              'type': 'string',
+              'description': 'The search query (e.g. from:carol invoice).',
+            },
+            'limit': {
+              'type': 'integer',
+              'description': 'How many results (1-10). Defaults to 10.',
+            },
+          },
+          'required': ['query'],
+        },
+      ),
+      McpTool(
+        name: 'mail.read_message',
+        description:
+            'Read one message fully by id (from mail.list_messages / '
+            'mail.search rows or a previously returned id).',
+        inputSchema: {
+          'type': 'object',
+          'properties': {
+            'id': {'type': 'string', 'description': 'The message id.'},
+          },
+          'required': ['id'],
+        },
+      ),
+      McpTool(
+        name: 'mail.send',
+        description:
+            'Send an e-mail from the connected account. ALWAYS presents an '
+            'approval dialog in the app before anything goes out.',
+        inputSchema: {
+          'type': 'object',
+          'properties': {
+            'to': {
+              'type': 'string',
+              'description': 'The recipient e-mail address.',
+            },
+            'subject': {'type': 'string', 'description': 'Subject line.'},
+            'body': {
+              'type': 'string',
+              'description': 'Plain-text body of the e-mail.',
+            },
+          },
+          'required': ['to', 'subject', 'body'],
+        },
+      ),
+    ];
+    _serverUrls[mailMcpServerLabel] = mailMcpServerUrl;
+  }
+
+  /// Test/inspection seam for the mail services bundle.
+  @visibleForTesting
+  MailServices? getMailServices() => _mailServices[mailMcpServerLabel];
+
+  bool hasMailServer() => _mailServices.containsKey(mailMcpServerLabel);
+
   /// Test/inspection seam for the device services bundle.
   @visibleForTesting
   DeviceServices? getDeviceServices() => _deviceServices[deviceMcpServerLabel];
@@ -385,7 +483,8 @@ class McpServerManager {
       _localExampleServers.contains(label) ||
       _webServices.containsKey(label) ||
       _terminalServices.containsKey(label) ||
-      _deviceServices.containsKey(label);
+      _deviceServices.containsKey(label) ||
+      _mailServices.containsKey(label);
 
   bool hasExampleServer() =>
       _localExampleServers.contains(exampleMcpServerLabel);
@@ -420,6 +519,10 @@ class McpServerManager {
 
     if (_deviceServices.containsKey(serverLabel)) {
       return _callDeviceTool(toolName, args);
+    }
+
+    if (_mailServices.containsKey(serverLabel)) {
+      return _callMailTool(toolName, args);
     }
 
     if (_localExampleServers.contains(serverLabel)) {
@@ -462,7 +565,76 @@ class McpServerManager {
     _webServices.clear();
     _terminalServices.clear();
     _deviceServices.clear();
+    _mailServices.clear();
     _localExampleServers.clear();
+  }
+
+  int _clampInt(
+    Map<String, dynamic> args,
+    String key,
+    int min,
+    int max,
+    int fallback,
+  ) {
+    final value = args[key];
+    if (value is! int) return fallback;
+    return value.clamp(min, max);
+  }
+
+  Future<String> _callMailTool(
+    String toolName,
+    Map<String, dynamic> args,
+  ) async {
+    final services = _mailServices[mailMcpServerLabel];
+    if (services == null) {
+      throw McpException('Mail server is not connected');
+    }
+    try {
+      switch (toolName) {
+        case 'mail.list_messages':
+        case 'mail.search':
+          final limit = _clampInt(args, 'limit', 1, 10, 10);
+          final MailMessageApi mailApi = services.gmail;
+          if (toolName == 'mail.search') {
+            final query = args['query'];
+            if (query is! String || query.trim().isEmpty) {
+              throw McpException('mail.search requires a query string');
+            }
+            return mailToolOutput(
+              mailListRender(await mailApi.search(query, limit: limit)),
+            );
+          }
+          return mailToolOutput(
+            mailListRender(await mailApi.listMessages(limit: limit)),
+          );
+        case 'mail.read_message':
+          final id = args['id'];
+          if (id is! String || id.trim().isEmpty) {
+            throw McpException('mail.read_message requires a message id');
+          }
+          final message = await services.gmail.readMessage(id);
+          return mailReadRender(message);
+        case 'mail.send':
+          final to = args['to'];
+          final subject = args['subject'];
+          final body = args['body'];
+          if (to is! String || to.trim().isEmpty) {
+            throw McpException('mail.send requires a recipient address (to)');
+          }
+          if (subject is! String || subject.trim().isEmpty) {
+            throw McpException('mail.send requires a subject');
+          }
+          if (body is! String || body.isEmpty) {
+            throw McpException('mail.send requires a body');
+          }
+          final id = await services.gmail.send(to, subject, body);
+          return 'Sent e-mail to $to (id $id)';
+        default:
+          throw McpException('Mail MCP tool not found: $toolName');
+      }
+    } on MailConnectorException catch (error) {
+      return 'ERROR: ${error.message}';
+    }
   }
 
   /// NOTE: the whitelist is deliberately NOT enforced here. It only gates

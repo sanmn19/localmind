@@ -99,6 +99,7 @@ dependencies:
   geocoding: ^5.0.0
   marionette_flutter: ^0.6.0
   marionette_logger: ^0.6.0
+  google_sign_in: ^7.2.0
 
 dev_dependencies:
   flutter_test:
