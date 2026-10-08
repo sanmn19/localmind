@@ -98,25 +98,22 @@ void main() {
       await notifier.sendMessage('use your calc tools');
       await _drain();
 
-      // Round 1 (`calc.add`): a non-web tool name, so the Task-6 webhook
-      // auto-approval must NOT kick in — the approval must travel through
-      // the explicit approval path.
+      // Round 1 (`calc.add`): calc tools always auto-approve (user spec),
+      // so the execution runs without surfacing `pendingToolApproval`.
       expect(
-        await _grantNextApproval(container),
-        isTrue,
-        reason: 'round-1 tool call (calc.add) must request approval',
+        await _grantNextApproval(container, expectApproval: false),
+        isFalse,
+        reason: 'calc.add is always auto-approved; no dialog may appear',
       );
       await _drain();
 
       // Round 2 runs on the continuation stream (`_runAssistantStream`).
-      // Today the tool call it emits is dropped, so no approval is ever
-      // requested and the chain stalls.
+      // calc.multiply is also always auto-approved, so the second hop must
+      // complete without surfacing an approval dialog either.
       expect(
-        await _grantNextApproval(container),
-        isTrue,
-        reason:
-            'round-2 tool call (calc.multiply) emitted by the follow-up '
-            'stream must request approval too (multi-hop chain)',
+        await _grantNextApproval(container, expectApproval: false),
+        isFalse,
+        reason: 'calc.multiply is always auto-approved; no dialog either',
       );
       await _drain();
 
@@ -199,9 +196,17 @@ void main() {
     await notifier.loadConversation(_conversation);
     await notifier.sendMessage('use your calc tools');
     await _drain();
-    expect(await _grantNextApproval(container), isTrue);
+    expect(
+      await _grantNextApproval(container, expectApproval: false),
+      isFalse,
+      reason: 'calc calls auto-approve without a dialog',
+    );
     await _drain();
-    expect(await _grantNextApproval(container), isTrue);
+    expect(
+      await _grantNextApproval(container, expectApproval: false),
+      isFalse,
+      reason: 'calc calls auto-approve without a dialog',
+    );
     await _drain();
     await _awaitChainCompletion(container);
 
@@ -280,8 +285,15 @@ Future<void> _drain([int iterations = 40]) async {
   }
 }
 
-Future<bool> _grantNextApproval(ProviderContainer container) async {
-  final deadline = DateTime.now().add(const Duration(seconds: 10));
+/// Auto-approved tool calls never surface a dialog, so callers assert a
+/// short, bounded no-approval window instead of the grant path ({expectApproval: false}).
+Future<bool> _grantNextApproval(
+  ProviderContainer container, {
+  bool expectApproval = true,
+}) async {
+  final deadline = DateTime.now().add(
+    expectApproval ? const Duration(seconds: 10) : const Duration(milliseconds: 400),
+  );
   while (DateTime.now().isBefore(deadline)) {
     final pending = container.read(chatProvider).pendingToolApproval;
     if (pending != null && !pending.completer.isCompleted) {

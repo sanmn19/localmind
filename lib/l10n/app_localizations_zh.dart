@@ -9,6 +9,20 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
+  String get terminal_card_title => 'Terminal';
+
+  @override
+  String get terminal_card_desc =>
+      'Sandboxed shell + HTTP tool for models. Whitelisted first commands run without asking; everything else requires approval each time.';
+
+  @override
+  String get terminal_whitelist_label => 'Whitelisted commands';
+
+  @override
+  String get terminal_whitelist_hint =>
+      'Comma-separated first commands (curl, ping, net.http)';
+
+  @override
   String get app_name => 'LocalMind';
 
   @override

@@ -75,6 +75,20 @@ class _LocalPlusRemoteManager extends McpServerManager {
   }
 }
 
+Future<bool> _autoApprove(
+  String toolName,
+  ToolRegistry registry, {
+  bool enabled = true,
+}) {
+  return shouldAutoApproveTool(
+    toolName,
+    webToolsEnabled: enabled,
+    terminalToolsEnabled: false,
+    registry: registry,
+    whitelist: null,
+  );
+}
+
 void main() {
   Dio stubbedSearchDio() => Dio()
     ..httpClientAdapter = StubAdapter({
@@ -198,14 +212,8 @@ void main() {
         );
         final registry = await registryOver(manager);
 
-        expect(
-          await shouldAutoApproveTool('web.search', true, registry),
-          isTrue,
-        );
-        expect(
-          await shouldAutoApproveTool('web.fetch', true, registry),
-          isTrue,
-        );
+        expect(await _autoApprove('web.search', registry), isTrue);
+        expect(await _autoApprove('web.fetch', registry), isTrue);
       },
     );
 
@@ -219,7 +227,7 @@ void main() {
       final registry = await registryOver(manager);
 
       expect(
-        await shouldAutoApproveTool('web.search', false, registry),
+        await _autoApprove('web.search', registry, enabled: false),
         isFalse,
       );
     });
@@ -235,10 +243,7 @@ void main() {
         );
         final registry = await registryOver(manager);
 
-        expect(
-          await shouldAutoApproveTool('web.fetch', true, registry),
-          isFalse,
-        );
+        expect(await _autoApprove('web.fetch', registry), isFalse);
       },
     );
   });

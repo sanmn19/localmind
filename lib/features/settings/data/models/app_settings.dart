@@ -66,6 +66,15 @@ class AppSettings {
   /// Base URL of the user's self-hosted SearXNG instance (empty/null when
   /// unset); leads the web search chain whenever configured (Amendment 2).
   final String? webSearxUrl;
+
+  /// Whether the in-process `local://terminal` MCP server (terminal.run +
+  /// net.http) is registered at all.
+  final bool terminalToolsEnabled;
+
+  /// First-command entries (e.g. `curl`, `ping`, `net.http`) that let
+  /// matching terminal tool calls skip the approval dialog. Empty by
+  /// default — nothing auto-runs until the user opt-ins.
+  final List<String> toolWhitelist;
   final bool autoCollapseThinking;
 
   /// Whether `temperature` / `top_p` are sent to remote APIs. Some providers
@@ -129,6 +138,8 @@ class AppSettings {
     this.webSearchProvider = 'auto',
     this.webSearchApiKey,
     this.webSearxUrl,
+    this.terminalToolsEnabled = false,
+    this.toolWhitelist = const [],
     this.autoCollapseThinking = false,
     this.sendTemperature = true,
     this.sendTopP = true,
@@ -187,6 +198,8 @@ class AppSettings {
     String? webSearchProvider,
     Object? webSearchApiKey = _unset,
     Object? webSearxUrl = _unset,
+    bool? terminalToolsEnabled,
+    List<String>? toolWhitelist,
     bool? autoCollapseThinking,
     bool? sendTemperature,
     bool? sendTopP,
@@ -271,6 +284,8 @@ class AppSettings {
       webSearxUrl: identical(webSearxUrl, _unset)
           ? this.webSearxUrl
           : webSearxUrl as String?,
+      terminalToolsEnabled: terminalToolsEnabled ?? this.terminalToolsEnabled,
+      toolWhitelist: toolWhitelist ?? this.toolWhitelist,
       autoCollapseThinking: autoCollapseThinking ?? this.autoCollapseThinking,
       sendTemperature: sendTemperature ?? this.sendTemperature,
       sendTopP: sendTopP ?? this.sendTopP,
@@ -331,6 +346,8 @@ class AppSettings {
       'webSearchProvider': webSearchProvider,
       'webSearchApiKey': webSearchApiKey,
       'webSearxUrl': webSearxUrl,
+      'terminalToolsEnabled': terminalToolsEnabled,
+      'toolWhitelist': toolWhitelist,
       'autoCollapseThinking': autoCollapseThinking,
       'sendTemperature': sendTemperature,
       'sendTopP': sendTopP,
@@ -395,6 +412,8 @@ class AppSettings {
       webSearchProvider: map['webSearchProvider'] as String? ?? 'auto',
       webSearchApiKey: map['webSearchApiKey'] as String?,
       webSearxUrl: map['webSearxUrl'] as String?,
+      terminalToolsEnabled: map['terminalToolsEnabled'] ?? false,
+      toolWhitelist: (map['toolWhitelist'] as List?)?.cast<String>() ?? const [],
       autoCollapseThinking: map['autoCollapseThinking'] ?? false,
       sendTemperature: map['sendTemperature'] ?? true,
       sendTopP: map['sendTopP'] ?? true,

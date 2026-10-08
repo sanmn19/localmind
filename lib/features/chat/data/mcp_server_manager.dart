@@ -1,6 +1,7 @@
 // ignore_for_file: prefer_initializing_formals
 
 import 'package:flutter/foundation.dart';
+import 'package:localmind/features/mcp/data/terminal_mcp_server.dart';
 import 'package:localmind/features/mcp/data/web/web_fetch_service.dart';
 import 'package:localmind/features/mcp/data/web/web_search_service.dart';
 
@@ -18,6 +19,21 @@ class WebServices {
   final WebFetchService fetch;
 }
 
+/// Backing services for the in-process `local://terminal` MCP server.
+/// The whitelist travels with the services so re-registration (settings
+/// change) always refreshes it; it gates APPROVALS only — the manager
+/// itself never refuses a call the approval flow allowed.
+class TerminalServices {
+  const TerminalServices({
+    required this.runner,
+    required this.http,
+    required this.whitelist,
+  });
+  final TerminalProcessRunner runner;
+  final NetHttpTool http;
+  final TerminalWhitelist whitelist;
+}
+
 class McpServerManager {
   final String _appVersion;
   final Map<String, McpClient> _clients = {};
@@ -25,6 +41,7 @@ class McpServerManager {
   final Map<String, List<McpTool>> _tools = {};
   final Map<String, String> _serverUrls = {};
   final Map<String, WebServices> _webServices = {};
+  final Map<String, TerminalServices> _terminalServices = {};
   final Set<String> _localExampleServers = {};
   final Set<String> _pendingLabels = {};
 
@@ -73,6 +90,7 @@ class McpServerManager {
     _tools.remove(label);
     _serverUrls.remove(label);
     _webServices.remove(label);
+    _terminalServices.remove(label);
     _localExampleServers.remove(label);
   }
 
@@ -183,15 +201,88 @@ class McpServerManager {
     _serverUrls[webMcpServerLabel] = webMcpServerUrl;
   }
 
+  /// Registers the in-process terminal MCP server (`terminal.run` +
+  /// `net.http`). Mirrors [addWebServer]'s idempotent re-add semantics so a
+  /// settings rebuild (e.g. a fresh whitelist) just replaces it.
+  Future<void> addTerminalServer(TerminalServices services) async {
+    await removeServer(terminalMcpServerLabel);
+
+    _terminalServices[terminalMcpServerLabel] = services;
+    _capabilities[terminalMcpServerLabel] = const McpCapabilities(tools: true);
+    _tools[terminalMcpServerLabel] = const [
+      McpTool(
+        name: 'terminal.run',
+        description:
+            'Run a single shell command inside the app sandbox and return '
+            'its exit status, stdout and stderr. Simple one-command lines '
+            '(no pipes/redirects) may auto-run; anything else asks first.',
+        inputSchema: {
+          'type': 'object',
+          'properties': {
+            'command': {
+              'type': 'string',
+              'description': 'The shell command line to run.',
+            },
+          },
+          'required': ['command'],
+        },
+      ),
+      McpTool(
+        name: 'net.http',
+        description:
+            'Perform an HTTP request to a public http(s) URL and return the '
+            'status plus body. Use for APIs instead of shell curl.',
+        inputSchema: {
+          'type': 'object',
+          'properties': {
+            'method': {
+              'type': 'string',
+              'description': 'HTTP method; defaults to GET.',
+            },
+            'url': {
+              'type': 'string',
+              'description': 'The public http(s) URL to request.',
+            },
+            'headers': {
+              'type': 'object',
+              'description': 'Optional request headers as name/value pairs.',
+            },
+            'body': {
+              'type': 'string',
+              'description': 'Optional request body (usually POST/PUT).',
+            },
+            'max_chars': {
+              'type': 'integer',
+              'description':
+                  'Maximum characters of the response body (default 8000, '
+                  'max 8000).',
+            },
+          },
+          'required': ['url'],
+        },
+      ),
+    ];
+    _serverUrls[terminalMcpServerLabel] = terminalMcpServerUrl;
+  }
+
+  /// Test/inspection seam for the terminal services bundle.
+  @visibleForTesting
+  TerminalServices? getTerminalServices() =>
+      _terminalServices[terminalMcpServerLabel];
+
   bool hasServer(String label) =>
       _clients.containsKey(label) ||
       _localExampleServers.contains(label) ||
-      _webServices.containsKey(label);
+      _webServices.containsKey(label) ||
+      _terminalServices.containsKey(label);
 
   bool hasExampleServer() =>
       _localExampleServers.contains(exampleMcpServerLabel);
 
   bool hasWebServer() => _webServices.containsKey(webMcpServerLabel);
+
+  bool hasTerminalServer() =>
+      _terminalServices.containsKey(terminalMcpServerLabel);
 
   List<McpTool> getTools(String label) => _tools[label] ?? [];
 
@@ -208,6 +299,10 @@ class McpServerManager {
   ) async {
     if (_webServices.containsKey(serverLabel)) {
       return _callWebTool(toolName, args);
+    }
+
+    if (_terminalServices.containsKey(serverLabel)) {
+      return _callTerminalTool(toolName, args);
     }
 
     if (_localExampleServers.contains(serverLabel)) {
@@ -248,7 +343,67 @@ class McpServerManager {
     _tools.clear();
     _serverUrls.clear();
     _webServices.clear();
+    _terminalServices.clear();
     _localExampleServers.clear();
+  }
+
+  /// NOTE: the whitelist is deliberately NOT enforced here. It only gates
+  /// auto-approval (see `shouldAutoApproveTool` in tooling_providers.dart) —
+  /// a non-whitelisted command reaches this point only after the user
+  /// approved the dialog, so refusing it here would contradict that decision.
+  Future<String> _callTerminalTool(
+    String toolName,
+    Map<String, dynamic> args,
+  ) async {
+    final services = _terminalServices[terminalMcpServerLabel];
+    if (services == null) {
+      throw McpException('MCP server not connected: $terminalMcpServerLabel');
+    }
+
+    switch (toolName) {
+      case 'terminal.run':
+        final command = args['command'];
+        if (command is! String) {
+          throw McpException('terminal.run requires a string command');
+        }
+        final result = await services.runner.run(
+          command,
+          timeout: terminalRunTimeout,
+        );
+        return formatTerminalRunResult(result);
+
+      case 'net.http':
+        final url = args['url'];
+        if (url is! String) {
+          throw McpException('net.http requires a string url');
+        }
+        final method = args['method'] is String ? args['method'] as String : 'GET';
+        final body = args['body'] is String ? args['body'] as String : null;
+        final rawChars = args['max_chars'];
+        final maxChars = rawChars is int ? rawChars.clamp(1, netHttpMaxChars).toInt() : null;
+        return services.http.run(
+          method: method,
+          url: url,
+          headers: _stringHeaders(args['headers']),
+          body: body,
+          maxChars: maxChars,
+        );
+
+      default:
+        throw McpException('Terminal MCP tool not found: $toolName');
+    }
+  }
+
+  Map<String, String>? _stringHeaders(dynamic raw) {
+    if (raw is! Map) return null;
+    final headers = <String, String>{};
+    for (final entry in raw.entries) {
+      final key = entry.key?.toString() ?? '';
+      final value = entry.value?.toString() ?? '';
+      if (key.isEmpty) continue;
+      headers[key] = value;
+    }
+    return headers.isEmpty ? null : headers;
   }
 
   Future<String> _callWebTool(
