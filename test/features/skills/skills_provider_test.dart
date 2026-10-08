@@ -77,6 +77,20 @@ void main() {
     expect(state.enabled, isTrue);
   });
 
+  test('a bootstrap-shaped refresh over an empty host stays empty', () async {
+    // The app boot calls refresh() off the critical path on the empty
+    // documents dir — that must complete without bailing into the
+    // bootstrap error state.
+    final container = await makeContainer({});
+    addTearDown(container.dispose);
+
+    await container.read(skillsProvider.notifier).refresh();
+
+    final state = container.read(skillsProvider);
+    expect(state.entries, isEmpty);
+    expect(state.enabled, isTrue);
+  });
+
   test('refresh re-reads the settings switch each pass', () async {
     final container = await makeContainer({});
     addTearDown(container.dispose);

@@ -10,6 +10,9 @@ import '../../mcp/data/terminal_mcp_server.dart';
 import '../../mcp/data/web/keyless_mcp_ring.dart';
 import '../../mcp/data/web/web_fetch_service.dart';
 import '../../mcp/data/web/web_search_service.dart';
+import '../../skills/data/skills_mcp_server.dart';
+import '../../skills/data/skills_provider.dart';
+import '../../skills/data/skills_store.dart';
 
 /// Per-turn web-tool budgets, owning state in the notifier's tool path.
 /// One instance per app session: consecutive tool rounds of a reply SHARE
@@ -54,6 +57,7 @@ Future<bool> shouldAutoApproveTool(
   Map<String, dynamic> args = const {},
   required bool webToolsEnabled,
   required bool terminalToolsEnabled,
+  required bool skillsEnabled,
   required ToolRegistry registry,
   required TerminalWhitelist? whitelist,
 }) async {
@@ -81,6 +85,14 @@ Future<bool> shouldAutoApproveTool(
     }
   }
 
+  if (await registry.isLocalTool(toolName, {skillsMcpServerUrl})) {
+    // Reads ride the standard local-server bypass. Writes NEVER auto-approve:
+    // adding or deleting skills from chat always goes through the approval
+    // dialog, whatever the toggle says — the user must see it happen.
+    if (toolName == 'skills.list') return skillsEnabled;
+    return false;
+  }
+
   return false;
 }
 
@@ -106,12 +118,13 @@ WebSearchProvider webSearchProviderFromName(String name) {
 /// Keeps the in-process local MCP servers in step with their settings.
 ///
 /// A [Provider] only runs while it is being watched, so a UI surface that
-/// should keep the web AND terminal servers in sync MUST watch this
+/// should keep the web, terminal AND skills servers in sync MUST watch this
 /// provider: `ref.watch(webServerRegistrationProvider);` (used by the MCP
 /// tools screen). Rebuilds on any settings change and (de)registers the
-/// `web.search` / `web.fetch` server and the `terminal.run` / `net.http`
-/// server accordingly. The historical provider/web-host names are kept even
-/// though this now covers both local servers (cosmetic only).
+/// `web.search` / `web.fetch` server, the `terminal.run` / `net.http`
+/// server and the `skills.list` / `skills.add` / `skills.delete` server
+/// accordingly. The historical provider/web-host names are kept even though
+/// this now covers all local servers (cosmetic only).
 final webServerRegistrationProvider = Provider<void>((ref) {
   final settings = ref.watch(settingsProvider);
   final manager = ref.watch(mcpServerManagerProvider);
@@ -146,6 +159,32 @@ final webServerRegistrationProvider = Provider<void>((ref) {
   } else if (manager.hasTerminalServer()) {
     manager.removeServer(terminalMcpServerLabel);
   }
+  if (settings.skillsEnabled) {
+    // ASYMMETRY (by design): the registration only re-runs on a SETTINGS
+    // change, but the write tools bridge straight into the skills provider —
+    // every store write is followed by SkillsNotifier.refresh(), so the
+    // next chat request's system-builder picks model-added skills up
+    // mid-conversation without waiting for a re-registration.
+    manager.addSkillsServer(
+      SkillsServices(
+        list: () => SkillsStore(ref.read(skillsFileHostProvider)).refresh(),
+        add: (name, description, content) async {
+          final store = SkillsStore(ref.read(skillsFileHostProvider));
+          await store.add(
+            SkillEntry(name: name, description: description, body: content),
+          );
+          await ref.read(skillsProvider.notifier).refresh();
+        },
+        delete: (name) async {
+          await SkillsStore(ref.read(skillsFileHostProvider)).delete(name);
+          await ref.read(skillsProvider.notifier).refresh();
+        },
+        enabled: () => ref.read(settingsProvider).skillsEnabled,
+      ),
+    );
+  } else if (manager.hasSkillsServer()) {
+    manager.removeServer(skillsMcpServerLabel);
+  }
   ref.onDispose(() {
     if (manager.hasWebServer()) {
       // Not awaited — teardown best-effort.
@@ -153,6 +192,9 @@ final webServerRegistrationProvider = Provider<void>((ref) {
     }
     if (manager.hasTerminalServer()) {
       manager.removeServer(terminalMcpServerLabel);
+    }
+    if (manager.hasSkillsServer()) {
+      manager.removeServer(skillsMcpServerLabel);
     }
   });
 });
