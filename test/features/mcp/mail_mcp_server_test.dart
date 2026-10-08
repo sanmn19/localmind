@@ -20,12 +20,15 @@ class _FakeGmail implements MailMessageApi {
   String? lastTo;
   String? lastSubject;
   String? lastBody;
+  int listCalls = 0;
+  int searchCalls = 0;
 
   @override
   Future<List<MailMessageSummary>> listMessages({
     String? query,
     int limit = 10,
   }) async {
+    listCalls++;
     if (throwForList != null) throw throwForList!();
     return listResult;
   }
@@ -46,6 +49,7 @@ class _FakeGmail implements MailMessageApi {
     String query, {
     int limit = 10,
   }) async {
+    searchCalls++;
     return searchResult;
   }
 
@@ -280,6 +284,110 @@ void main() {
         () => manager.callTool(mailMcpServerLabel, 'mail.list_messages', {}),
         throwsA(isA<McpException>()),
       );
+    });
+
+    test('a services bundle with zero usable accounts refuses dispatches '
+        'instead of tripping on the null gmail repo', () async {
+      final manager = McpServerManager();
+      await manager.addMailServer(MailServices());
+      expect(
+        () => manager.callTool(mailMcpServerLabel, 'mail.list_messages', {}),
+        throwsA(predicate((e) => '$e'.contains('No mail account'))),
+      );
+    });
+  });
+
+  group('multi-provider dispatch — the imap connector', () {
+    test("provider:'imap' routes to the imap repo only and renders "
+        'without section headers', () async {
+      final gmail = _FakeGmail(listResult: [_summary('g1')]);
+      final imap = _FakeGmail(listResult: [_summary('i1', subject: 'imap row')]);
+      final manager = McpServerManager();
+      await manager.addMailServer(MailServices(gmail: gmail, imap: imap));
+
+      final output = await manager.callTool(
+        mailMcpServerLabel,
+        'mail.list_messages',
+        {'provider': 'imap', 'limit': 3},
+      );
+
+      expect(output, contains('imap row'));
+      expect(output, isNot(contains('[imap]')));
+      expect(gmail.listCalls, 0);
+    });
+
+    test('without a filter both accounts render with their provider '
+        'headers so ids stay attributable', () async {
+      final gmail = _FakeGmail(listResult: [_summary('g1')]);
+      final imap = _FakeGmail(listResult: [_summary('i1')]);
+      final manager = McpServerManager();
+      await manager.addMailServer(MailServices(gmail: gmail, imap: imap));
+
+      final output = await manager.callTool(
+        mailMcpServerLabel,
+        'mail.list_messages',
+        {},
+      );
+
+      expect(output, contains('[gmail]'));
+      expect(output, contains('[imap]'));
+      expect(imap.listCalls, 1);
+      expect(gmail.listCalls, 1);
+    });
+
+    test('an imap-only bundle renders bare rows without headers and '
+        'never touches the absent gmail repo', () async {
+      final imap = _FakeGmail(listResult: [_summary('i1', from: 'dan')]);
+      final manager = McpServerManager();
+      await manager.addMailServer(MailServices(imap: imap));
+
+      final output = await manager.callTool(
+        mailMcpServerLabel,
+        'mail.list_messages',
+        {},
+      );
+
+      expect(output, contains('dan'));
+      expect(output, isNot(contains('[imap]')));
+      expect(imap.listCalls, 1);
+    });
+
+    test("mail.search with provider:'imap' only queries the imap repo",
+        () async {
+      final gmail = _FakeGmail();
+      final imap = _FakeGmail(searchResult: [_summary('i2')]);
+      final manager = McpServerManager();
+      await manager.addMailServer(MailServices(gmail: gmail, imap: imap));
+
+      final output = await manager.callTool(mailMcpServerLabel, 'mail.search', {
+        'query': 'FROM "carol"',
+        'provider': 'imap',
+      });
+
+      expect(output, contains('i2'));
+      expect(gmail.searchCalls, 0);
+      expect(imap.searchCalls, 1);
+    });
+
+    test('connector faults from the imap repo surface as ERROR lines',
+        () async {
+      final imap = _FakeGmail(
+        throwForList: () => const MailConnectorException(
+          mailNotAuthenticatedCode,
+          'sign-in failed — check or re-enter the app password',
+        ),
+      );
+      final manager = McpServerManager();
+      await manager.addMailServer(MailServices(imap: imap));
+
+      final output = await manager.callTool(
+        mailMcpServerLabel,
+        'mail.list_messages',
+        {},
+      );
+
+      expect(output, startsWith('ERROR:'));
+      expect(output, contains('re-enter the app password'));
     });
   });
 }

@@ -8,15 +8,19 @@ const mailMcpServerUrl = 'local://mail';
 const mailMaxChars = 6000;
 
 class MailServices {
-  const MailServices({required this.gmail, this.outlook});
+  const MailServices({this.gmail, this.outlook, this.imap});
 
-  /// The connected Gmail account's repository (mail.* tools dispatch here
-  /// when the account is a gmail one).
-  final MailMessageApi gmail;
+  /// The connected Gmail account's repository, or null when no Gmail
+  /// account is set up (mail.* tools dispatch across all non-null repos).
+  final MailMessageApi? gmail;
 
-  /// The connected Outlook account's repository, or null until that
-  /// connector lands (Task 6).
+  /// The connected Outlook account's repository, or null after a
+  /// disconnect (OAuth-only connector).
   final MailMessageApi? outlook;
+
+  /// The connected IMAP/SMTP account's repository (e-mail + app password),
+  /// or null until that account connects.
+  final MailMessageApi? imap;
 }
 
 /// Formats a truncated tool-output string; the [truncatedMarker] tail is

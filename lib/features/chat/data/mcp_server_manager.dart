@@ -488,8 +488,8 @@ class McpServerManager {
             'provider': {
               'type': 'string',
               'description':
-                  "Which connected account to send with ('gmail' or "
-                  "'outlook'). Optional when only one account is connected.",
+                  "Which connected account to send with ('gmail', 'outlook' "
+                  "or 'imap'). Optional when only one account is connected.",
             },
           },
           'required': ['to', 'subject', 'body'],
@@ -625,11 +625,15 @@ class McpServerManager {
         ? null
         : MailProviderName.fromName(providerFilter);
     final apis = <(MailProvider, MailMessageApi)>[
-      if (wanted == null || wanted == MailProvider.gmail)
-        (MailProvider.gmail, services.gmail),
+      if (services.gmail != null &&
+          (wanted == null || wanted == MailProvider.gmail))
+        (MailProvider.gmail, services.gmail!),
       if (services.outlook != null &&
           (wanted == null || wanted == MailProvider.outlook))
         (MailProvider.outlook, services.outlook!),
+      if (services.imap != null &&
+          (wanted == null || wanted == MailProvider.imap))
+        (MailProvider.imap, services.imap!),
     ];
     return apis;
   }
