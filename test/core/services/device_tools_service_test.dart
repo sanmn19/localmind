@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:localmind/core/services/device_tools_service.dart';
+import 'package:localmind/features/mcp/data/device_mcp_server.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -16,7 +17,7 @@ void main() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(deviceToolsChannel, (call) async {
             calls.add(call);
-            return 'ok';
+            return true;
           });
 
       final result = await const MethodChannelDeviceAppLauncher().composeEmail(
@@ -26,7 +27,10 @@ void main() {
         cc: ['bob@example.com'],
       );
 
-      expect(result, 'ok');
+      expect(
+        result,
+        'Opened your mail app with a message to alice@example.com',
+      );
       expect(calls, hasLength(1));
       expect(calls.single.method, deviceToolsMethodNameComposeEmail);
       expect(calls.single.arguments, {
@@ -42,7 +46,7 @@ void main() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(deviceToolsChannel, (call) async {
             calls.add(call);
-            return 'ok';
+            return true;
           });
 
       await const MethodChannelDeviceAppLauncher().composeEmail(
@@ -63,14 +67,14 @@ void main() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(deviceToolsChannel, (call) async {
             calls.add(call);
-            return 'ok';
+            return true;
           });
 
       final result = await const MethodChannelDeviceAppLauncher().open(
         'com.example.app',
       );
 
-      expect(result, 'ok');
+      expect(result, 'Opened com.example.app');
       expect(calls.single.method, deviceToolsMethodNameOpenApp);
       expect(calls.single.arguments, {'target': 'com.example.app'});
     });
@@ -120,6 +124,99 @@ void main() {
           const MethodChannelDeviceAppLauncher().listInstalled(),
           throwsA(isA<DeviceChannelUnavailable>()),
         );
+      },
+    );
+
+    test(
+      'the channel payload mirrors the pinned native mailto parity string',
+      () async {
+        final calls = <MethodCall>[];
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(deviceToolsChannel, (call) async {
+              calls.add(call);
+              return true;
+            });
+
+        await const MethodChannelDeviceAppLauncher().composeEmail(
+          to: 'alice@example.com',
+          subject: 'Import plans',
+          body: 'Line one\nLine two',
+          cc: ['bob@example.com', 'carol@example.com'],
+        );
+
+        // CROSS-CHECK pinning Dart↔Kotlin parity: MainActivity.kt's
+        // composeEmail builds the mailto: URI from the received fields with
+        // Uri.encode(part, "-_.!~*'()") (Dart's Uri.encodeComponent leave
+        // set) and a comma-joined cc. Its required output is exactly what
+        // device_mcp_server_test.dart pins for the pure Dart builder.
+        expect(
+          composeEmailIntent(
+            to: 'alice@example.com',
+            subject: 'Import plans',
+            body: 'Line one\nLine two',
+            cc: ['bob@example.com', 'carol@example.com'],
+          ),
+          'mailto:alice@example.com?subject=Import%20plans'
+          '&body=Line%20one%0ALine%20two'
+          '&cc=bob%40example.com,carol%40example.com',
+        );
+        expect(calls.single.arguments, {
+          'to': 'alice@example.com',
+          'subject': 'Import plans',
+          'body': 'Line one\nLine two',
+          'cc': ['bob@example.com', 'carol@example.com'],
+        });
+      },
+    );
+
+    test(
+      'each native error code maps to a reason-carrying exception',
+      () async {
+        for (final code in const [
+          deviceToolsErrorNoMailApp,
+          deviceToolsErrorAppNotInstalled,
+          deviceToolsErrorSecurityException,
+        ]) {
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+              .setMockMethodCallHandler(deviceToolsChannel, (call) async {
+                throw PlatformException(code: code);
+              });
+
+          await expectLater(
+            const MethodChannelDeviceAppLauncher().composeEmail(
+              to: 'a@example.com',
+              subject: 's',
+              body: 'b',
+            ),
+            throwsA(
+              isA<DeviceChannelUnavailable>().having(
+                (failure) => failure.reason,
+                'reason',
+                code,
+              ),
+            ),
+          );
+          await expectLater(
+            const MethodChannelDeviceAppLauncher().open('com.example.app'),
+            throwsA(
+              isA<DeviceChannelUnavailable>().having(
+                (failure) => failure.reason,
+                'reason',
+                code,
+              ),
+            ),
+          );
+          await expectLater(
+            const MethodChannelDeviceAppLauncher().listInstalled(),
+            throwsA(
+              isA<DeviceChannelUnavailable>().having(
+                (failure) => failure.reason,
+                'reason',
+                code,
+              ),
+            ),
+          );
+        }
       },
     );
   });

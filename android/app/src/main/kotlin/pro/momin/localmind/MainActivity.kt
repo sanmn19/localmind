@@ -17,14 +17,17 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import android.content.pm.PackageManager
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : AudioServiceActivity() {
     private val CHANNEL = "localmind/chat_background"
     private val MEMORY_CHANNEL = "localmind/device_memory"
     private val ASSISTANT_CHANNEL = "localmind/android_assistant"
+    private val DEVICE_TOOLS_CHANNEL = "localmind/device_tools"
 
     private var assistantChannel: MethodChannel? = null
     private var pendingAssistantInvocation = false
@@ -159,6 +162,15 @@ class MainActivity : AudioServiceActivity() {
                     }
                     else -> result.notImplemented()
                 }
+            }
+        }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DEVICE_TOOLS_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "composeEmail" -> composeDeviceEmail(call, result)
+                "openApp" -> openDeviceApp(call, result)
+                "listInstalledApps" -> listInstalledDeviceApps(result)
+                else -> result.notImplemented()
             }
         }
     }
@@ -322,8 +334,117 @@ class MainActivity : AudioServiceActivity() {
         return false
     }
 
+    /** Builds the same mailto: intent [composeEmailIntent] does on the Dart
+     *  side and hands it to the OS mail app. `to` stays verbatim in the
+     *  opaque part; subject/body/cc values are percent-encoded per part with
+     *  Dart's Uri.encodeComponent leave-set, and the cc list is comma-joined
+     *  with literal separators. */
+    private fun composeDeviceEmail(call: MethodCall, result: MethodChannel.Result) {
+        val to = call.argument<String>("to") ?: ""
+        val subject = call.argument<String>("subject") ?: ""
+        val body = call.argument<String>("body") ?: ""
+        val cc = call.argument<List<String>>("cc") ?: emptyList()
+
+        val segments = mutableListOf(
+            "subject=" + Uri.encode(subject, URI_COMPONENT_LEAVE_CHARS),
+            "body=" + Uri.encode(body, URI_COMPONENT_LEAVE_CHARS)
+        )
+        if (cc.isNotEmpty()) {
+            segments.add(
+                "cc=" + cc.map { Uri.encode(it.trim(), URI_COMPONENT_LEAVE_CHARS) }
+                    .joinToString(",")
+            )
+        }
+        val intent = Intent(
+            Intent.ACTION_SENDTO,
+            Uri.parse("mailto:$to?${segments.joinToString("&")}")
+        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+        try {
+            startActivity(intent)
+            result.success(true)
+        } catch (error: ActivityNotFoundException) {
+            result.error("no_mail_app", "No mail app available on this device", null)
+        } catch (error: SecurityException) {
+            result.error(
+                "security_exception",
+                error.message ?: "Launching the mail app was not allowed.",
+                null
+            )
+        }
+    }
+
+    /** Package names go through the app launcher; anything else that carries
+     *  a scheme is treated as a deep link. Unresolvable targets and missing
+     *  handlers surface `app_not_installed` in both cases. */
+    private fun openDeviceApp(call: MethodCall, result: MethodChannel.Result) {
+        val target = call.argument<String>("target") ?: ""
+        val launch = if (target.matches(PACKAGE_NAME_PATTERN.toRegex())) {
+            packageManager.getLaunchIntentForPackage(target)
+        } else {
+            val link = Uri.parse(target)
+            if (link.scheme.isNullOrBlank()) {
+                null
+            } else {
+                Intent(Intent.ACTION_VIEW, link)
+            }
+        }
+
+        if (launch == null) {
+            result.error(
+                "app_not_installed",
+                "No app installed for this target: $target",
+                null
+            )
+            return
+        }
+
+        try {
+            startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            result.success(true)
+        } catch (error: ActivityNotFoundException) {
+            result.error(
+                "app_not_installed",
+                "No app installed to handle this target: $target",
+                null
+            )
+        } catch (error: SecurityException) {
+            result.error(
+                "security_exception",
+                error.message ?: "Opening this app was not allowed.",
+                null
+            )
+        }
+    }
+
+    /** [label, package] rows for the model, ordered alphabetically by label.
+     *  Rows without usable metadata (hidden/stripped system components) are
+     *  skipped rather than listed with blank names. */
+    private fun listInstalledDeviceApps(result: MethodChannel.Result) {
+        try {
+            val rows = packageManager.getInstalledPackages(0)
+                .mapNotNull { info ->
+                    val appInfo = info.applicationInfo ?: return@mapNotNull null
+                    val label = runCatching {
+                        packageManager.getApplicationLabel(appInfo).toString()
+                    }.getOrNull() ?: return@mapNotNull null
+                    mapOf("label" to label, "package" to info.packageName)
+                }
+                .sortedBy { (it["label"] ?: "").toString().lowercase() }
+            result.success(rows)
+        } catch (error: SecurityException) {
+            result.error(
+                "security_exception",
+                error.message ?: "Listing installed apps was not allowed.",
+                null
+            )
+        }
+    }
+
     companion object {
         private const val ASSISTANT_ROLE_REQUEST_CODE = 4101
         private const val SCREENSHOT_TIMEOUT_MS = 2000L
+        private const val PACKAGE_NAME_PATTERN = "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)+\$"
+        private const val URI_COMPONENT_LEAVE_CHARS = "-_.!~*'()"
     }
 }

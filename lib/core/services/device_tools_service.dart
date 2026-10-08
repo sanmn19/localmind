@@ -2,12 +2,10 @@ import 'package:flutter/services.dart';
 
 /// Dart-side contract for the `local://device` MCP server's backing services.
 ///
-/// TASK-SPAN NOTE: this file only carries the contracts the device server
-/// tools dispatch against plus the channel rider. The native method handlers
-/// (compose/open/list/contacts/share events on Android, MainActivity.kt) are
-/// THREAD 2 scope (`feat(device): intent channels for compose/open/list`) —
-/// until they exist the No handler case surfaces to the model via
-/// [DeviceChannelUnavailable], never a crash.
+/// TASK-SPAN NOTE: the launcher methods (compose/open/list) answer native
+/// handlers on Android (MainActivity.kt, channel proven below). The contacts
+/// methods are Task 3 scope — until they exist the No handler case surfaces
+/// to the model via [DeviceChannelUnavailable], never a crash.
 
 /// Method channel the native device-tools host answers on.
 const deviceToolsChannel = MethodChannel('localmind/device_tools');
@@ -18,6 +16,14 @@ const deviceToolsMethodNameListInstalledApps = 'listInstalledApps';
 const deviceToolsMethodNameSearchContacts = 'searchContacts';
 const deviceToolsMethodNameContactByEmail = 'contactByEmail';
 const deviceToolsMethodNameContactByPhone = 'contactByPhone';
+
+/// Native error codes the device_tools host raises. Every one of them
+/// surfaces through [DeviceChannelUnavailable] with the code as the reason;
+/// the server renders the generic `ERROR: device channel unavailable` line
+/// for the model regardless of the code.
+const deviceToolsErrorNoMailApp = 'no_mail_app';
+const deviceToolsErrorAppNotInstalled = 'app_not_installed';
+const deviceToolsErrorSecurityException = 'security_exception';
 
 /// Raised by the channel-backed device services when the platform has no
 /// handler for a device-tools call (or the call errors natively). The device
@@ -31,8 +37,9 @@ class DeviceChannelUnavailable implements Exception {
   String toString() => 'DeviceChannelUnavailable: device channel unavailable';
 }
 
-/// Channel-backed launcher used by the registration provider until Task 2
-/// widens the payload mapping (message surfaces, per-code error strings).
+/// Channel-backed launcher over the intent channels MainActivity.kt hosts.
+/// The native side answers `true`-or-throws; the readable result lines below
+/// are what the device server renders for the model.
 class MethodChannelDeviceAppLauncher implements DeviceAppLauncher {
   const MethodChannelDeviceAppLauncher();
 
@@ -42,18 +49,22 @@ class MethodChannelDeviceAppLauncher implements DeviceAppLauncher {
     required String subject,
     required String body,
     List<String>? cc,
-  }) {
-    return _invokeString(deviceToolsMethodNameComposeEmail, {
+  }) async {
+    // The URI build itself lives native-side (the mail app receives the
+    // Android intent); the fields travel under this contract.
+    await _invokeDeviceTools(deviceToolsMethodNameComposeEmail, {
       'to': to,
       'subject': subject,
       'body': body,
       if (cc != null && cc.isNotEmpty) 'cc': cc,
     });
+    return 'Opened your mail app with a message to $to';
   }
 
   @override
-  Future<String> open(String target) {
-    return _invokeString(deviceToolsMethodNameOpenApp, {'target': target});
+  Future<String> open(String target) async {
+    await _invokeDeviceTools(deviceToolsMethodNameOpenApp, {'target': target});
+    return 'Opened $target';
   }
 
   @override
@@ -118,11 +129,6 @@ Future<Object?> _invokeDeviceTools(
   } on MissingPluginException catch (e) {
     throw DeviceChannelUnavailable(e.message);
   }
-}
-
-Future<String> _invokeString(String method, Map<String, Object?> args) async {
-  final payload = await _invokeDeviceTools(method, args);
-  return payload?.toString() ?? '';
 }
 
 List<String> _stringList(dynamic raw) => [
