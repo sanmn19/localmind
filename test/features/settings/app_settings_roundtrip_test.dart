@@ -93,4 +93,22 @@ void main() {
     });
     expect(restored.webSearxUrl, isNull);
   });
+
+  test('device tool settings default to disabled', () {
+    final settings = AppSettings();
+    expect(settings.deviceToolsEnabled, isFalse);
+  });
+
+  test('deviceToolsEnabled survives the toMap/fromMap round-trip', () {
+    final settings = AppSettings().copyWith(deviceToolsEnabled: true);
+    final map = settings.toMap();
+    expect(map['deviceToolsEnabled'], isTrue);
+    final restored = AppSettings.fromMap(map);
+    expect(restored.deviceToolsEnabled, isTrue);
+  });
+
+  test('fromMap tolerates missing deviceToolsEnabled (upgrade path)', () {
+    final restored = AppSettings.fromMap({'themeMode': 2});
+    expect(restored.deviceToolsEnabled, isFalse);
+  });
 }

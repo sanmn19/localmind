@@ -1,11 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../../core/services/device_tools_service.dart';
 import '../data/tools/tool_registry.dart';
 import '../data/tools/builtin_tool_provider.dart';
 import '../data/tools/mcp_tool_provider.dart';
 import '../data/tools/tool_definition.dart';
 import '../data/mcp_server_manager.dart';
 import '../data/tool_budget.dart';
+import '../../mcp/data/device_mcp_server.dart';
 import '../../mcp/data/terminal_mcp_server.dart';
 import '../../mcp/data/web/keyless_mcp_ring.dart';
 import '../../mcp/data/web/web_fetch_service.dart';
@@ -54,6 +56,7 @@ Future<bool> shouldAutoApproveTool(
   Map<String, dynamic> args = const {},
   required bool webToolsEnabled,
   required bool terminalToolsEnabled,
+  bool deviceToolsEnabled = false,
   required ToolRegistry registry,
   required TerminalWhitelist? whitelist,
 }) async {
@@ -61,6 +64,13 @@ Future<bool> shouldAutoApproveTool(
 
   if (await registry.isLocalTool(toolName, {webMcpServerUrl})) {
     return webToolsEnabled;
+  }
+
+  if (await registry.isLocalTool(toolName, {deviceMcpServerUrl})) {
+    // The whole apps.*/contacts.* surface auto-runs while locally owned:
+    // every tool ends in the OS itself (mail app review, launcher, contact
+    // read-only look-up), so the toggle — not a per-tool whitelist — gates.
+    return deviceToolsEnabled;
   }
 
   if (await registry.isLocalTool(toolName, {terminalMcpServerUrl})) {
@@ -146,6 +156,18 @@ final webServerRegistrationProvider = Provider<void>((ref) {
   } else if (manager.hasTerminalServer()) {
     manager.removeServer(terminalMcpServerLabel);
   }
+  if (settings.deviceToolsEnabled) {
+    // Routing goes through the method channel today; Task 2 fills the
+    // native handlers, Task 3 swaps contacts to the real repository.
+    manager.addDeviceServer(
+      DeviceServices(
+        contacts: const MethodChannelDeviceContactsService(),
+        launcher: const MethodChannelDeviceAppLauncher(),
+      ),
+    );
+  } else if (manager.hasDeviceServer()) {
+    manager.removeServer(deviceMcpServerLabel);
+  }
   ref.onDispose(() {
     if (manager.hasWebServer()) {
       // Not awaited — teardown best-effort.
@@ -153,6 +175,9 @@ final webServerRegistrationProvider = Provider<void>((ref) {
     }
     if (manager.hasTerminalServer()) {
       manager.removeServer(terminalMcpServerLabel);
+    }
+    if (manager.hasDeviceServer()) {
+      manager.removeServer(deviceMcpServerLabel);
     }
   });
 });

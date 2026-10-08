@@ -1,6 +1,8 @@
 // ignore_for_file: prefer_initializing_formals
 
 import 'package:flutter/foundation.dart';
+import 'package:localmind/core/services/device_tools_service.dart';
+import 'package:localmind/features/mcp/data/device_mcp_server.dart';
 import 'package:localmind/features/mcp/data/terminal_mcp_server.dart';
 import 'package:localmind/features/mcp/data/web/web_fetch_service.dart';
 import 'package:localmind/features/mcp/data/web/web_search_service.dart';
@@ -42,6 +44,7 @@ class McpServerManager {
   final Map<String, String> _serverUrls = {};
   final Map<String, WebServices> _webServices = {};
   final Map<String, TerminalServices> _terminalServices = {};
+  final Map<String, DeviceServices> _deviceServices = {};
   final Set<String> _localExampleServers = {};
   final Set<String> _pendingLabels = {};
 
@@ -91,6 +94,7 @@ class McpServerManager {
     _serverUrls.remove(label);
     _webServices.remove(label);
     _terminalServices.remove(label);
+    _deviceServices.remove(label);
     _localExampleServers.remove(label);
   }
 
@@ -270,11 +274,117 @@ class McpServerManager {
   TerminalServices? getTerminalServices() =>
       _terminalServices[terminalMcpServerLabel];
 
+  /// Registers the in-process device MCP server (`apps.*` + `contacts.*`).
+  /// Mirrors [addWebServer]'s idempotent re-add semantics so a settings
+  /// rebuild just replaces it. Every tool routes through the injected
+  /// [DeviceServices] — the OS app / ContentProvider is the real gate, so
+  /// this server performs no network or send-side action itself.
+  Future<void> addDeviceServer(DeviceServices services) async {
+    await removeServer(deviceMcpServerLabel);
+
+    _deviceServices[deviceMcpServerLabel] = services;
+    _capabilities[deviceMcpServerLabel] = const McpCapabilities(tools: true);
+    _tools[deviceMcpServerLabel] = const [
+      McpTool(
+        name: 'apps.compose_email',
+        description:
+            'Open the device mail app pre-filled with an email (to/subject/'
+            'body, optional comma-separated cc). No message is sent '
+            'automatically — the user reviews and sends in their mail app.',
+        inputSchema: {
+          'type': 'object',
+          'properties': {
+            'to': {
+              'type': 'string',
+              'description':
+                  'Recipient e-mail address (or comma-separated addresses).',
+            },
+            'subject': {'type': 'string', 'description': 'Subject line.'},
+            'body': {'type': 'string', 'description': 'Plain-text body.'},
+            'cc': {
+              'type': 'string',
+              'description': 'Optional comma-separated copy-to addresses.',
+            },
+          },
+          'required': ['to', 'subject', 'body'],
+        },
+      ),
+      McpTool(
+        name: 'apps.open',
+        description:
+            'Launch an installed app by package name (e.g. com.example.app) '
+            'or open a deep link URI that carries a scheme '
+            '(https://..., localmind://...).',
+        inputSchema: {
+          'type': 'object',
+          'properties': {
+            'target': {
+              'type': 'string',
+              'description': 'Package name or deep-link URI.',
+            },
+          },
+          'required': ['target'],
+        },
+      ),
+      McpTool(
+        name: 'apps.list_installed',
+        description:
+            'List installed apps on this device (label + package name). Use '
+            'the package name with apps.open to launch one.',
+        inputSchema: {'type': 'object', 'properties': {}},
+      ),
+      McpTool(
+        name: 'contacts.search',
+        description:
+            'Search the device contacts by name or detail and return name, '
+            'e-mails and phone numbers.',
+        inputSchema: {
+          'type': 'object',
+          'properties': {
+            'query': {
+              'type': 'string',
+              'description': 'Free-text contact look-up.',
+            },
+          },
+          'required': ['query'],
+        },
+      ),
+      McpTool(
+        name: 'contacts.by_email',
+        description: 'Find device contacts matching an e-mail address.',
+        inputSchema: {
+          'type': 'object',
+          'properties': {
+            'email': {'type': 'string', 'description': 'E-mail to match.'},
+          },
+          'required': ['email'],
+        },
+      ),
+      McpTool(
+        name: 'contacts.by_phone',
+        description: 'Find device contacts matching a phone number.',
+        inputSchema: {
+          'type': 'object',
+          'properties': {
+            'phone': {'type': 'string', 'description': 'Phone to match.'},
+          },
+          'required': ['phone'],
+        },
+      ),
+    ];
+    _serverUrls[deviceMcpServerLabel] = deviceMcpServerUrl;
+  }
+
+  /// Test/inspection seam for the device services bundle.
+  @visibleForTesting
+  DeviceServices? getDeviceServices() => _deviceServices[deviceMcpServerLabel];
+
   bool hasServer(String label) =>
       _clients.containsKey(label) ||
       _localExampleServers.contains(label) ||
       _webServices.containsKey(label) ||
-      _terminalServices.containsKey(label);
+      _terminalServices.containsKey(label) ||
+      _deviceServices.containsKey(label);
 
   bool hasExampleServer() =>
       _localExampleServers.contains(exampleMcpServerLabel);
@@ -283,6 +393,8 @@ class McpServerManager {
 
   bool hasTerminalServer() =>
       _terminalServices.containsKey(terminalMcpServerLabel);
+
+  bool hasDeviceServer() => _deviceServices.containsKey(deviceMcpServerLabel);
 
   List<McpTool> getTools(String label) => _tools[label] ?? [];
 
@@ -303,6 +415,10 @@ class McpServerManager {
 
     if (_terminalServices.containsKey(serverLabel)) {
       return _callTerminalTool(toolName, args);
+    }
+
+    if (_deviceServices.containsKey(serverLabel)) {
+      return _callDeviceTool(toolName, args);
     }
 
     if (_localExampleServers.contains(serverLabel)) {
@@ -344,6 +460,7 @@ class McpServerManager {
     _serverUrls.clear();
     _webServices.clear();
     _terminalServices.clear();
+    _deviceServices.clear();
     _localExampleServers.clear();
   }
 
@@ -377,10 +494,14 @@ class McpServerManager {
         if (url is! String) {
           throw McpException('net.http requires a string url');
         }
-        final method = args['method'] is String ? args['method'] as String : 'GET';
+        final method = args['method'] is String
+            ? args['method'] as String
+            : 'GET';
         final body = args['body'] is String ? args['body'] as String : null;
         final rawChars = args['max_chars'];
-        final maxChars = rawChars is int ? rawChars.clamp(1, netHttpMaxChars).toInt() : null;
+        final maxChars = rawChars is int
+            ? rawChars.clamp(1, netHttpMaxChars).toInt()
+            : null;
         return services.http.run(
           method: method,
           url: url,
@@ -448,6 +569,101 @@ class McpServerManager {
       default:
         throw McpException('Web MCP tool not found: $toolName');
     }
+  }
+
+  /// Device dispatch — mirrors the terminal/web dispatch shape. Failures of
+  /// the backing channels surface as `ERROR: ...` strings (the model stays
+  /// readable); known-but-bad arguments reject with [McpException].
+  Future<String> _callDeviceTool(
+    String toolName,
+    Map<String, dynamic> args,
+  ) async {
+    final services = _deviceServices[deviceMcpServerLabel];
+    if (services == null) {
+      throw McpException('MCP server not connected: $deviceMcpServerLabel');
+    }
+
+    try {
+      switch (toolName) {
+        case 'apps.compose_email':
+          final to = args['to'];
+          final subject = args['subject'];
+          final body = args['body'];
+          if (to is! String || subject is! String || body is! String) {
+            throw McpException(
+              'apps.compose_email requires string to/subject/body arguments',
+            );
+          }
+          if (to.trim().isEmpty) {
+            return 'ERROR: recipient address is required';
+          }
+          return await services.launcher.composeEmail(
+            to: to,
+            subject: subject,
+            body: body,
+            cc: _composeCcList(args['cc']),
+          );
+
+        case 'apps.open':
+          final target = args['target'];
+          if (target is! String) {
+            throw McpException('apps.open requires a string target');
+          }
+          if (!isValidOpenTarget(target)) {
+            return 'ERROR: not a valid package or deep link: $target';
+          }
+          return await services.launcher.open(target);
+
+        case 'apps.list_installed':
+          return formatDeviceAppList(await services.launcher.listInstalled());
+
+        case 'contacts.search':
+          final query = args['query'];
+          if (query is! String) {
+            throw McpException('contacts.search requires a string query');
+          }
+          return formatContactSummaries(await services.contacts.search(query));
+
+        case 'contacts.by_email':
+          final email = args['email'];
+          if (email is! String) {
+            throw McpException('contacts.by_email requires a string email');
+          }
+          return formatContactSummaries(await services.contacts.byEmail(email));
+
+        case 'contacts.by_phone':
+          final phone = args['phone'];
+          if (phone is! String) {
+            throw McpException('contacts.by_phone requires a string phone');
+          }
+          return formatContactSummaries(await services.contacts.byPhone(phone));
+
+        default:
+          throw McpException('Device MCP tool not found: $toolName');
+      }
+    } on DeviceChannelUnavailable {
+      return 'ERROR: device channel unavailable';
+    }
+  }
+
+  /// `cc` accepts either a comma-separated string or a list of addresses;
+  /// empty input yields no cc segment at all.
+  List<String>? _composeCcList(dynamic raw) {
+    if (raw is List) {
+      final entries = [
+        for (final item in raw)
+          if (item is String && item.trim().isNotEmpty) item.trim(),
+      ];
+      return entries.isEmpty ? null : entries;
+    }
+    if (raw is String) {
+      final entries = [
+        for (final part in raw.split(','))
+          if (part.trim().isNotEmpty) part.trim(),
+      ];
+      return entries.isEmpty ? null : entries;
+    }
+    return null;
   }
 
   String _callExampleTool(String toolName, Map<String, dynamic> args) {

@@ -71,6 +71,12 @@ class AppSettings {
   /// net.http) is registered at all.
   final bool terminalToolsEnabled;
 
+  /// Whether the in-process `local://device` MCP server (apps.* +
+  /// contacts.*) is registered at all. Device tools only act through OS
+  /// surfaces (launcher, mail app, ContactsProvider), so this toggle gates
+  /// registration; the actionable sends stay user-tapped in the OS app.
+  final bool deviceToolsEnabled;
+
   /// First-command entries (e.g. `curl`, `ping`, `net.http`) that let
   /// matching terminal tool calls skip the approval dialog. Empty by
   /// default — nothing auto-runs until the user opt-ins.
@@ -139,6 +145,7 @@ class AppSettings {
     this.webSearchApiKey,
     this.webSearxUrl,
     this.terminalToolsEnabled = false,
+    this.deviceToolsEnabled = false,
     this.toolWhitelist = const [],
     this.autoCollapseThinking = false,
     this.sendTemperature = true,
@@ -199,6 +206,7 @@ class AppSettings {
     Object? webSearchApiKey = _unset,
     Object? webSearxUrl = _unset,
     bool? terminalToolsEnabled,
+    bool? deviceToolsEnabled,
     List<String>? toolWhitelist,
     bool? autoCollapseThinking,
     bool? sendTemperature,
@@ -285,6 +293,7 @@ class AppSettings {
           ? this.webSearxUrl
           : webSearxUrl as String?,
       terminalToolsEnabled: terminalToolsEnabled ?? this.terminalToolsEnabled,
+      deviceToolsEnabled: deviceToolsEnabled ?? this.deviceToolsEnabled,
       toolWhitelist: toolWhitelist ?? this.toolWhitelist,
       autoCollapseThinking: autoCollapseThinking ?? this.autoCollapseThinking,
       sendTemperature: sendTemperature ?? this.sendTemperature,
@@ -347,6 +356,7 @@ class AppSettings {
       'webSearchApiKey': webSearchApiKey,
       'webSearxUrl': webSearxUrl,
       'terminalToolsEnabled': terminalToolsEnabled,
+      'deviceToolsEnabled': deviceToolsEnabled,
       'toolWhitelist': toolWhitelist,
       'autoCollapseThinking': autoCollapseThinking,
       'sendTemperature': sendTemperature,
@@ -413,7 +423,9 @@ class AppSettings {
       webSearchApiKey: map['webSearchApiKey'] as String?,
       webSearxUrl: map['webSearxUrl'] as String?,
       terminalToolsEnabled: map['terminalToolsEnabled'] ?? false,
-      toolWhitelist: (map['toolWhitelist'] as List?)?.cast<String>() ?? const [],
+      deviceToolsEnabled: map['deviceToolsEnabled'] ?? false,
+      toolWhitelist:
+          (map['toolWhitelist'] as List?)?.cast<String>() ?? const [],
       autoCollapseThinking: map['autoCollapseThinking'] ?? false,
       sendTemperature: map['sendTemperature'] ?? true,
       sendTopP: map['sendTopP'] ?? true,
