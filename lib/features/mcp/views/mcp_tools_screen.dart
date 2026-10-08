@@ -12,6 +12,7 @@ import '../../chat/data/tools/tool_definition.dart';
 import '../../chat/providers/chat_mcp_providers.dart';
 import '../../chat/providers/tooling_providers.dart';
 import '../../mail/data/google_auth_client.dart';
+import '../../mail/data/imap_connection_test.dart';
 import '../../mail/data/mail_common.dart';
 import '../../mail/data/mail_connector_config.dart';
 import '../../mail/data/mail_token_store.dart';
@@ -1288,6 +1289,18 @@ class _MailConnectorsCardState extends ConsumerState<_MailConnectorsCard> {
   /// spinner and disables re-triggering while awaiting the consent sheet.
   MailProvider? _connecting;
 
+  final _imapEmailController = TextEditingController();
+  final _imapPasswordController = TextEditingController();
+  final _imapHostController = TextEditingController();
+
+  @override
+  void dispose() {
+    _imapEmailController.dispose();
+    _imapPasswordController.dispose();
+    _imapHostController.dispose();
+    super.dispose();
+  }
+
   MailAccount? _accountFor(MailProvider provider, AppSettings settings) {
     for (final row in settings.mailConnectorAccounts) {
       final account = MailAccount.fromMap(row);
@@ -1321,6 +1334,8 @@ class _MailConnectorsCardState extends ConsumerState<_MailConnectorsCard> {
   }
 
   /// Interactive sign-in; null/empty email = user backed out of consent.
+  /// The imap provider never enters here — it connects through the form
+  /// panels below ([_connectImap]), not an OAuth consent sheet.
   Future<String> _signInEmail(MailProvider provider) {
     switch (provider) {
       case MailProvider.gmail:
@@ -1333,12 +1348,15 @@ class _MailConnectorsCardState extends ConsumerState<_MailConnectorsCard> {
           clientId: MailConnectorConfig.outlookClientId,
           tokens: ref.read(mailTokenStoreProvider),
         ).signIn().then((token) => token?.email ?? '');
+      case MailProvider.imap:
+        throw StateError('imap connects through the form, not OAuth');
     }
   }
 
   /// Upserts the provider's identity row (settings only carry provider +
-  /// email; tokens live in the platform caches + token store).
-  void _storeAccount(MailProvider provider, String email) {
+  /// email; tokens live in the platform caches + token store). An optional
+  /// [host] lands in the row for the imap connector's manual override.
+  void _storeAccount(MailProvider provider, String email, [String? host]) {
     final rows = ref
         .read(settingsProvider)
         .mailConnectorAccounts
@@ -1348,7 +1366,11 @@ class _MailConnectorsCardState extends ConsumerState<_MailConnectorsCard> {
               provider,
         )
         .toList();
-    rows.add({'provider': MailProviderName.nameOf(provider), 'email': email});
+    rows.add({
+      'provider': MailProviderName.nameOf(provider),
+      'email': email,
+      if (host != null && host.isNotEmpty) 'host': host,
+    });
     ref
         .read(settingsProvider.notifier)
         .setMailConnectorAccounts(List.unmodifiable(rows));
@@ -1356,6 +1378,9 @@ class _MailConnectorsCardState extends ConsumerState<_MailConnectorsCard> {
   }
 
   Future<void> _disconnect(MailProvider provider) async {
+    // Capture the identity before the row goes away — the imap clean-up
+    // needs the email to purge its token-store entry.
+    final account = _accountFor(provider, ref.read(settingsProvider));
     final rows = ref
         .read(settingsProvider)
         .mailConnectorAccounts
@@ -1383,8 +1408,57 @@ class _MailConnectorsCardState extends ConsumerState<_MailConnectorsCard> {
             clientId: MailConnectorConfig.outlookClientId,
             tokens: ref.read(mailTokenStoreProvider),
           ).signOut();
+        case MailProvider.imap:
+          if (account != null) {
+            await ref
+                .read(mailTokenStoreProvider)
+                .clear(MailProvider.imap, account.email);
+          }
       }
     } catch (_) {}
+  }
+
+  /// IMAP connect flow: a one-off live validation against the server with
+  /// the typed credentials; on success the identity row (plus optional host
+  /// override) lands in settings and the app password goes to the token
+  /// store — far-future expiry since basic-auth passwords don't rotate on
+  /// their own. Failures surface as the probe's model-readable message.
+  Future<void> _connectImap() async {
+    final l10n = AppLocalizations.of(context)!;
+    final email = _imapEmailController.text.trim().toLowerCase();
+    final password = _imapPasswordController.text;
+    final host = _imapHostController.text.trim();
+    if (email.isEmpty || password.isEmpty) {
+      _toast(l10n.imap_fields_required);
+      return;
+    }
+    setState(() => _connecting = MailProvider.imap);
+    try {
+      final failure = await ref
+          .read(imapConnectProbeProvider)
+          .verify(
+            email: email,
+            password: password,
+            host: host.isEmpty ? null : host,
+          );
+      if (!mounted) return;
+      if (failure != null) {
+        _toast(failure);
+        return;
+      }
+      _storeAccount(MailProvider.imap, email, host);
+      await ref
+          .read(mailTokenStoreProvider)
+          .updateToken(
+            MailProvider.imap,
+            email,
+            password,
+            DateTime.now().add(const Duration(days: 3650)),
+          );
+      _imapPasswordController.clear();
+    } finally {
+      if (mounted) setState(() => _connecting = null);
+    }
   }
 
   void _toast(String message) {
@@ -1424,7 +1498,115 @@ class _MailConnectorsCardState extends ConsumerState<_MailConnectorsCard> {
           account: _accountFor(MailProvider.outlook, settings),
           connectLabel: l10n.mail_connect_outlook,
         ),
+        _imapRow(context, settings),
       ],
+    );
+  }
+
+  /// The imap connector is password-based, so its surface is a form:
+  /// e-mail + app password + an optional manual host. A connected account
+  /// collapses the form back into the shared connected-row rendering.
+  Widget _imapRow(BuildContext context, AppSettings settings) {
+    final account = _accountFor(MailProvider.imap, settings);
+    if (account != null) {
+      return _providerRow(
+        context,
+        MailProvider.imap,
+        HugeIcons.strokeRoundedMailSecure01,
+        account: account,
+        connectLabel: '',
+      );
+    }
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final connecting = _connecting == MailProvider.imap;
+
+    return _McpPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2563EB).withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Center(
+                  child: HugeIcon(
+                    icon: HugeIcons.strokeRoundedMailSecure01,
+                    color: Color(0xFF2563EB),
+                    size: 15,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  l10n.mail_connect_imap,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            l10n.imap_hint,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ShadInput(
+            key: const Key('imap_email_input'),
+            controller: _imapEmailController,
+            keyboardType: TextInputType.emailAddress,
+            autocorrect: false,
+            enableSuggestions: false,
+            placeholder: Text(l10n.imap_email_hint),
+          ),
+          const SizedBox(height: 8),
+          ShadInput(
+            key: const Key('imap_password_input'),
+            controller: _imapPasswordController,
+            obscureText: true,
+            autocorrect: false,
+            enableSuggestions: false,
+            placeholder: Text(l10n.imap_password_hint),
+          ),
+          const SizedBox(height: 8),
+          ShadInput(
+            key: const Key('imap_host_input'),
+            controller: _imapHostController,
+            autocorrect: false,
+            enableSuggestions: false,
+            placeholder: Text(l10n.imap_host_hint),
+          ),
+          const SizedBox(height: 10),
+          ShadButton(
+            key: const Key('imap_connect_button'),
+            onPressed: connecting ? null : _connectImap,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (connecting) ...[
+                  const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                Text(l10n.imap_connect),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

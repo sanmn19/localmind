@@ -6326,6 +6326,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Disconnect'**
   String get mail_disconnect;
+
+  /// Title of the IMAP connect form
+  ///
+  /// In en, this message translates to:
+  /// **'Connect IMAP account'**
+  String get mail_connect_imap;
+
+  /// Explains the IMAP/app-password connector setup
+  ///
+  /// In en, this message translates to:
+  /// **'Uses an e-mail address plus app password. Gmail needs an app password (Google Account → Security → 2-Step Verification → App passwords); Microsoft consumer accounts no longer allow this — use the Outlook connector.'**
+  String get imap_hint;
+
+  /// Placeholder for the IMAP e-mail field
+  ///
+  /// In en, this message translates to:
+  /// **'you@example.com'**
+  String get imap_email_hint;
+
+  /// Placeholder for the IMAP app-password field
+  ///
+  /// In en, this message translates to:
+  /// **'App password'**
+  String get imap_password_hint;
+
+  /// Placeholder for the optional IMAP host override field
+  ///
+  /// In en, this message translates to:
+  /// **'Host (auto unless the provider is unknown)'**
+  String get imap_host_hint;
+
+  /// Button validating and saving the IMAP account
+  ///
+  /// In en, this message translates to:
+  /// **'Connect'**
+  String get imap_connect;
+
+  /// Validation message for an incomplete IMAP connect form
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an e-mail and an app password to connect.'**
+  String get imap_fields_required;
 }
 
 class _AppLocalizationsDelegate
