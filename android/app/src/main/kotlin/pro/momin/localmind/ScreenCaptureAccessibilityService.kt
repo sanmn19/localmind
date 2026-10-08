@@ -269,7 +269,15 @@ class ScreenCaptureAccessibilityService : AccessibilityService() {
             )
             val drawCanvas = Canvas(combined)
             drawCanvas.drawBitmap(canvas, 0f, 0f, null)
-            drawCanvas.drawBitmap(next, 0f, -overlap.toFloat(), null)
+            // Seam: place `next` so its leading `overlap` rows line up with
+            // the canvas's trailing rows — new content appends BELOW, never
+            // overwrites what's already stitched.
+            drawCanvas.drawBitmap(
+                next,
+                0f,
+                (canvas.height - overlap).toFloat(),
+                null
+            )
             canvas.recycle()
             canvas = combined
 
