@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:objectbox/objectbox.dart';
 import '../models/enums.dart';
+import '../../features/chat/data/models/fork_anchor.dart';
 import '../../features/chat/data/models/message.dart';
 import '../../features/chat/data/tools/tool_event.dart';
 import '../../features/conversations/data/models/conversation.dart';
@@ -273,6 +274,9 @@ class ConversationEntity {
   bool isArchived;
   int characterCount;
   int? totalTokenCount;
+  String? forkOfMessageId;
+  String? forkSpan;
+  bool isFork;
 
   @Backlink()
   final messages = ToMany<MessageEntity>();
@@ -302,6 +306,9 @@ class ConversationEntity {
     this.isArchived = false,
     this.characterCount = 0,
     this.totalTokenCount,
+    this.forkOfMessageId,
+    this.forkSpan,
+    this.isFork = false,
   });
 
   factory ConversationEntity.fromDomain(Conversation conversation) {
@@ -331,6 +338,9 @@ class ConversationEntity {
       isArchived: conversation.isArchived,
       characterCount: conversation.characterCount,
       totalTokenCount: conversation.totalTokenCount,
+      forkOfMessageId: conversation.forkOfMessageId,
+      forkSpan: conversation.forkSpan,
+      isFork: conversation.isFork,
     );
   }
 
@@ -371,6 +381,9 @@ class ConversationEntity {
       isArchived: isArchived,
       characterCount: characterCount,
       totalTokenCount: totalTokenCount,
+      forkOfMessageId: forkOfMessageId,
+      forkSpan: forkSpan,
+      isFork: isFork,
     );
   }
 }
@@ -656,6 +669,58 @@ class MessageEntity {
       isActiveVariant: isActiveVariant,
       parentMessageId: parentMessageId,
       contentTokenCount: contentTokenCount,
+    );
+  }
+}
+
+@Entity()
+class ForkAnchorEntity {
+  @Id()
+  int internalId = 0;
+
+  @Index()
+  String id;
+  @Index()
+  String mainConversationId;
+  @Index()
+  String anchorMessageId;
+
+  /// Raw selected text, verbatim, trimmed.
+  String selectedText;
+  @Index()
+  String forkConversationId;
+  @Property(type: PropertyType.date)
+  DateTime createdAt;
+
+  ForkAnchorEntity({
+    this.internalId = 0,
+    required this.id,
+    required this.mainConversationId,
+    required this.anchorMessageId,
+    required this.selectedText,
+    required this.forkConversationId,
+    required this.createdAt,
+  });
+
+  factory ForkAnchorEntity.fromDomain(ForkAnchor anchor) {
+    return ForkAnchorEntity(
+      id: anchor.id,
+      mainConversationId: anchor.mainConversationId,
+      anchorMessageId: anchor.anchorMessageId,
+      selectedText: anchor.selectedText,
+      forkConversationId: anchor.forkConversationId,
+      createdAt: anchor.createdAt,
+    );
+  }
+
+  ForkAnchor toDomain() {
+    return ForkAnchor(
+      id: id,
+      mainConversationId: mainConversationId,
+      anchorMessageId: anchorMessageId,
+      selectedText: selectedText,
+      forkConversationId: forkConversationId,
+      createdAt: createdAt,
     );
   }
 }

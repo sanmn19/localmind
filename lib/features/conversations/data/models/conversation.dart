@@ -22,6 +22,9 @@ class Conversation {
   final bool isArchived;
   final int characterCount;
   final int? totalTokenCount;
+  final String? forkOfMessageId;
+  final String? forkSpan;
+  final bool isFork;
 
   Conversation({
     required this.id,
@@ -47,6 +50,9 @@ class Conversation {
     this.isArchived = false,
     this.characterCount = 0,
     this.totalTokenCount,
+    this.forkOfMessageId,
+    this.forkSpan,
+    this.isFork = false,
   });
 
   Conversation copyWith({
@@ -83,6 +89,11 @@ class Conversation {
     bool? isArchived,
     int? characterCount,
     int? totalTokenCount,
+    String? forkOfMessageId,
+    bool clearForkOfMessageId = false,
+    String? forkSpan,
+    bool clearForkSpan = false,
+    bool? isFork,
   }) {
     return Conversation(
       id: id ?? this.id,
@@ -116,6 +127,11 @@ class Conversation {
       isArchived: isArchived ?? this.isArchived,
       characterCount: characterCount ?? this.characterCount,
       totalTokenCount: totalTokenCount ?? this.totalTokenCount,
+      forkOfMessageId: clearForkOfMessageId
+          ? null
+          : (forkOfMessageId ?? this.forkOfMessageId),
+      forkSpan: clearForkSpan ? null : (forkSpan ?? this.forkSpan),
+      isFork: isFork ?? this.isFork,
     );
   }
 }
