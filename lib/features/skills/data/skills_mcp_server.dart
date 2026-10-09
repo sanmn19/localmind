@@ -62,6 +62,17 @@ String formatSkillsList(List<SkillEntry> entries) {
   ].join('\n');
 }
 
+/// Model-readable `skills.read` render: the heading, the description and
+/// the full markdown body. Bodies can be arbitrarily large, so the output
+/// trims at [skillsReadMaxChars] with [skillsReadTruncationMarker] — the
+/// same tool-output truncation convention the other local servers use.
+String formatSkillsRead(SkillEntry entry) {
+  final body = entry.body.trimRight();
+  final text = '# ${entry.name}\n${entry.description}\n\n$body';
+  if (text.length <= skillsReadMaxChars) return text;
+  return '${text.substring(0, skillsReadMaxChars)}\n$skillsReadTruncationMarker';
+}
+
 /// The add-tool's invalid-name failure line, or null when the chat-provided
 /// name resolves to a stored-ready skill name.
 String? skillsNameFailure(String rawName) {

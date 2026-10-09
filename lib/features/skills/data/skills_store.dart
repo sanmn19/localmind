@@ -1,7 +1,8 @@
 import 'dart:io';
 
 /// One named markdown skill: a unique name, a one-line description and the
-/// markdown body injected verbatim into chats.
+/// markdown body — indexed in chat context by name/description, loaded on
+/// demand through the `skills.read` tool.
 class SkillEntry {
   const SkillEntry({
     required this.name,
@@ -36,12 +37,22 @@ class SkillEntry {
   String toString() => 'SkillEntry($name)';
 }
 
-/// Character budget for the skills section injected into a system prompt.
-const skillsSystemSectionBudget = 12000;
+/// Sanity-cap for the skills INDEX injected into a system prompt: the
+/// index carries only name/description rows, so the cap just bounds
+/// pathological row counts.
+const skillsIndexBudget = 3000;
 
-/// Marker appended when body text was dropped to respect
-/// [skillsSystemSectionBudget]; the name/description rows survive.
-const skillsTruncationMarker = '[skill bodies truncated to fit context]';
+/// Marker appended when index rows were dropped to respect
+/// [skillsIndexBudget]; the earlier `- name: description` rows survive.
+const skillsTruncationMarker = '[skills index truncated to fit context]';
+
+/// Character cap of a single `skills.read` tool render.
+const skillsReadMaxChars = 12000;
+
+/// Marker appended when a `skills.read` render was cut to respect
+/// [skillsReadMaxChars]; the tail is what the model sees when it asked
+/// for too much.
+const skillsReadTruncationMarker = '[truncated]';
 
 /// The filesystem boundary behind [SkillsStore]. Unit tests inject an
 /// in-memory fake; the app wires the real documents directory.
@@ -273,30 +284,32 @@ class SkillsStore {
   }
 }
 
-/// Builds the system-prompt section listing the given skills.
+/// Builds the system-prompt section INDEXING the given skills.
 ///
-/// Format per entry: a `- name: description` row followed by the body
-/// verbatim. The header and every name row are always kept; once the
-/// accumulated section would exceed [skillsSystemSectionBudget] the
-/// remaining bodies are dropped and [skillsTruncationMarker] appended.
-/// An empty list yields an empty string (injection skipped).
+/// Progressive disclosure: the injection carries only the header, the
+/// `skills.read` guidance line and one `- name: description` row per
+/// skill — never the bodies (the model loads a body on demand with
+/// `skills.read {name}`). Once another row would exceed
+/// [skillsIndexBudget] the remaining rows are dropped and
+/// [skillsTruncationMarker] appended. An empty list yields an empty
+/// string (injection skipped).
 String buildSkillsSystemSection(List<SkillEntry> entries) {
   if (entries.isEmpty) return '';
   final buffer = StringBuffer();
   buffer.writeln('# Skills');
   buffer.writeln(
-    'The user maintains these skills. When relevant, follow them.',
+    'The user maintains these skills. Call skills.read {name} to load a '
+    "skill's full instructions when relevant.",
   );
   var truncated = false;
   for (final entry in entries) {
-    buffer.writeln();
-    buffer.writeln('- ${entry.name}: ${entry.description}');
-    if (truncated) continue;
-    if (buffer.length + 1 + entry.body.length <= skillsSystemSectionBudget) {
-      buffer.writeln(entry.body);
-    } else {
+    final row = '- ${entry.name}: ${entry.description}';
+    if (buffer.length + 1 + row.length > skillsIndexBudget) {
       truncated = true;
+      break;
     }
+    buffer.writeln();
+    buffer.writeln(row);
   }
   if (truncated) {
     buffer.writeln();

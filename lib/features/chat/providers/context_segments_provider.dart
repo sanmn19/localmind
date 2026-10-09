@@ -73,15 +73,12 @@ class ChatContextSegments {
 }
 
 /// Skills bytes exactly as the system-builder would inject them: the
-/// serialized skill (the same frontmatter format) per mirror entry,
-/// collapsed to zero whenever the injection kill switch is off.
+/// INDEX section (header + `skills.read` guidance + `- name: description`
+/// rows, never the bodies — bodies load on demand via the skills.read
+/// tool), collapsed to zero whenever the injection kill switch is off.
 int _skillsChars(SkillsState state) {
   if (!state.enabled) return 0;
-  var chars = 0;
-  for (final entry in state.entries) {
-    chars += SkillsStore.serialize(entry).length;
-  }
-  return chars;
+  return buildSkillsSystemSection(state.entries).length;
 }
 
 /// History bytes: the active timeline's message contents plus the

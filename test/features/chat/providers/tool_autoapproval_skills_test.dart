@@ -38,7 +38,12 @@ class _RemoteToolProvider implements ToolProvider {
 
   @override
   Future<List<ToolDefinition>> listTools() async => [
-    for (final name in const ['skills.list', 'skills.add', 'skills.delete'])
+    for (final name in const [
+      'skills.list',
+      'skills.read',
+      'skills.add',
+      'skills.delete',
+    ])
       ToolDefinition(
         name: name,
         description: 'Remote shadow of $name',
@@ -136,6 +141,16 @@ void main() {
       expect(await approve('skills.list', registry, skills: true), isTrue);
     });
 
+    test('skills.read auto-approves while locally owned and enabled', () async {
+      final registry = await localSkillsRegistry();
+      expect(await approve('skills.read', registry, skills: true), isTrue);
+    });
+
+    test('skills.read falls back to the dialog while disabled', () async {
+      final registry = await localSkillsRegistry();
+      expect(await approve('skills.read', registry, skills: false), isFalse);
+    });
+
     test('skills.list falls back to the dialog while disabled', () async {
       final registry = await localSkillsRegistry();
       expect(await approve('skills.list', registry, skills: false), isFalse);
@@ -159,6 +174,7 @@ void main() {
         final registry = ToolRegistry(providers: [const _RemoteToolProvider()]);
         for (final name in const [
           'skills.list',
+          'skills.read',
           'skills.add',
           'skills.delete',
         ]) {
@@ -198,7 +214,12 @@ void main() {
           .getTools(skillsMcpServerLabel)
           .map((t) => t.name)
           .toSet();
-      expect(toolNames, {'skills.list', 'skills.add', 'skills.delete'});
+      expect(toolNames, {
+        'skills.list',
+        'skills.read',
+        'skills.add',
+        'skills.delete',
+      });
     });
 
     test('does nothing while the switch is off', () async {

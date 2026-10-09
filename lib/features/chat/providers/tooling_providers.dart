@@ -86,10 +86,13 @@ Future<bool> shouldAutoApproveTool(
   }
 
   if (await registry.isLocalTool(toolName, {skillsMcpServerUrl})) {
-    // Reads ride the standard local-server bypass. Writes NEVER auto-approve:
-    // adding or deleting skills from chat always goes through the approval
-    // dialog, whatever the toggle says — the user must see it happen.
-    if (toolName == 'skills.list') return skillsEnabled;
+    // Reads (list + on-demand body loads) ride the standard local-server
+    // bypass. Writes NEVER auto-approve: adding or deleting skills from
+    // chat always goes through the approval dialog, whatever the toggle
+    // says — the user must see it happen.
+    if (toolName == 'skills.list' || toolName == 'skills.read') {
+      return skillsEnabled;
+    }
     return false;
   }
 

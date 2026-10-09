@@ -264,7 +264,7 @@ Body line two.''');
   });
 
   group('buildSkillsSystemSection', () {
-    test('lists the header, every name row and every body verbatim', () {
+    test('lists the header, the skills.read guidance and every name row', () {
       final section = buildSkillsSystemSection(const [
         SkillEntry(
           name: 'release_checklist',
@@ -280,53 +280,71 @@ Body line two.''');
 
       expect(section, startsWith('# Skills'));
       expect(section, contains('The user maintains these skills.'));
+      expect(section, contains('skills.read'));
       expect(section, contains('- release_checklist: Release checks'));
-      expect(section, contains('Run the smoke tests.'));
       expect(section, contains('- code_style: House style'));
-      expect(section, contains('Keep lines short.'));
       expect(section, isNot(contains(skillsTruncationMarker)));
+    });
+
+    test(
+      'never includes the bodies — progressive disclosure via skills.read',
+      () {
+        final section = buildSkillsSystemSection(const [
+          SkillEntry(
+            name: 'release_checklist',
+            description: 'Release checks',
+            body: 'Run the smoke tests.',
+          ),
+          SkillEntry(
+            name: 'code_style',
+            description: 'House style',
+            body: 'Keep lines short.',
+          ),
+        ]);
+
+        expect(section, isNot(contains('Run the smoke tests.')));
+        expect(section, isNot(contains('Keep lines short.')));
+      },
+    );
+
+    test('a huge body never enters the section', () {
+      final section = buildSkillsSystemSection([
+        SkillEntry(name: 'big_one', description: 'Big', body: 'b' * 40000),
+      ]);
+
+      expect(section, startsWith('# Skills'));
+      expect(section, contains('- big_one: Big'));
+      // 40 safe characters could only come from the body.
+      expect(section, isNot(contains('b' * 40)));
+      // The index with one row is tiny regardless of the body's size.
+      expect(section.length, lessThan(500));
     });
 
     test('emits nothing when there are no entries', () {
       expect(buildSkillsSystemSection(const []), '');
     });
 
-    test('keeps all bodies when they fit the shared budget', () {
+    test('drops past-budget rows but keeps every earlier row', () {
       final section = buildSkillsSystemSection([
-        for (var i = 1; i <= 2; i++)
+        for (var i = 1; i <= 30; i++)
           SkillEntry(
             name: 'skill_$i',
-            description: 'Skill $i',
-            body: 'unique$i ${'x' * 5000}',
-          ),
-      ]);
-
-      expect(section, isNot(contains(skillsTruncationMarker)));
-      expect(section, contains('unique1'));
-      expect(section, contains('unique2'));
-    });
-
-    test('drops bodies past the budget but keeps every name row', () {
-      final section = buildSkillsSystemSection([
-        for (var i = 1; i <= 4; i++)
-          SkillEntry(
-            name: 'skill_$i',
-            description: 'Skill $i',
-            body: 'unique$i ${'x' * 5000}',
+            description: 'A' * 200,
+            body: 'unique$i',
           ),
       ]);
 
       expect(section, contains(skillsTruncationMarker));
       expect(section, startsWith('# Skills'));
-      for (var i = 1; i <= 4; i++) {
-        expect(section, contains('- skill_$i: Skill $i'));
-      }
-      expect(section, contains('unique1'));
-      expect(section, contains('unique2'));
-      expect(section, isNot(contains('unique3')));
-      expect(section, isNot(contains('unique4')));
-      // The budget holds even with the always-kept name rows.
-      expect(section.length, lessThanOrEqualTo(12650));
+      expect(section, contains('- skill_1: '));
+      expect(section, isNot(contains('- skill_30: ')));
+      // The sanity-cap holds across the whole index (marker included).
+      expect(
+        section.length,
+        lessThanOrEqualTo(
+          skillsIndexBudget + 1 + skillsTruncationMarker.length + 1,
+        ),
+      );
     });
   });
 

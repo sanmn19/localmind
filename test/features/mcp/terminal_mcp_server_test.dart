@@ -124,13 +124,15 @@ void main() {
     });
 
     test('a killed-by-timeout run reports the timeout sentinel', () async {
-      final manager = await _managerWith(_FakeRunner(
-        const TerminalRunResult(
-          exitCode: terminalTimeoutExitCode,
-          stdout: 'partial',
-          stderr: '',
+      final manager = await _managerWith(
+        _FakeRunner(
+          const TerminalRunResult(
+            exitCode: terminalTimeoutExitCode,
+            stdout: 'partial',
+            stderr: '',
+          ),
         ),
-      ));
+      );
 
       final output = await manager.callTool(
         terminalMcpServerLabel,
@@ -141,9 +143,11 @@ void main() {
     });
 
     test('long output is truncated with the marker', () async {
-      final manager = await _managerWith(_FakeRunner(
-        TerminalRunResult(exitCode: 0, stdout: 'y' * 9000, stderr: ''),
-      ));
+      final manager = await _managerWith(
+        _FakeRunner(
+          TerminalRunResult(exitCode: 0, stdout: 'y' * 9000, stderr: ''),
+        ),
+      );
 
       final output = await manager.callTool(
         terminalMcpServerLabel,

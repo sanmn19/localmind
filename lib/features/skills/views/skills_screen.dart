@@ -112,7 +112,12 @@ class SkillsScreen extends ConsumerWidget {
                       : 12.0;
 
                   return ListView(
-                    padding: EdgeInsets.fromLTRB(horizontalPadding, 12, horizontalPadding, 96 + bottomInset),
+                    padding: EdgeInsets.fromLTRB(
+                      horizontalPadding,
+                      12,
+                      horizontalPadding,
+                      96 + bottomInset,
+                    ),
                     children: [
                       Center(
                         child: ConstrainedBox(
@@ -136,8 +141,11 @@ class SkillsScreen extends ConsumerWidget {
                                       AppRoutes.skillEditor,
                                       extra: entries[i],
                                     ),
-                                    onDelete: () async =>
-                                        _confirmDelete(context, ref, entries[i]),
+                                    onDelete: () async => _confirmDelete(
+                                      context,
+                                      ref,
+                                      entries[i],
+                                    ),
                                   ),
                                 ],
                             ],
@@ -157,9 +165,7 @@ class SkillsScreen extends ConsumerWidget {
           child: FloatingActionButton(
             key: const Key('skills_add_fab'),
             tooltip: l10n.skills_add,
-            onPressed: () => context.push(
-              AppRoutes.skillEditor,
-            ),
+            onPressed: () => context.push(AppRoutes.skillEditor),
             child: const HugeIcon(icon: HugeIcons.strokeRoundedAdd01),
           ),
         ),

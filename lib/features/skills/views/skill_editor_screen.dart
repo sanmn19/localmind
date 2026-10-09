@@ -145,9 +145,7 @@ class _SkillEditorScreenState extends ConsumerState<SkillEditorScreen> {
           child: Row(
             children: [
               IconButton(
-                icon: const HugeIcon(
-                  icon: HugeIcons.strokeRoundedArrowLeft01,
-                ),
+                icon: const HugeIcon(icon: HugeIcons.strokeRoundedArrowLeft01),
                 onPressed: () => context.canPop()
                     ? context.pop()
                     : context.go(AppRoutes.skills),

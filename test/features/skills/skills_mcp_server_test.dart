@@ -80,7 +80,7 @@ Future<McpServerManager> _managerWith(_Harness harness) async {
 void main() {
   group('skills mcp server registration', () {
     test(
-      'addSkillsServer advertises the three tools with the local url',
+      'addSkillsServer advertises the four tools with the local url',
       () async {
         final manager = await _managerWith(_Harness());
 
@@ -92,9 +92,44 @@ void main() {
             .getTools(skillsMcpServerLabel)
             .map((t) => t.name)
             .toSet();
-        expect(toolNames, {'skills.list', 'skills.add', 'skills.delete'});
+        expect(toolNames, {
+          'skills.list',
+          'skills.read',
+          'skills.add',
+          'skills.delete',
+        });
         expect(manager.hasWebServer(), isFalse);
         expect(manager.hasTerminalServer(), isFalse);
+      },
+    );
+
+    test('skills.read schema requires exactly the name', () async {
+      final manager = await _managerWith(_Harness());
+
+      final read = manager
+          .getTools(skillsMcpServerLabel)
+          .firstWhere((t) => t.name == 'skills.read');
+      expect(read.inputSchema['required'], ['name']);
+      expect((read.inputSchema['properties'] as Map).keys, ['name']);
+    });
+
+    test(
+      'the read-path descriptions reference skills.read, not injection',
+      () async {
+        final manager = await _managerWith(_Harness());
+        final tools = manager.getTools(skillsMcpServerLabel);
+
+        final read = tools.firstWhere((t) => t.name == 'skills.read');
+        expect(
+          read.description,
+          "Return the full instructions of one skill by name; use it before "
+          "following a skill's details.",
+        );
+        // The old 'body is already injected' claim is false under progressive
+        // disclosure: the list points at skills.read instead.
+        final list = tools.firstWhere((t) => t.name == 'skills.list');
+        expect(list.description, contains('skills.read'));
+        expect(list.description, isNot(contains('already injected')));
       },
     );
 
@@ -117,7 +152,7 @@ void main() {
       await manager.addSkillsServer(_Harness().build());
       await manager.addSkillsServer(_Harness().build());
 
-      expect(manager.getTools(skillsMcpServerLabel), hasLength(3));
+      expect(manager.getTools(skillsMcpServerLabel), hasLength(4));
       expect(manager.getSkillsServices(), isNotNull);
       expect(manager.serverCount, 1);
     });
@@ -165,6 +200,80 @@ void main() {
         {},
       );
       expect(output, 'No skills defined.');
+    });
+  });
+
+  group('skills.read dispatch', () {
+    test('renders header, description and the full body', () async {
+      final harness = _Harness()
+        ..seed('alpha', description: 'First', body: 'Alpha body.');
+      final manager = await _managerWith(harness);
+
+      final output = await manager.callTool(
+        skillsMcpServerLabel,
+        'skills.read',
+        {'name': 'alpha'},
+      );
+
+      expect(harness.host.files, isNotEmpty);
+      expect(output, '# alpha\nFirst\n\nAlpha body.');
+    });
+
+    test('a missing name raises the dispatcher McpException', () async {
+      final harness = _Harness()..seed('alpha');
+      final manager = await _managerWith(harness);
+
+      expect(
+        () => manager.callTool(skillsMcpServerLabel, 'skills.read', {
+          'name': 'nope',
+        }),
+        throwsA(
+          isA<McpException>().having(
+            (e) => e.message,
+            'message',
+            'skills.read: no skill named nope',
+          ),
+        ),
+      );
+    });
+
+    test('requires a string name argument', () async {
+      final harness = _Harness()..seed('alpha');
+      final manager = await _managerWith(harness);
+
+      expect(
+        () => manager.callTool(skillsMcpServerLabel, 'skills.read', {}),
+        throwsA(isA<McpException>()),
+      );
+      expect(
+        () =>
+            manager.callTool(skillsMcpServerLabel, 'skills.read', {'name': 7}),
+        throwsA(isA<McpException>()),
+      );
+    });
+
+    test('a huge body trims at the read cap with the marker', () async {
+      final harness = _Harness()
+        ..seed('big', description: 'Big', body: 'z' * 13000);
+      final manager = await _managerWith(harness);
+
+      final output = await manager.callTool(
+        skillsMcpServerLabel,
+        'skills.read',
+        {'name': 'big'},
+      );
+
+      expect(output, endsWith('\n$skillsReadTruncationMarker'));
+      expect(
+        output.length,
+        skillsReadMaxChars + 1 + skillsReadTruncationMarker.length,
+      );
+      expect(output, startsWith('# big\nBig\n\n'));
+      final composed = '# big\nBig\n\n${'z' * 13000}';
+      expect(
+        output.substring(0, skillsReadMaxChars),
+        composed.substring(0, skillsReadMaxChars),
+      );
     });
   });
 
@@ -335,6 +444,7 @@ void main() {
 
       for (final (name, args) in const <(String, Map<String, dynamic>)>[
         ('skills.list', {}),
+        ('skills.read', {'name': 'alpha'}),
         ('skills.add', {'name': 'alpha', 'content': 'b'}),
         ('skills.delete', {'name': 'alpha'}),
       ]) {
