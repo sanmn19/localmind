@@ -21,6 +21,9 @@ import 'package:localmind/features/models/data/models/model_info.dart';
 import 'package:localmind/features/on_device/providers/on_device_providers.dart';
 import 'package:localmind/features/personas/providers/personas_providers.dart';
 import 'package:localmind/features/personas/utils/persona_prompt_utils.dart';
+import 'package:localmind/features/skills/data/skills_provider.dart';
+import 'package:localmind/features/skills/data/skills_store.dart'
+    show buildSkillsSystemSection;
 import 'package:localmind/features/servers/data/models/server.dart';
 import 'package:localmind/features/servers/providers/server_providers.dart';
 import 'package:localmind/objectbox.g.dart';
@@ -1460,6 +1463,21 @@ class ChatNotifier extends Notifier<ChatState> {
           : '$systemContent\n$conciseInstruction';
     }
 
+    // Claude-style skills: append the maintained-skills section when the
+    // kill switch is on and the mirror has entries. Every request path
+    // (send + continue) flows through this single system-message
+    // composition point, so the section is never duplicated. Placed before
+    // the /no_think handling so that literal stays the terminal line.
+    final skills = ref.read(skillsProvider);
+    if (skills.enabled) {
+      final skillsSection = buildSkillsSystemSection(skills.entries);
+      if (skillsSection.isNotEmpty) {
+        systemContent = (systemContent == null || systemContent.trim().isEmpty)
+            ? skillsSection
+            : '$systemContent\n\n$skillsSection';
+      }
+    }
+
     if (shouldDisableThinking) {
       // Hybrid reasoning models (Qwen3 and similar) key off this literal
       // token in the prompt to skip their <think> block — send it whenever
@@ -2479,6 +2497,7 @@ class ChatNotifier extends Notifier<ChatState> {
               terminalToolsEnabled: settings.terminalToolsEnabled,
               deviceToolsEnabled: settings.deviceToolsEnabled,
               mailAccountsConnected: settings.mailConnectorAccounts.isNotEmpty,
+              skillsEnabled: settings.skillsEnabled,
               registry: registry,
               whitelist: TerminalWhitelist(settings.toolWhitelist),
             )) {

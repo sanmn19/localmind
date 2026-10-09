@@ -4359,6 +4359,90 @@ abstract class AppLocalizations {
   /// **'Enable example server'**
   String get enable_example_server;
 
+  /// Title of the skills management screen and settings entry
+  ///
+  /// In en, this message translates to:
+  /// **'Skills'**
+  String get skills_name;
+
+  /// Master switch that turns skill injection on or off
+  ///
+  /// In en, this message translates to:
+  /// **'Enable skills'**
+  String get skills_toggle;
+
+  /// Floating action button opening the skill editor for a new skill
+  ///
+  /// In en, this message translates to:
+  /// **'Add skill'**
+  String get skills_add;
+
+  /// Title of the skill editor when editing an existing skill
+  ///
+  /// In en, this message translates to:
+  /// **'Edit skill'**
+  String get skills_edit_title;
+
+  /// Title of the skill editor when creating a skill
+  ///
+  /// In en, this message translates to:
+  /// **'New skill'**
+  String get skills_new_title;
+
+  /// Confirmation title before deleting a skill
+  ///
+  /// In en, this message translates to:
+  /// **'Delete skill \"{name}\"?'**
+  String skills_delete_confirm(String name);
+
+  /// Confirm button deleting a skill
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get skills_delete;
+
+  /// Empty state on the skills screen
+  ///
+  /// In en, this message translates to:
+  /// **'No skills yet. Ask the AI in a chat, or add one here.'**
+  String get skills_empty;
+
+  /// Label of the skill name field in the editor
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get skill_name_label;
+
+  /// Label of the skill description field in the editor
+  ///
+  /// In en, this message translates to:
+  /// **'Short description'**
+  String get skill_description_label;
+
+  /// Label of the skill body field in the editor
+  ///
+  /// In en, this message translates to:
+  /// **'Skill content (markdown)'**
+  String get skill_body_label;
+
+  /// Save button of the skill editor
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get skills_save;
+
+  /// Inline error shown when a skill name is invalid
+  ///
+  /// In en, this message translates to:
+  /// **'Lowercase letters, digits and underscores only'**
+  String get name_invalid_hint;
+
+  /// Inline error shown when a skill name clashes with an existing skill
+  ///
+  /// In en, this message translates to:
+  /// **'A skill with this name already exists'**
+  String get duplicate_name_hint;
+
   /// No description provided for @built_in_label.
   ///
   /// In en, this message translates to:
