@@ -6464,6 +6464,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Forked · {text}'**
   String forkChipLabel(String text);
+
+  /// Tooltip for the fork panel's close button
+  ///
+  /// In en, this message translates to:
+  /// **'Close fork chat'**
+  String get forkPanelCloseTooltip;
+
+  /// Tooltip for the fork panel's delete-fork button
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this fork and its messages'**
+  String get forkPanelDeleteTooltip;
+
+  /// Placeholder shown in the fork panel before the first exchange
+  ///
+  /// In en, this message translates to:
+  /// **'Ask a follow-up about this selection.'**
+  String get forkPanelEmptyBody;
+
+  /// Hint text of the fork panel's question input
+  ///
+  /// In en, this message translates to:
+  /// **'Ask about this selection…'**
+  String get forkPanelInputHint;
 }
 
 class _AppLocalizationsDelegate

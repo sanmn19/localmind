@@ -3445,4 +3445,16 @@ class AppLocalizationsJa extends AppLocalizations {
   String forkChipLabel(String text) {
     return 'Forked · $text';
   }
+
+  @override
+  String get forkPanelCloseTooltip => 'Close fork chat';
+
+  @override
+  String get forkPanelDeleteTooltip => 'Delete this fork and its messages';
+
+  @override
+  String get forkPanelEmptyBody => 'Ask a follow-up about this selection.';
+
+  @override
+  String get forkPanelInputHint => 'Ask about this selection…';
 }

@@ -69,7 +69,11 @@
     "imap_connect",
     "imap_fields_required",
     "forkFromSelection",
-    "forkChipLabel"
+    "forkChipLabel",
+    "forkPanelCloseTooltip",
+    "forkPanelDeleteTooltip",
+    "forkPanelEmptyBody",
+    "forkPanelInputHint"
   ],
 
   "bn": [
@@ -146,7 +150,11 @@
     "imap_connect",
     "imap_fields_required",
     "forkFromSelection",
-    "forkChipLabel"
+    "forkChipLabel",
+    "forkPanelCloseTooltip",
+    "forkPanelDeleteTooltip",
+    "forkPanelEmptyBody",
+    "forkPanelInputHint"
   ],
 
   "de": [
@@ -223,7 +231,11 @@
     "imap_connect",
     "imap_fields_required",
     "forkFromSelection",
-    "forkChipLabel"
+    "forkChipLabel",
+    "forkPanelCloseTooltip",
+    "forkPanelDeleteTooltip",
+    "forkPanelEmptyBody",
+    "forkPanelInputHint"
   ],
 
   "es": [
@@ -300,7 +312,11 @@
     "imap_connect",
     "imap_fields_required",
     "forkFromSelection",
-    "forkChipLabel"
+    "forkChipLabel",
+    "forkPanelCloseTooltip",
+    "forkPanelDeleteTooltip",
+    "forkPanelEmptyBody",
+    "forkPanelInputHint"
   ],
 
   "fr": [
@@ -377,7 +393,11 @@
     "imap_connect",
     "imap_fields_required",
     "forkFromSelection",
-    "forkChipLabel"
+    "forkChipLabel",
+    "forkPanelCloseTooltip",
+    "forkPanelDeleteTooltip",
+    "forkPanelEmptyBody",
+    "forkPanelInputHint"
   ],
 
   "hi": [
@@ -454,7 +474,11 @@
     "imap_connect",
     "imap_fields_required",
     "forkFromSelection",
-    "forkChipLabel"
+    "forkChipLabel",
+    "forkPanelCloseTooltip",
+    "forkPanelDeleteTooltip",
+    "forkPanelEmptyBody",
+    "forkPanelInputHint"
   ],
 
   "it": [
@@ -531,7 +555,11 @@
     "imap_connect",
     "imap_fields_required",
     "forkFromSelection",
-    "forkChipLabel"
+    "forkChipLabel",
+    "forkPanelCloseTooltip",
+    "forkPanelDeleteTooltip",
+    "forkPanelEmptyBody",
+    "forkPanelInputHint"
   ],
 
   "ja": [
@@ -608,7 +636,11 @@
     "imap_connect",
     "imap_fields_required",
     "forkFromSelection",
-    "forkChipLabel"
+    "forkChipLabel",
+    "forkPanelCloseTooltip",
+    "forkPanelDeleteTooltip",
+    "forkPanelEmptyBody",
+    "forkPanelInputHint"
   ],
 
   "ko": [
@@ -671,7 +703,11 @@
     "imap_connect",
     "imap_fields_required",
     "forkFromSelection",
-    "forkChipLabel"
+    "forkChipLabel",
+    "forkPanelCloseTooltip",
+    "forkPanelDeleteTooltip",
+    "forkPanelEmptyBody",
+    "forkPanelInputHint"
   ],
 
   "pt": [
@@ -734,7 +770,11 @@
     "imap_connect",
     "imap_fields_required",
     "forkFromSelection",
-    "forkChipLabel"
+    "forkChipLabel",
+    "forkPanelCloseTooltip",
+    "forkPanelDeleteTooltip",
+    "forkPanelEmptyBody",
+    "forkPanelInputHint"
   ],
 
   "ru": [
@@ -811,7 +851,11 @@
     "imap_connect",
     "imap_fields_required",
     "forkFromSelection",
-    "forkChipLabel"
+    "forkChipLabel",
+    "forkPanelCloseTooltip",
+    "forkPanelDeleteTooltip",
+    "forkPanelEmptyBody",
+    "forkPanelInputHint"
   ],
 
   "tr": [
@@ -888,7 +932,11 @@
     "imap_connect",
     "imap_fields_required",
     "forkFromSelection",
-    "forkChipLabel"
+    "forkChipLabel",
+    "forkPanelCloseTooltip",
+    "forkPanelDeleteTooltip",
+    "forkPanelEmptyBody",
+    "forkPanelInputHint"
   ],
 
   "zh": [
@@ -965,7 +1013,11 @@
     "imap_connect",
     "imap_fields_required",
     "forkFromSelection",
-    "forkChipLabel"
+    "forkChipLabel",
+    "forkPanelCloseTooltip",
+    "forkPanelDeleteTooltip",
+    "forkPanelEmptyBody",
+    "forkPanelInputHint"
   ],
 
   "zh_TW": [
@@ -1042,6 +1094,10 @@
     "imap_connect",
     "imap_fields_required",
     "forkFromSelection",
-    "forkChipLabel"
+    "forkChipLabel",
+    "forkPanelCloseTooltip",
+    "forkPanelDeleteTooltip",
+    "forkPanelEmptyBody",
+    "forkPanelInputHint"
   ]
 }

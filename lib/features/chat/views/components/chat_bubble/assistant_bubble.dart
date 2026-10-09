@@ -456,7 +456,11 @@ class _ForkAwareAssistantContentState
 
   Widget _buildChip(ForkAnchor anchor) {
     final text = anchor.selectedText;
-    final clipped = text.length <= 32 ? text : text.substring(0, 32);
+    // Clip at the grapheme boundary — a raw code-unit substring can split a
+    // surrogate pair (e.g. an emoji) and render a broken glyph.
+    final clipped = text.characters.length <= 32
+        ? text
+        : text.characters.take(32).string;
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onTap: () => _openFork(anchor),

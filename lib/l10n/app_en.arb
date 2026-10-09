@@ -3660,5 +3660,13 @@
         "type": "String"
       }
     }
-  }
+  },
+  "forkPanelCloseTooltip": "Close fork chat",
+  "@forkPanelCloseTooltip": {"description": "Tooltip for the fork panel's close button"},
+  "forkPanelDeleteTooltip": "Delete this fork and its messages",
+  "@forkPanelDeleteTooltip": {"description": "Tooltip for the fork panel's delete-fork button"},
+  "forkPanelEmptyBody": "Ask a follow-up about this selection.",
+  "@forkPanelEmptyBody": {"description": "Placeholder shown in the fork panel before the first exchange"},
+  "forkPanelInputHint": "Ask about this selection…",
+  "@forkPanelInputHint": {"description": "Hint text of the fork panel's question input"}
 }

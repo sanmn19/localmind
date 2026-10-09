@@ -73,6 +73,11 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
   ChatService? _chatService;
   StreamSubscription<ChatResponse>? _streamSubscription;
   bool _cancelled = false;
+  /// Set at the top of every [submit] and completed on every terminal path
+  /// (typed failure, empty reply, error, cancel, success) — [cancelAndSettle]
+  /// awaits it so downstream mutations (ForkService.deleteFork) cannot race
+  /// the finalize into a deleted fork conversation.
+  Completer<void>? _exchangeSettle;
 
   @override
   ForkChatState build() {
@@ -112,6 +117,9 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
 
     state = state.copyWith(isStreaming: true, clearFailure: true);
     _cancelled = false;
+    // Every terminal path completes this; see cancelAndSettle.
+    final finished = Completer<void>();
+    _exchangeSettle = finished;
 
     final target = ref.read(activeChatTargetProvider);
     final server = target.server;
@@ -185,7 +193,6 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
     }
 
     _chatService = chatService;
-    final finished = Completer<void>();
     // Mirrors ChatNotifier's streamHadError guard: real services yield the
     // error/timeoutError as a data event and then return, which closes the
     // stream — onDone fires AFTER the failure already finalized the turn,
@@ -311,6 +318,7 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
     try {
       await finished.future;
     } finally {
+      _exchangeSettle = null;
       _disposeStream();
     }
   }
@@ -321,6 +329,19 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
     if (!state.isStreaming) return;
     _cancelled = true;
     _chatService?.cancelStream();
+  }
+
+  /// Cancels the active fork reply (if any) and awaits its terminal
+  /// finalize so callers that mutate persisted fork data (deleteFork) can
+  /// never race an in-flight exchange: after this resolves, every turn the
+  /// notifier was going to persist has been persisted.
+  Future<void> cancelAndSettle() async {
+    if (!state.isStreaming) return;
+    cancel();
+    final Completer<void>? settle = _exchangeSettle;
+    if (settle != null) {
+      await settle.future;
+    }
   }
 
   /// Reads the fork conversation's own persisted turns. Overridden in tests
@@ -434,6 +455,12 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
   void _failAndStop(String message) {
     if (!ref.mounted) return;
     state = state.copyWith(isStreaming: false, failure: message);
+    // Typed rejections never start the stream; the settle future would
+    // otherwise stay pending for anyone awaiting cancelAndSettle.
+    final Completer<void>? settle = _exchangeSettle;
+    if (settle != null && !settle.isCompleted) {
+      settle.complete();
+    }
   }
 
   static List<Message> _replaceLast(List<Message> rows, Message replacement) {

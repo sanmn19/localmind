@@ -6,6 +6,7 @@ import 'package:localmind/features/chat/views/components/background_generation_n
 import 'package:localmind/features/chat/views/components/chat_input_bar.dart';
 import 'package:localmind/features/chat/views/components/top_bar/smart_reply_chips.dart';
 import 'package:localmind/features/chat/providers/chat_providers.dart';
+import 'package:localmind/features/chat/providers/fork_panel_overlay.dart';
 import 'package:localmind/features/conversations/providers/conversation_providers.dart'
     as conv;
 import 'package:localmind/features/models/views/model_picker_sheet.dart';
@@ -112,6 +113,9 @@ class ChatBottomBar extends ConsumerWidget {
               hasNoticeAbove: generatingElsewhere.isNotEmpty,
               keyboardIncognito: keyboardIncognito,
               onSend: (message, {attachments}) {
+                // Fork panel auto-close (UX 6a): a main-composer send folds
+                // the anchored fork panel away before the send kicks off.
+                ref.read(forkPanelAutoCloseProvider)();
                 ref
                     .read(chatProvider.notifier)
                     .sendMessage(message, attachments: attachments);

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/models/fork_anchor.dart';
+import '../views/components/fork_chat_panel.dart';
 
 const ValueKey<String> kForkPanelContainerKey =
     ValueKey<String>('fork_panel_container');
@@ -66,16 +67,26 @@ class ForkPanelOverlayController extends Notifier<ForkPanelOverlayState> {
   }
 
   void close() {
-    _entry?.remove();
+    final OverlayEntry? entry = _entry;
     _entry = null;
+    // The entry may already be gone (overlay dispose racing a teardown, or
+    // a close() that follows an external removeCollection) — removal must
+    // tolerate that instead of asserting.
+    if (entry != null && entry.mounted) {
+      entry.remove();
+    }
     if (state.isOpen) {
       state = const ForkPanelOverlayState();
     }
   }
 
   void _teardown() {
+    final OverlayEntry? entry = _entry;
     _entry = null;
     _overlay = null;
+    if (entry != null && entry.mounted) {
+      entry.remove();
+    }
   }
 
   static ({double maxWidth, double maxHeight}) _panelConstraints(
@@ -139,10 +150,15 @@ class _ForkPanelOverlayHost extends StatelessWidget {
                   key: kForkPanelContainerKey,
                   width: math.min(420.0, maxWidth),
                   height: math.min(240.0, maxHeight),
+                  padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
                     color: theme.colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: theme.colorScheme.outline),
+                  ),
+                  child: ForkChatPanel(
+                    anchor: anchor,
+                    onClose: onClose,
                   ),
                 ),
               ),
@@ -152,4 +168,70 @@ class _ForkPanelOverlayHost extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Composer-facing auto-close hop (UX 6a): the main composer's focus bridge
+/// and send path invoke the returned closure instead of reaching into the
+/// overlay controller, so composer widgets stay provider-dumb. Closing is a
+/// no-op while the panel is hidden and never touches the fork transcript.
+final forkPanelAutoCloseProvider = Provider<void Function()>((ref) {
+  return () => ref.read(forkPanelOverlayProvider.notifier).close();
+});
+
+/// Listens on a [FocusNode] and folds the fork panel away whenever that
+/// node gains focus (UX 6a: main-composer focus closes the anchored fork
+/// chat). Mounted once around the chat screen's body; the close itself is
+/// a plain provider hop via [forkPanelAutoCloseProvider], so this widget
+/// knows nothing about the panel's internals. Order guarantee: the listener
+/// runs synchronously in the focus event, BEFORE any keyboard/viewport
+/// animation the focus gain schedules, so the panel is gone before hit-
+/// testing regions change under it.
+class ForkPanelAutoCloseBridge extends ConsumerStatefulWidget {
+  const ForkPanelAutoCloseBridge({
+    super.key,
+    required this.focusNode,
+    required this.child,
+  });
+
+  final FocusNode focusNode;
+  final Widget child;
+
+  @override
+  ConsumerState<ForkPanelAutoCloseBridge> createState() =>
+      _ForkPanelAutoCloseBridgeState();
+}
+
+class _ForkPanelAutoCloseBridgeState
+    extends ConsumerState<ForkPanelAutoCloseBridge> {
+  void _handleFocusChanged() {
+    if (widget.focusNode.hasFocus) {
+      ref.read(forkPanelAutoCloseProvider)();
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    widget.focusNode.addListener(_handleFocusChanged);
+  }
+
+  @override
+  void didUpdateWidget(ForkPanelAutoCloseBridge oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.focusNode, widget.focusNode)) {
+      oldWidget.focusNode.removeListener(_handleFocusChanged);
+      widget.focusNode.addListener(_handleFocusChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    // removeListener is documented to tolerate disposed focus nodes, so no
+    // mounted guard is needed here.
+    widget.focusNode.removeListener(_handleFocusChanged);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

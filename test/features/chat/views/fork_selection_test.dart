@@ -142,12 +142,23 @@ void main() {
 
       await tester.longPress(find.text('Ada Lovelace wrote it'));
       await tester.pumpAndSettle();
+
+      // The harness long-press only word-selects ('Lovelace'). Drive the
+      // toolbar's Select All route so the live selection covers the whole
+      // paragraph, then fork: the captured span must equal the anchor text.
+      tester
+          .state<SelectableRegionState>(find.byType(SelectableRegion))
+          .selectAll(SelectionChangedCause.toolbar);
+      await tester.pumpAndSettle();
+
       await tester.tap(find.text('Fork from this selection'));
       await tester.pumpAndSettle();
 
       expect(service.createCalls, 1);
       expect(service.lastAnchorMessageId, 'msg-done');
-      expect(service.lastSelection, isNotEmpty);
+      // The exact captured span must equal what the user selected — it is
+      // stored verbatim as the anchor's `selectedText` (highlight-band key).
+      expect(service.lastSelection, 'Ada Lovelace wrote it');
 
       final container = _containerOf(tester);
       final state = container.read(forkPanelOverlayProvider);
@@ -314,5 +325,84 @@ void main() {
     await tester.pump();
     expect(find.byKey(kForkPanelContainerKey), findsNothing);
     expect(container.read(forkPanelOverlayProvider).isOpen, isFalse);
+  });
+
+  testWidgets(
+    ' disposing the provider container while the panel is open removes its overlay entry',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final container = ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          forkServiceProvider.overrideWithValue(
+            _FakeForkService([await _seedAnchor()]),
+          ),
+        ],
+      );
+      // Disposing here (not via addTearDown) IS the behavior under test.
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Scaffold(
+              body: ListView(
+                children: [
+                  const SizedBox(height: 40),
+                  AssistantBubble(
+                    message: _assistantMessage(
+                      'Intro line up top.\nAda Lovelace wrote it\nOutro line down low.',
+                    ),
+                    isStreaming: false,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('fork_band_anchor-seed')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(kForkPanelContainerKey), findsOneWidget);
+
+      // Dispose while open: the controller teardown must remove the entry
+      // and tolerate being torn down rather than leave it dangling.
+      container.dispose();
+      await tester.pump();
+
+      expect(find.byKey(kForkPanelContainerKey), findsNothing);
+    },
+  );
+
+  testWidgets('chip fallback clips at the grapheme boundary, never inside a surrogate pair', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final selection = 'x' * 31 + '😀'; // 33 UTF-16 units; char 32 would split the pair
+    final service = _FakeForkService([
+      await _seedAnchor(id: 'anchor-surrogate', selectedText: selection),
+    ]);
+    // Content does not contain the selection verbatim → chip fallback path.
+    await tester.pumpWidget(
+      _buildHarness(
+        prefs: prefs,
+        message: _assistantMessage('A completely different body text.'),
+        service: service,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('fork_chip_anchor-surrogate')),
+      findsOneWidget,
+    );
+    // The clipped label still ends with the intact emoji — a split surrogate
+    // would not be findable as the composed character.
+    expect(find.textContaining('😀'), findsOneWidget);
   });
 }
