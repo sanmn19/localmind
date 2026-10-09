@@ -46,7 +46,14 @@
     "mail_connect_gmail",
     "mail_connect_outlook",
     "mail_connected_as",
-    "mail_disconnect"
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ],
 
   "bn": [
@@ -100,7 +107,14 @@
     "mail_connect_gmail",
     "mail_connect_outlook",
     "mail_connected_as",
-    "mail_disconnect"
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ],
 
   "de": [
@@ -154,7 +168,14 @@
     "mail_connect_gmail",
     "mail_connect_outlook",
     "mail_connected_as",
-    "mail_disconnect"
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ],
 
   "es": [
@@ -208,7 +229,14 @@
     "mail_connect_gmail",
     "mail_connect_outlook",
     "mail_connected_as",
-    "mail_disconnect"
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ],
 
   "fr": [
@@ -262,7 +290,14 @@
     "mail_connect_gmail",
     "mail_connect_outlook",
     "mail_connected_as",
-    "mail_disconnect"
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ],
 
   "hi": [
@@ -316,7 +351,14 @@
     "mail_connect_gmail",
     "mail_connect_outlook",
     "mail_connected_as",
-    "mail_disconnect"
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ],
 
   "it": [
@@ -370,7 +412,14 @@
     "mail_connect_gmail",
     "mail_connect_outlook",
     "mail_connected_as",
-    "mail_disconnect"
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ],
 
   "ja": [
@@ -424,7 +473,14 @@
     "mail_connect_gmail",
     "mail_connect_outlook",
     "mail_connected_as",
-    "mail_disconnect"
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ],
 
   "ko": [
@@ -464,7 +520,14 @@
     "mail_connect_gmail",
     "mail_connect_outlook",
     "mail_connected_as",
-    "mail_disconnect"
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ],
 
   "pt": [
@@ -504,7 +567,14 @@
     "mail_connect_gmail",
     "mail_connect_outlook",
     "mail_connected_as",
-    "mail_disconnect"
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ],
 
   "ru": [
@@ -558,7 +628,14 @@
     "mail_connect_gmail",
     "mail_connect_outlook",
     "mail_connected_as",
-    "mail_disconnect"
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ],
 
   "tr": [
@@ -612,7 +689,14 @@
     "mail_connect_gmail",
     "mail_connect_outlook",
     "mail_connected_as",
-    "mail_disconnect"
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ],
 
   "zh": [
@@ -666,7 +750,14 @@
     "mail_connect_gmail",
     "mail_connect_outlook",
     "mail_connected_as",
-    "mail_disconnect"
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ],
 
   "zh_TW": [
@@ -720,6 +811,13 @@
     "mail_connect_gmail",
     "mail_connect_outlook",
     "mail_connected_as",
-    "mail_disconnect"
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ]
 }

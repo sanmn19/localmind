@@ -5,6 +5,9 @@ import 'package:localmind/core/providers/app_providers.dart';
 import 'package:localmind/core/providers/storage_providers.dart';
 import 'package:localmind/core/theme/app_theme.dart';
 import 'package:localmind/features/chat/providers/tooling_providers.dart';
+import 'package:localmind/features/mail/data/imap_connection_test.dart';
+import 'package:localmind/features/mail/data/mail_common.dart';
+import 'package:localmind/features/mail/data/mail_token_store.dart';
 import 'package:localmind/features/mcp/views/mcp_tools_screen.dart';
 import 'package:localmind/features/settings/data/models/app_settings.dart';
 import 'package:localmind/l10n/app_localizations.dart';
@@ -24,6 +27,8 @@ void main() {
     bool deviceToolsEnabled = false,
     bool shareTargetEnabled = true,
     List<Map<String, dynamic>> mailConnectorAccounts = const [],
+    _RecordingProbe? probe,
+    InMemoryMailTokenStore? tokens,
   }) async {
     // The test font draws every glyph a full em wide; give rows room.
     tester.view.physicalSize = const Size(700, 2400);
@@ -51,6 +56,8 @@ void main() {
         ),
         settingsProvider.overrideWith(() => spy),
         availableToolsProvider.overrideWith((ref) => Future.value(const [])),
+        if (probe != null) imapConnectProbeProvider.overrideWithValue(probe),
+        if (tokens != null) mailTokenStoreProvider.overrideWithValue(tokens),
       ],
     );
     addTearDown(container.dispose);
@@ -134,6 +141,154 @@ void main() {
     expect(find.text('Disconnect'), findsOneWidget);
     expect(spy.setMailConnectorAccountsCalls, isEmpty);
   });
+
+  testWidgets('the imap connect form validates empty input without probing', (
+    tester,
+  ) async {
+    final probe = _RecordingProbe();
+    final (_, spy) = await pumpCardsHarness(tester, probe: probe);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('imap_email_input')), findsOneWidget);
+    expect(find.byKey(const Key('imap_password_input')), findsOneWidget);
+    expect(find.byKey(const Key('imap_host_input')), findsOneWidget);
+    expect(find.text('Connect IMAP account'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('imap_connect_button')));
+    await tester.pumpAndSettle();
+
+    expect(
+      probe.calls,
+      isEmpty,
+      reason: 'an empty form must not trigger any connection attempt',
+    );
+    expect(spy.setMailConnectorAccountsCalls, isEmpty);
+  });
+
+  testWidgets('a failing validation toasts the error and saves no row', (
+    tester,
+  ) async {
+    final probe = _RecordingProbe(
+      failure: 'sign-in failed — check or re-enter the app password',
+    );
+    final (_, spy) = await pumpCardsHarness(tester, probe: probe);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('imap_email_input')),
+      'bob@example.org',
+    );
+    await tester.enterText(
+      find.byKey(const Key('imap_password_input')),
+      'app-password-abc',
+    );
+    await tester.enterText(
+      find.byKey(const Key('imap_host_input')),
+      'imap.example.org',
+    );
+    await tester.tap(find.byKey(const Key('imap_connect_button')));
+    await tester.pumpAndSettle();
+
+    expect(probe.calls.single.email, 'bob@example.org');
+    expect(probe.calls.single.password, 'app-password-abc');
+    expect(probe.calls.single.host, 'imap.example.org');
+    expect(find.textContaining('re-enter the app password'), findsOneWidget);
+    expect(spy.setMailConnectorAccountsCalls, isEmpty);
+  });
+
+  testWidgets('a successful validation stores the row and the app password', (
+    tester,
+  ) async {
+    final probe = _RecordingProbe();
+    final tokens = InMemoryMailTokenStore();
+    final (container, spy) = await pumpCardsHarness(
+      tester,
+      probe: probe,
+      tokens: tokens,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const Key('imap_email_input')),
+      'bob@example.org',
+    );
+    await tester.enterText(
+      find.byKey(const Key('imap_password_input')),
+      'app-password-abc',
+    );
+    await tester.tap(find.byKey(const Key('imap_connect_button')));
+    await tester.pumpAndSettle();
+
+    expect(
+      probe.calls.single.host,
+      isNull,
+      reason: 'the host field is optional — auto-resolution applies',
+    );
+    final calls = spy.setMailConnectorAccountsCalls;
+    expect(calls, hasLength(1));
+    final savedRow = calls.single.single;
+    expect(savedRow['provider'], 'imap');
+    expect(savedRow['email'], 'bob@example.org');
+    expect(
+      await tokens.accessToken(MailProvider.imap, 'bob@example.org'),
+      'app-password-abc',
+      reason: 'the app password must land in the token store, not settings',
+    );
+    expect(
+      container.read(settingsProvider).mailConnectorAccounts.last['host'],
+      isNull,
+    );
+  });
+
+  testWidgets('a connected imap account shows its row and disconnect '
+      'removes it and clears the password', (tester) async {
+    final tokens = InMemoryMailTokenStore();
+    await tokens.updateToken(
+      MailProvider.imap,
+      'bob@example.org',
+      'app-password-abc',
+      DateTime.parse('9999-01-01T00:00:00Z'),
+    );
+    final (_, spy) = await pumpCardsHarness(
+      tester,
+      tokens: tokens,
+      mailConnectorAccounts: const [
+        {'provider': 'imap', 'email': 'bob@example.org'},
+      ],
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Connected: bob@example.org'), findsOneWidget);
+    expect(find.byKey(const Key('imap_connect_button')), findsNothing);
+
+    await tester.tap(find.text('Disconnect').first);
+    await tester.pumpAndSettle();
+
+    final calls = spy.setMailConnectorAccountsCalls;
+    expect(calls.last, isEmpty, reason: 'the imap row must be gone');
+    expect(
+      await tokens.accessToken(MailProvider.imap, 'bob@example.org'),
+      isNull,
+      reason: 'disconnect must clear the stored app password',
+    );
+  });
+}
+
+class _RecordingProbe implements ImapConnectProbe {
+  final String? failure;
+  final List<({String email, String password, String? host})> calls = [];
+
+  _RecordingProbe({this.failure});
+
+  @override
+  Future<String?> verify({
+    required String email,
+    required String password,
+    String? host,
+  }) async {
+    calls.add((email: email, password: password, host: host));
+    return failure;
+  }
 }
 
 class _SpySettingsNotifier extends SettingsNotifier {

@@ -101,6 +101,7 @@ dependencies:
   marionette_logger: ^0.6.0
   google_sign_in: ^7.2.0
   msal_auth: ^3.5.3
+  enough_mail: ^2.1.7
 
 dev_dependencies:
   flutter_test:

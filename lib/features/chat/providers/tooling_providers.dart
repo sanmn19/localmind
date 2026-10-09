@@ -8,6 +8,7 @@ import '../data/tools/tool_definition.dart';
 import '../data/mcp_server_manager.dart';
 import 'package:localmind/features/mail/data/google_auth_client.dart';
 import 'package:localmind/features/mail/data/gmail_repository.dart';
+import 'package:localmind/features/mail/data/imap_repository.dart';
 import 'package:localmind/features/mail/data/mail_connector_config.dart';
 import 'package:localmind/features/mail/data/mail_common.dart';
 import 'package:localmind/features/mail/data/mail_token_store.dart';
@@ -181,6 +182,7 @@ final webServerRegistrationProvider = Provider<void>((ref) {
       DeviceServices(
         contacts: const DeviceContactsRepository(),
         launcher: const MethodChannelDeviceAppLauncher(),
+        screenshot: const MethodChannelDeviceScreenshotService(),
       ),
     );
   } else if (manager.hasDeviceServer()) {
@@ -188,38 +190,49 @@ final webServerRegistrationProvider = Provider<void>((ref) {
   }
   // Mail connectors register from the connected accounts list (provider +
   // email rows) — the connected toggle lives with the account, and each
-  // repository owns the token gateway for its account.
+  // repository owns the token gateway for its account. Only rows that
+  // actually identify an account produce a repository; an imap row is the
+  // e-mail + app-password connector (password read from the token store).
   if (settings.mailConnectorAccounts.isNotEmpty) {
     final store = ref.watch(mailTokenStoreProvider);
-    final gmailAccount = settings.mailConnectorAccounts
-        .map(MailAccount.fromMap)
+    final accounts = settings.mailConnectorAccounts.map(MailAccount.fromMap);
+    final gmailAccount = accounts
         .firstWhere(
           (account) => account.provider == MailProvider.gmail,
           orElse: () =>
               const MailAccount(provider: MailProvider.gmail, email: ''),
-        );
-    final outlookAccount = settings.mailConnectorAccounts
-        .map(MailAccount.fromMap)
+        )
+        .email;
+    final outlookAccount = accounts
         .firstWhere(
           (account) => account.provider == MailProvider.outlook,
           orElse: () => MailAccount(provider: MailProvider.outlook, email: ''),
-        );
+        )
+        .email;
+    final imapRow = settings.mailConnectorAccounts.firstWhere(
+      (row) => row['provider']?.toString() == MailProviderName.imap,
+      orElse: () => const <String, dynamic>{'provider': 'imap', 'email': ''},
+    );
+    final imapHost = imapRow['host']?.toString();
     manager.addMailServer(
       MailServices(
-        gmail: GmailRepository(
-          accountEmail: gmailAccount.email,
-          dio: Dio(),
-          tokens: store,
-          gateway: GoogleMailAuthGateway(
-            serverClientId: MailConnectorConfig.googleServerClientId.isEmpty
-                ? null
-                : MailConnectorConfig.googleServerClientId,
-          ),
-        ),
-        outlook: outlookAccount.email.isEmpty
+        gmail: gmailAccount.isEmpty
+            ? null
+            : GmailRepository(
+                accountEmail: gmailAccount,
+                dio: Dio(),
+                tokens: store,
+                gateway: GoogleMailAuthGateway(
+                  serverClientId:
+                      MailConnectorConfig.googleServerClientId.isEmpty
+                      ? null
+                      : MailConnectorConfig.googleServerClientId,
+                ),
+              ),
+        outlook: outlookAccount.isEmpty
             ? null
             : OutlookRepository(
-                accountEmail: outlookAccount.email,
+                accountEmail: outlookAccount,
                 dio: Dio(),
                 tokens: store,
                 gateway: MsalOutlookAuthGateway(
@@ -227,6 +240,15 @@ final webServerRegistrationProvider = Provider<void>((ref) {
                   tokens: store,
                 ),
               ),
+        imap: imapRow['email']?.toString().isEmpty == false
+            ? ImapRepository(
+                accountEmail: imapRow['email']!.toString(),
+                tokens: store,
+                hostOverride: (imapHost == null || imapHost.isEmpty)
+                    ? null
+                    : imapHost,
+              )
+            : null,
       ),
     );
   } else if (manager.hasMailServer()) {

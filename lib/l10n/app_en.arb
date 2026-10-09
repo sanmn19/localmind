@@ -3576,5 +3576,19 @@
     }
   },
   "mail_disconnect": "Disconnect",
-  "@mail_disconnect": {"description": "Action to disconnect a mail account"}
+  "@mail_disconnect": {"description": "Action to disconnect a mail account"},
+  "mail_connect_imap": "Connect IMAP account",
+  "@mail_connect_imap": {"description": "Title of the IMAP connect form"},
+  "imap_hint": "Uses an e-mail address plus app password. Gmail needs an app password (Google Account → Security → 2-Step Verification → App passwords); Microsoft consumer accounts no longer allow this — use the Outlook connector.",
+  "@imap_hint": {"description": "Explains the IMAP/app-password connector setup"},
+  "imap_email_hint": "you@example.com",
+  "@imap_email_hint": {"description": "Placeholder for the IMAP e-mail field"},
+  "imap_password_hint": "App password",
+  "@imap_password_hint": {"description": "Placeholder for the IMAP app-password field"},
+  "imap_host_hint": "Host (auto unless the provider is unknown)",
+  "@imap_host_hint": {"description": "Placeholder for the optional IMAP host override field"},
+  "imap_connect": "Connect",
+  "@imap_connect": {"description": "Button validating and saving the IMAP account"},
+  "imap_fields_required": "Enter an e-mail and an app password to connect.",
+  "@imap_fields_required": {"description": "Validation message for an incomplete IMAP connect form"}
 }

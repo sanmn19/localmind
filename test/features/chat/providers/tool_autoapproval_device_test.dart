@@ -58,10 +58,17 @@ class _FakeContacts implements DeviceContactsService {
   Future<List<ContactSummary>> byPhone(String phone) async => const [];
 }
 
+class _FakeScreenshotService implements DeviceScreenshotService {
+  @override
+  Future<String> screenshot({String? package, bool scroll = false}) async =>
+      'Screenshot captured (1 screen)\n[path=/tmp/tool_x.png]\n[frames=1]';
+}
+
 const _deviceToolNames = [
   'apps.compose_email',
   'apps.open',
   'apps.list_installed',
+  'apps.screenshot',
   'contacts.search',
   'contacts.by_email',
   'contacts.by_phone',
@@ -132,7 +139,11 @@ void main() {
     }) async {
       final manager = McpServerManager();
       await manager.addDeviceServer(
-        DeviceServices(contacts: _FakeContacts(), launcher: _FakeLauncher()),
+        DeviceServices(
+          contacts: _FakeContacts(),
+          launcher: _FakeLauncher(),
+          screenshot: _FakeScreenshotService(),
+        ),
       );
       return ToolRegistry(
         providers: [
@@ -228,6 +239,7 @@ void main() {
           DeviceServices(
             contacts: _FakeContacts(),
             launcher: _OpenRecordingLauncher(),
+            screenshot: _FakeScreenshotService(),
           ),
         );
         final registry = ToolRegistry(

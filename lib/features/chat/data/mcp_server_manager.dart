@@ -339,6 +339,31 @@ class McpServerManager {
         inputSchema: {'type': 'object', 'properties': {}},
       ),
       McpTool(
+        name: 'apps.screenshot',
+        description:
+            'Screenshot an app or the whole screen. With scroll=true, '
+            'scrolls and stitches a long image until the content ends (max '
+            '6 screens). The model must treat the [path=…] marker in the '
+            'result as the attached image context.',
+        inputSchema: {
+          'type': 'object',
+          'properties': {
+            'package': {
+              'type': 'string',
+              'description':
+                  'Optional package name to launch first (and let settle) '
+                  'before capturing. Omit to screenshot the current screen.',
+            },
+            'scroll': {
+              'type': 'boolean',
+              'description':
+                  'Swipe up, re-capture and stitch a tall long-screenshot '
+                  'instead of a single frame. Defaults to false.',
+            },
+          },
+        },
+      ),
+      McpTool(
         name: 'contacts.search',
         description:
             'Search the device contacts by name or detail and return name, '
@@ -463,8 +488,8 @@ class McpServerManager {
             'provider': {
               'type': 'string',
               'description':
-                  "Which connected account to send with ('gmail' or "
-                  "'outlook'). Optional when only one account is connected.",
+                  "Which connected account to send with ('gmail', 'outlook' "
+                  "or 'imap'). Optional when only one account is connected.",
             },
           },
           'required': ['to', 'subject', 'body'],
@@ -600,11 +625,15 @@ class McpServerManager {
         ? null
         : MailProviderName.fromName(providerFilter);
     final apis = <(MailProvider, MailMessageApi)>[
-      if (wanted == null || wanted == MailProvider.gmail)
-        (MailProvider.gmail, services.gmail),
+      if (services.gmail != null &&
+          (wanted == null || wanted == MailProvider.gmail))
+        (MailProvider.gmail, services.gmail!),
       if (services.outlook != null &&
           (wanted == null || wanted == MailProvider.outlook))
         (MailProvider.outlook, services.outlook!),
+      if (services.imap != null &&
+          (wanted == null || wanted == MailProvider.imap))
+        (MailProvider.imap, services.imap!),
     ];
     return apis;
   }
@@ -845,6 +874,27 @@ class McpServerManager {
         case 'apps.list_installed':
           return formatDeviceAppList(await services.launcher.listInstalled());
 
+        case 'apps.screenshot':
+          final rawPackage = args['package'];
+          if (rawPackage != null && rawPackage is! String) {
+            throw McpException(
+              'apps.screenshot requires a string package argument',
+            );
+          }
+          final package = rawPackage as String?;
+          if (package != null &&
+              package.trim().isNotEmpty &&
+              !isValidOpenTarget(package.trim())) {
+            return 'ERROR: not a valid package: $package';
+          }
+          final scroll = args['scroll'] is bool
+              ? args['scroll']! as bool
+              : false;
+          return await services.screenshot.screenshot(
+            package: (package?.trim().isEmpty ?? true) ? null : package!.trim(),
+            scroll: scroll,
+          );
+
         case 'contacts.search':
           final query = args['query'];
           if (query is! String) {
@@ -874,7 +924,13 @@ class McpServerManager {
       // runtime prompt was refused or is permanently denied): guide the user
       // to system settings instead of the generic channel line.
       return 'ERROR: contacts permission needed — grant it in system settings';
-    } on DeviceChannelUnavailable {
+    } on DeviceChannelUnavailable catch (error) {
+      // The screenshot capture needs the accessibility service; a disabled
+      // one gets its own actionable guidance instead of the generic line.
+      if (error.reason == deviceToolsErrorScreenCaptureServiceOff) {
+        return "ERROR: enable LocalMind's Screen Capture in "
+            'Accessibility settings';
+      }
       return 'ERROR: device channel unavailable';
     }
   }
