@@ -1,11 +1,19 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:localmind/core/theme/colors.dart';
 import 'package:localmind/features/chat/providers/chat_providers.dart';
+import 'package:localmind/features/chat/providers/context_segments_provider.dart';
 import 'package:localmind/l10n/app_localizations.dart';
 
 /// Context usage at which the indicator starts showing.
 const _visibleFromRatio = 0.5;
+
+/// Segment colors of the context split: skills (violet), history (the
+/// component's accent) and tools/MCP (teal).
+const _skillsSegmentColor = Color(0xFF8B5CF6);
+const _toolsSegmentColor = Color(0xFF14B8A6);
 
 class TokenUsageIndicator extends ConsumerWidget {
   const TokenUsageIndicator({super.key, required this.totalTokenCount});
@@ -42,32 +50,47 @@ class TokenUsageIndicator extends ConsumerWidget {
     if (ratio < _visibleFromRatio) return const SizedBox.shrink();
     final ringColor = ratio >= 0.9 ? Colors.red : theme.colorScheme.primary;
 
+    final segments = ref.watch(chatContextSegmentsProvider);
+
     return GestureDetector(
       onTap: () => _showTokenUsageSheet(context, contextLength, ratio),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
         decoration: BoxDecoration(borderRadius: BorderRadius.circular(4)),
-        height: 20,
-        child: Row(
+        child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(
-              width: 12,
-              height: 12,
-              child: CircularProgressIndicator(
-                value: ratio,
-                strokeWidth: 2,
-                backgroundColor: (isDark ? Colors.white : Colors.black)
-                    .withValues(alpha: 0.12),
-                valueColor: AlwaysStoppedAnimation<Color>(ringColor),
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(
+                    value: ratio,
+                    strokeWidth: 2,
+                    backgroundColor: (isDark ? Colors.white : Colors.black)
+                        .withValues(alpha: 0.12),
+                    valueColor: AlwaysStoppedAnimation<Color>(ringColor),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'ctx ~${segments.totalTokens}/$contextLength',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 4),
-            Text(
-              '${(ratio * 100).round()}%',
-              style: TextStyle(
-                fontSize: 10,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+            const SizedBox(height: 2),
+            _ContextSegmentBar(
+              segments: segments,
+              historyColor: ringColor,
+              trackColor: (isDark ? Colors.white : Colors.black).withValues(
+                alpha: 0.12,
               ),
             ),
           ],
@@ -130,6 +153,67 @@ class TokenUsageIndicator extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The 3-segment horizontal split under the usage row: skills / history /
+/// tools, each segment's width proportional to its chunk of the approximate
+/// total. All-empty data renders 0-width segments over the quiet track.
+class _ContextSegmentBar extends StatelessWidget {
+  const _ContextSegmentBar({
+    required this.segments,
+    required this.historyColor,
+    required this.trackColor,
+  });
+
+  final ChatContextSegments segments;
+  final Color historyColor;
+  final Color trackColor;
+
+  static const _barWidth = 96.0;
+  static const _barHeight = 3.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = max(segments.totalTokens, 1);
+    return SizedBox(
+      key: const ValueKey('context_segments_bar'),
+      width: _barWidth,
+      height: _barHeight,
+      child: ColoredBox(
+        color: trackColor,
+        child: Row(
+          children: [
+            _segment(
+              'context_segment_skills',
+              segments.skillsTokens,
+              total,
+              _skillsSegmentColor,
+            ),
+            _segment(
+              'context_segment_history',
+              segments.historyTokens,
+              total,
+              historyColor,
+            ),
+            _segment(
+              'context_segment_tools',
+              segments.toolsTokens,
+              total,
+              _toolsSegmentColor,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _segment(String key, int tokens, int total, Color color) {
+    return Container(
+      key: ValueKey(key),
+      width: tokens / total * _barWidth,
+      color: color,
     );
   }
 }

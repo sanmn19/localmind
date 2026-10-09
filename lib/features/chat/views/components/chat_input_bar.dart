@@ -629,7 +629,7 @@ class ChatInputBarState extends ConsumerState<ChatInputBar>
   /// Reserve space on the right edge of the text field so long
   /// messages never slide underneath the overlaid token-usage
   /// indicator. Sized to comfortably fit a 6-digit token count.
-  static const double _tokenUsageReservedWidth = 70;
+  static const double _tokenUsageReservedWidth = 116;
 
   /// 16pt text at this height plus 8pt above and below makes one line of
   /// the field exactly as tall as the 36pt buttons beside it, so they sit
