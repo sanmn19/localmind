@@ -4,10 +4,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:localmind/core/models/enums.dart';
 import 'package:localmind/core/providers/storage_providers.dart';
 import 'package:localmind/features/chat/data/fork_service.dart';
+import 'package:localmind/features/chat/data/models/chat_parameters.dart';
 import 'package:localmind/features/chat/data/models/fork_anchor.dart';
 import 'package:localmind/features/chat/data/models/message.dart';
+import 'package:localmind/features/chat/providers/chat_providers.dart';
 import 'package:localmind/features/chat/providers/fork_panel_overlay.dart';
 import 'package:localmind/features/chat/views/components/chat_bubble/assistant_bubble.dart';
+import 'package:localmind/features/servers/data/models/server.dart';
 import 'package:localmind/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -42,10 +45,38 @@ class _FakeForkService extends ForkService {
   Future<List<ForkAnchor>> anchorsFor(String mainConversationId) async => seed;
 }
 
+/// Static main timeline for assistant_bubble's fork-creation gate: the gate
+/// resolves the anchor through ChatNotifier.mainTimelineUpTo. A seed list
+/// that omits the bubble's message simulates an inactive-variant bubble.
+class _StaticMainChatNotifier extends ChatNotifier {
+  _StaticMainChatNotifier({required this.seed});
+
+  final List<Message> seed;
+
+  @override
+  ChatState build() =>
+      ChatState(messages: List.of(seed), allMessages: List.of(seed));
+}
+
+Server _remoteServer() {
+  return Server(
+    id: 'remote',
+    name: 'Remote',
+    type: ServerType.ollama,
+    host: '127.0.0.1',
+    port: 11434,
+    createdAt: DateTime(2026, 10, 5),
+    lastConnectedAt: DateTime(2026, 10, 5),
+    status: ConnectionStatus.connected,
+  );
+}
+
 Message _assistantMessage(
   String content, {
   String id = 'msg-done',
   String conversationId = 'conv-1',
+  MessageStatus status = MessageStatus.complete,
+  String? errorMessage,
 }) {
   return Message(
     id: id,
@@ -53,7 +84,8 @@ Message _assistantMessage(
     role: MessageRole.assistant,
     content: content,
     createdAt: DateTime(2026),
-    status: MessageStatus.complete,
+    status: status,
+    errorMessage: errorMessage,
   );
 }
 
@@ -61,11 +93,24 @@ Widget _buildHarness({
   required SharedPreferences prefs,
   required Message message,
   required _FakeForkService service,
+  List<Message>? mainSeed,
 }) {
   return ProviderScope(
     overrides: [
       sharedPreferencesProvider.overrideWithValue(prefs),
       forkServiceProvider.overrideWithValue(service),
+      activeChatTargetProvider.overrideWithValue(
+        ActiveChatTarget(
+          server: _remoteServer(),
+          selectedModel: null,
+          effectiveModelId: 'model',
+          modelLabel: 'Model',
+        ),
+      ),
+      chatParamsProvider.overrideWithValue(ChatParameters.defaults()),
+      chatProvider.overrideWith(
+        () => _StaticMainChatNotifier(seed: mainSeed ?? [message]),
+      ),
     ],
     child: MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -122,6 +167,77 @@ void main() {
       expect(find.byType(SelectionArea), findsOneWidget);
       expect(find.text('Fork from this selection'), findsOneWidget);
       expect(find.text('Copy'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'fork action is gated to fully completed bubbles: an error bubble with '
+    'partial content offers Copy but no fork (fix 4)',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final service = _FakeForkService(const []);
+      await tester.pumpWidget(
+        _buildHarness(
+          prefs: prefs,
+          message: _assistantMessage(
+            'Partial stream kept in the transcript',
+            status: MessageStatus.error,
+            errorMessage: 'stream died',
+          ),
+          service: service,
+        ),
+      );
+      await tester.pump();
+
+      await tester.longPress(find.text('Partial stream kept in the transcript'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SelectionArea), findsOneWidget);
+      expect(find.text('Fork from this selection'), findsNothing);
+      expect(find.text('Copy'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'fork creation is rejected with a visible error when the message left '
+    'the active timeline — no anchor row persists (fix 3)',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final service = _FakeForkService(const []);
+      await tester.pumpWidget(
+        _buildHarness(
+          prefs: prefs,
+          message: _assistantMessage('Ada Lovelace wrote it'),
+          service: service,
+          // The bubble message is OFF the resolved timeline (inactive
+          // variant): _StaticMainChatNotifier never surfaces it.
+          mainSeed: const [],
+        ),
+      );
+      await tester.pump();
+
+      await tester.longPress(find.text('Ada Lovelace wrote it'));
+      await tester.pumpAndSettle();
+      tester
+          .state<SelectableRegionState>(find.byType(SelectableRegion))
+          .selectAll(SelectionChangedCause.toolbar);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Fork from this selection'));
+      await tester.pumpAndSettle();
+
+      expect(service.createCalls, 0, reason: 'no anchor row persists');
+      final container = _containerOf(tester);
+      expect(container.read(forkPanelOverlayProvider).isOpen, isFalse);
+      expect(find.byKey(kForkPanelContainerKey), findsNothing);
+      // The rejection is visible, not silent.
+      expect(
+        find.textContaining("This selection's anchor is unavailable"),
+        findsOneWidget,
+      );
     },
   );
 

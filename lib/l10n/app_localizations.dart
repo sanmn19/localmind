@@ -6488,6 +6488,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Ask about this selection…'**
   String get forkPanelInputHint;
+
+  /// Prefix for a failed fork turn rendered in the fork panel transcript
+  ///
+  /// In en, this message translates to:
+  /// **'An error occurred: {message}'**
+  String forkTurnErrorLabel(String message);
 }
 
 class _AppLocalizationsDelegate

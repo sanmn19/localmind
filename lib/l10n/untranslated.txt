@@ -73,7 +73,8 @@
     "forkPanelCloseTooltip",
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
-    "forkPanelInputHint"
+    "forkPanelInputHint",
+    "forkTurnErrorLabel"
   ],
 
   "bn": [
@@ -154,7 +155,8 @@
     "forkPanelCloseTooltip",
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
-    "forkPanelInputHint"
+    "forkPanelInputHint",
+    "forkTurnErrorLabel"
   ],
 
   "de": [
@@ -235,7 +237,8 @@
     "forkPanelCloseTooltip",
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
-    "forkPanelInputHint"
+    "forkPanelInputHint",
+    "forkTurnErrorLabel"
   ],
 
   "es": [
@@ -316,7 +319,8 @@
     "forkPanelCloseTooltip",
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
-    "forkPanelInputHint"
+    "forkPanelInputHint",
+    "forkTurnErrorLabel"
   ],
 
   "fr": [
@@ -397,7 +401,8 @@
     "forkPanelCloseTooltip",
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
-    "forkPanelInputHint"
+    "forkPanelInputHint",
+    "forkTurnErrorLabel"
   ],
 
   "hi": [
@@ -478,7 +483,8 @@
     "forkPanelCloseTooltip",
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
-    "forkPanelInputHint"
+    "forkPanelInputHint",
+    "forkTurnErrorLabel"
   ],
 
   "it": [
@@ -559,7 +565,8 @@
     "forkPanelCloseTooltip",
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
-    "forkPanelInputHint"
+    "forkPanelInputHint",
+    "forkTurnErrorLabel"
   ],
 
   "ja": [
@@ -640,7 +647,8 @@
     "forkPanelCloseTooltip",
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
-    "forkPanelInputHint"
+    "forkPanelInputHint",
+    "forkTurnErrorLabel"
   ],
 
   "ko": [
@@ -707,7 +715,8 @@
     "forkPanelCloseTooltip",
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
-    "forkPanelInputHint"
+    "forkPanelInputHint",
+    "forkTurnErrorLabel"
   ],
 
   "pt": [
@@ -774,7 +783,8 @@
     "forkPanelCloseTooltip",
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
-    "forkPanelInputHint"
+    "forkPanelInputHint",
+    "forkTurnErrorLabel"
   ],
 
   "ru": [
@@ -855,7 +865,8 @@
     "forkPanelCloseTooltip",
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
-    "forkPanelInputHint"
+    "forkPanelInputHint",
+    "forkTurnErrorLabel"
   ],
 
   "tr": [
@@ -936,7 +947,8 @@
     "forkPanelCloseTooltip",
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
-    "forkPanelInputHint"
+    "forkPanelInputHint",
+    "forkTurnErrorLabel"
   ],
 
   "zh": [
@@ -1017,7 +1029,8 @@
     "forkPanelCloseTooltip",
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
-    "forkPanelInputHint"
+    "forkPanelInputHint",
+    "forkTurnErrorLabel"
   ],
 
   "zh_TW": [
@@ -1098,6 +1111,7 @@
     "forkPanelCloseTooltip",
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
-    "forkPanelInputHint"
+    "forkPanelInputHint",
+    "forkTurnErrorLabel"
   ]
 }

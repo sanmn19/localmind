@@ -3528,4 +3528,9 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get forkPanelInputHint => 'Ask about this selection…';
+
+  @override
+  String forkTurnErrorLabel(String message) {
+    return 'An error occurred: $message';
+  }
 }

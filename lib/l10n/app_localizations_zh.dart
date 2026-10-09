@@ -3428,6 +3428,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get forkPanelInputHint => 'Ask about this selection…';
+
+  @override
+  String forkTurnErrorLabel(String message) {
+    return 'An error occurred: $message';
+  }
 }
 
 /// The translations for Chinese, as used in Taiwan (`zh_TW`).

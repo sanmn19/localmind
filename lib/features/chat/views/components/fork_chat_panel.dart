@@ -55,6 +55,29 @@ class _ForkChatPanelState extends ConsumerState<ForkChatPanel> {
         setState(() {});
       }
     });
+    // Open-time hook (final-review): seed the persisted fork transcript
+    // after a restart and validate the anchor — a fork whose anchor left
+    // the active timeline (deleted row, inactive variant) shows the typed
+    // rejection banner as soon as the panel opens, instead of failing only
+    // on the first submit.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(
+        () async {
+          try {
+            await ref
+                .read(
+                  forkChatNotifierProvider(widget.anchor.forkConversationId)
+                      .notifier,
+                )
+                .prepareForPanelOpen(widget.anchor.anchorMessageId);
+          } catch (_) {
+            // The open hook is best-effort (restart seeding + anchor
+            // validation): a torn-down chat container or unavailable
+            // storage must never break opening the panel itself.
+          }
+        }(),
+      );
+    });
   }
 
   @override
@@ -347,7 +370,9 @@ class _ForkTurnRow extends StatelessWidget {
             const TypingIndicator()
           else if (isError)
             Text(
-              'An error occurred: ${message.errorMessage ?? message.content}',
+              AppLocalizations.of(context)!.forkTurnErrorLabel(
+                message.errorMessage ?? message.content,
+              ),
               style: TextStyle(fontSize: 13, color: theme.colorScheme.error),
             )
           else

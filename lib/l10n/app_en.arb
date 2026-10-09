@@ -3668,5 +3668,7 @@
   "forkPanelEmptyBody": "Ask a follow-up about this selection.",
   "@forkPanelEmptyBody": {"description": "Placeholder shown in the fork panel before the first exchange"},
   "forkPanelInputHint": "Ask about this selection…",
-  "@forkPanelInputHint": {"description": "Hint text of the fork panel's question input"}
-}
+  "@forkPanelInputHint": {"description": "Hint text of the fork panel's question input"},
+  "forkTurnErrorLabel": "An error occurred: {message}",
+  "@forkTurnErrorLabel": {"description": "Prefix for a failed fork turn rendered in the fork panel transcript", "placeholders": {"message": {"type": "String"}}}
+  }

@@ -492,6 +492,257 @@ void main() {
       throwsArgumentError,
     );
   });
+
+  test(
+    'a fresh slot seeds the persisted fork transcript without submit '
+    '(restart-reopen, fix 1)',
+    () async {
+      final chatService = _StreamingChatService(const []);
+      final saved = <Message>[];
+      final forkSeed = _seededForkTurns();
+      final container = await _forkTestContainer(
+        chatService: chatService,
+        onPersist: saved.add,
+        forkSeed: forkSeed,
+      );
+      addTearDown(container.dispose);
+
+      // Restart simulation: a brand-new container/slot. Reopening the fork
+      // panel only runs the open hook (seeding + anchor validation) — no
+      // submit.
+      final state = container.read(forkChatNotifierProvider('forkC1'));
+      expect(state.transcript, isEmpty, reason: 'seeding is async');
+      await container
+          .read(chatProvider.notifier)
+          .loadConversation(_mainConversation);
+      await container
+          .read(forkChatNotifierProvider('forkC1').notifier)
+          .prepareForPanelOpen('a-1');
+
+      final seeded = container.read(forkChatNotifierProvider('forkC1'));
+      expect(seeded.isStreaming, isFalse);
+      expect(seeded.failure, isNull);
+      expect(seeded.transcript, hasLength(2));
+      // Row identity is preserved: the persisted rows are shown as-is.
+      expect(identical(seeded.transcript[0], forkSeed[0]), isTrue);
+      expect(identical(seeded.transcript[1], forkSeed[1]), isTrue);
+      expect(seeded.transcript.last.content, 'First fork reply');
+
+      // Nothing submitted, nothing persisted again.
+      expect(chatService.requests, isEmpty);
+      expect(saved, isEmpty);
+    },
+  );
+
+  test('seeding does not duplicate rows on the next submit (fix 1b)', () async {
+    final chatService = _StreamingChatService(const ['Fork answer']);
+    final saved = <Message>[];
+    final forkSeed = _seededForkTurns();
+    final container = await _forkTestContainer(
+      chatService: chatService,
+      onPersist: saved.add,
+      forkSeed: forkSeed,
+    );
+    addTearDown(container.dispose);
+
+    await container
+        .read(chatProvider.notifier)
+        .loadConversation(_mainConversation);
+    // Panel-open seeding lands first; the follow-up then works on it.
+    await container
+        .read(forkChatNotifierProvider('forkC1').notifier)
+        .prepareForPanelOpen('a-1');
+    await container
+        .read(forkChatNotifierProvider('forkC1').notifier)
+        .submit(
+      'forkC1',
+      'why?',
+      selectedText: 'Ada Lovelace wrote it',
+      anchorMessageId: 'a-1',
+    );
+
+    final state = container.read(forkChatNotifierProvider('forkC1'));
+    expect(state.transcript, hasLength(4));
+    // The seeded turns keep their ids and identities — no re-load/re-put.
+    expect(identical(state.transcript[0], forkSeed[0]), isTrue);
+    expect(identical(state.transcript[1], forkSeed[1]), isTrue);
+    expect(state.transcript[2].content, 'why?');
+    expect(state.transcript[3].content, 'Fork answer');
+
+    // Follow-up semantics: the fork transcript is non-empty, so the new
+    // question passes plain (no re-quote) and rides AFTER the seeded turns.
+    final wire = chatService.requests.single;
+    expect(wire.last.content, 'why?');
+    final nonSystem = wire.where((m) => m.role != MessageRole.system);
+    expect(nonSystem.map((m) => m.id).toList(), [
+      'u-1',
+      'a-1',
+      'fk-u-1',
+      'fk-a-1',
+      wire.last.id,
+    ]);
+
+    expect(saved, hasLength(2), reason: 'only the new exchange persists');
+    expect(state.failure, isNull);
+  });
+
+  test(
+    'a window-pressure truncation keeps the fork anchor on the wire (fix 9)',
+    () async {
+      final chatService = _StreamingChatService(const ['answer']);
+      final saved = <Message>[];
+      final container = await _forkTestContainer(
+        chatService: chatService,
+        onPersist: saved.add,
+        mainTimeline: [
+          Message(
+            id: 'u-big',
+            conversationId: 'c-main',
+            role: MessageRole.user,
+            content: 'x' * 4000,
+            createdAt: DateTime.utc(2026, 10, 8, 10, 1),
+            status: MessageStatus.complete,
+            variantGroupId: 'g-1',
+            variantIndex: 0,
+            threadOrder: 0,
+            isActiveVariant: true,
+          ),
+          Message(
+            id: 'a-anchor',
+            conversationId: 'c-main',
+            role: MessageRole.assistant,
+            // The anchor row alone busts the tiny window: newest-first
+            // truncation returns an empty slice and would drop the row the
+            // whole fork is anchored on.
+            content: 'y' * 4000,
+            createdAt: DateTime.utc(2026, 10, 8, 10, 2),
+            status: MessageStatus.complete,
+            variantGroupId: 'g-2',
+            variantIndex: 0,
+            threadOrder: 1,
+            isActiveVariant: true,
+            parentMessageId: 'u-big',
+          ),
+        ],
+        params: ChatParameters.defaults().copyWith(contextLength: 100),
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(chatProvider.notifier)
+          .loadConversation(_mainConversation);
+      final notifier = container.read(
+        forkChatNotifierProvider('forkC1').notifier,
+      );
+      await notifier.submit(
+        'forkC1',
+        'summary please',
+        selectedText: 'y',
+        anchorMessageId: 'a-anchor',
+      );
+
+      final state = container.read(forkChatNotifierProvider('forkC1'));
+      expect(state.failure, isNull);
+      final wire = chatService.requests.single;
+      // The keep-anchor guard re-pinned the evicted anchor to the tail.
+      expect(wire.any((m) => m.id == 'a-anchor'), isTrue);
+      expect(wire.last.role, MessageRole.user);
+      expect(wire.last.content, contains('summary please'));
+    },
+  );
+
+  test(
+    'a seeded empty-content assistant error row stays visible but OFF the '
+    'fork wire (fix 2)',
+    () async {
+      final chatService = _StreamingChatService(const ['Fork answer']);
+      final saved = <Message>[];
+      final forkSeed = [
+        _forkTurn(
+          'fk-u-0',
+          MessageRole.user,
+          'who wrote it?',
+        ),
+        _forkTurn(
+          'fk-a-0',
+          MessageRole.assistant,
+          '',
+          status: MessageStatus.error,
+          errorMessage: 'boom',
+        ),
+      ];
+      final container = await _forkTestContainer(
+        chatService: chatService,
+        onPersist: saved.add,
+        forkSeed: forkSeed,
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(chatProvider.notifier)
+          .loadConversation(_mainConversation);
+      final notifier = container.read(
+        forkChatNotifierProvider('forkC1').notifier,
+      );
+      // Seeding parity: reopening through the panel hook first (there is no
+      // restart here, but the hook is the only seeding path now).
+      await notifier.prepareForPanelOpen('a-1');
+      expect(
+        container.read(forkChatNotifierProvider('forkC1')).transcript,
+        hasLength(2),
+      );
+      await notifier.submit(
+        'forkC1',
+        'why?',
+        selectedText: 'Ada Lovelace wrote it',
+        anchorMessageId: 'a-1',
+      );
+
+      final state = container.read(forkChatNotifierProvider('forkC1'));
+      // Still visible in the panel transcript.
+      expect(state.transcript, hasLength(4));
+      expect(
+        state.transcript.indexWhere((m) => m.id == 'fk-a-0'),
+        greaterThanOrEqualTo(0),
+      );
+      expect(state.transcript[1].status, MessageStatus.error);
+
+      // OFF the wire: the empty assistant error row never rides the request.
+      final wire = chatService.requests.single;
+      expect(wire.any((m) => m.id == 'fk-a-0'), isFalse);
+      expect(wire.last.content, 'why?');
+      final nonSystem = wire.where((m) => m.role != MessageRole.system);
+      expect(
+        nonSystem.map((m) => m.id).toList(),
+        ['u-1', 'a-1', 'fk-u-0', wire.last.id],
+      );
+    },
+  );
+}
+
+List<Message> _seededForkTurns() {
+  return [
+    _forkTurn('fk-u-1', MessageRole.user, 'Selected: "Ada Lovelace" who?'),
+    _forkTurn('fk-a-1', MessageRole.assistant, 'First fork reply'),
+  ];
+}
+
+Message _forkTurn(
+  String id,
+  MessageRole role,
+  String content, {
+  MessageStatus status = MessageStatus.complete,
+  String? errorMessage,
+}) {
+  return Message(
+    id: id,
+    conversationId: 'forkC1',
+    role: role,
+    content: content,
+    createdAt: DateTime.utc(2026, 10, 8, 9),
+    status: status,
+    errorMessage: errorMessage,
+  );
 }
 
 Future<void> _drain([int iterations = 60]) async {
@@ -551,6 +802,8 @@ Future<ProviderContainer> _forkTestContainer({
   required ChatService chatService,
   required void Function(Message) onPersist,
   List<Message>? mainTimeline,
+  List<Message>? forkSeed,
+  ChatParameters? params,
 }) async {
   SharedPreferences.setMockInitialValues({});
   return ProviderContainer(
@@ -566,7 +819,9 @@ Future<ProviderContainer> _forkTestContainer({
           modelLabel: 'Model',
         ),
       ),
-      chatParamsProvider.overrideWithValue(ChatParameters.defaults()),
+      chatParamsProvider.overrideWithValue(
+        params ?? ChatParameters.defaults(),
+      ),
       chatMcpConfigProvider.overrideWith(_DisabledMcpNotifier.new),
       chatBackgroundServiceProvider.overrideWithValue(
         _TestChatBackgroundService(),
@@ -585,25 +840,30 @@ Future<ProviderContainer> _forkTestContainer({
         (forkConversationId) => _SandboxForkChatNotifier(
           onPersist: onPersist,
           forkConversationId: forkConversationId,
+          seedTurns: forkSeed ?? const [],
         ),
       ),
     ],
   );
 }
 
-// Fork conversation rows come back from the persistence hook (empty unless a
-// test seeds them), mirroring how ChatNotifier tests fake loadConversation.
+// Fork conversation rows come back from the persistence hook — the host
+// unit-test toolchain cannot load libobjectbox.so, mirroring how
+// ChatNotifier tests fake loadConversation. [seedTurns] simulates rows a
+// restart-reopened fork loads from disk (final-review fix 1).
 class _SandboxForkChatNotifier extends ForkChatNotifier {
   _SandboxForkChatNotifier({
     required this.onPersist,
+    this.seedTurns = const [],
     super.forkConversationId = '',
   });
 
   final void Function(Message message) onPersist;
+  final List<Message> seedTurns;
 
   @override
   Future<List<Message>> loadForkMessages(String forkConversationId) =>
-      Future.value(const []);
+      Future.value(List.of(seedTurns));
 
   @override
   Future<void> persistMessage(Message message) => Future.sync(() {

@@ -1,11 +1,12 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:localmind/core/logger/app_logger.dart';
 import 'package:localmind/core/models/enums.dart';
 import 'package:localmind/core/providers/storage_providers.dart';
 import 'package:localmind/core/storage/entities.dart';
+import 'package:localmind/core/utils/uuid.dart';
 import 'package:localmind/features/chat/data/chat_service.dart'
     hide ToolCallData;
 import 'package:localmind/features/chat/data/fork_service.dart';
@@ -70,6 +71,13 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
   /// from outside this slot so UI wiring cannot cross two forks' streams.
   final String forkConversationId;
 
+  /// Shared rejection copy for an anchor no longer resolvable on the active
+  /// timeline (final-review: surface it at open time and at fork creation
+  /// instead of failing only on submit).
+  static const anchorUnavailableMessage =
+      "This selection's anchor is unavailable — it may be an inactive "
+      'variant. Re-create the fork from an active message.';
+
   ChatService? _chatService;
   StreamSubscription<ChatResponse>? _streamSubscription;
   bool _cancelled = false;
@@ -83,6 +91,58 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
   ForkChatState build() {
     ref.onDispose(_disposeStream);
     return const ForkChatState();
+  }
+
+  /// Panel-open hook (final-review fixes 1 + 3): a fresh notifier slot —
+  /// including the one built after an app restart — seeds its transcript
+  /// from the persisted fork rows (spec Q1: forks survive restarts) and
+  /// validates the anchor, so a band tap on a fork whose anchor left the
+  /// active timeline (deleted row, inactive variant) surfaces the typed
+  /// rejection as the panel's failure banner immediately instead of failing
+  /// only when the user submits. [submit]'s own empty-transcript load stays
+  /// as the second line of defense for exchanges racing this hook.
+  Future<void> prepareForPanelOpen(String anchorMessageId) async {
+    await _seedFromPersistedTurns();
+    checkAnchorAvailability(anchorMessageId);
+  }
+
+  /// Loads the persisted fork conversation rows into the transcript, once
+  /// per panel open. Guarded so seeding can never clobber an in-flight
+  /// exchange or rows a concurrent [submit] already composed (seeding must
+  /// never duplicate turns — identity is preserved).
+  ///
+  /// Best-effort: a storage failure logs and leaves the transcript empty
+  /// instead of breaking the panel.
+  Future<void> _seedFromPersistedTurns() async {
+    if (state.isStreaming || state.transcript.isNotEmpty) {
+      // A submit (or live exchange) already owns the transcript.
+      return;
+    }
+    final List<Message> loaded;
+    try {
+      loaded = await loadForkMessages(forkConversationId);
+    } catch (error) {
+      Log.error('Failed to load fork transcript for seeding: $error');
+      return;
+    }
+    if (!ref.mounted) return;
+    final current = state;
+    if (current.isStreaming || current.transcript.isNotEmpty) {
+      return;
+    }
+    state = current.copyWith(transcript: loaded);
+  }
+
+  /// Active-timeline validation of the fork anchor (shared by panel open
+  /// and [submit]): a null `mainTimelineUpTo` resolution — the anchor is
+  /// gone or an inactive variant — surfaces [anchorUnavailableMessage].
+  void checkAnchorAvailability(String anchorMessageId) {
+    if (state.isStreaming) return;
+    if (ref.read(chatProvider.notifier).mainTimelineUpTo(anchorMessageId) !=
+        null) {
+      return;
+    }
+    _failAndStop(anchorUnavailableMessage);
   }
 
   /// Submits [question] to the fork conversation whose slot this notifier
@@ -109,7 +169,7 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
       throw ArgumentError.value(
         forkConversationId,
         'forkConversationId',
-        'belongs to another fork slot; this notifier manages '
+          'belongs to another fork slot; this notifier manages '
             '${this.forkConversationId}',
       );
     }
@@ -138,11 +198,7 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
         .read(chatProvider.notifier)
         .mainTimelineUpTo(anchorMessageId);
     if (mainSlice == null) {
-      _failAndStop(
-        'The anchored message is no longer part of the active timeline '
-        '(it may be an inactive variant). Re-create the fork from an '
-        'active message.',
-      );
+      _failAndStop(ForkChatNotifier.anchorUnavailableMessage);
       return;
     }
     final sanitizedMain = _trimDanglingToolTail(mainSlice);
@@ -170,7 +226,7 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
       threadOrder: forkTurns.length,
     );
     var streamingAssistant = Message(
-      id: _generateUuid(),
+      id: generateUuidV4(),
       conversationId: forkConversationId,
       role: MessageRole.assistant,
       content: '',
@@ -481,13 +537,5 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
     if (subscription != null) {
       unawaited(subscription.cancel());
     }
-  }
-
-  static String _generateUuid() {
-    final secure = Random.secure();
-    final now = DateTime.now().microsecondsSinceEpoch.toRadixString(16);
-    final r1 = secure.nextInt(0xFFFFFFFF).toRadixString(16).padLeft(8, '0');
-    final r2 = secure.nextInt(0xFFFFFFFF).toRadixString(16).padLeft(8, '0');
-    return '$now-$r1-$r2';
   }
 }

@@ -9,6 +9,8 @@ import 'package:localmind/core/theme/colors.dart';
 import 'package:localmind/features/chat/data/fork_service.dart';
 import 'package:localmind/features/chat/data/models/fork_anchor.dart';
 import 'package:localmind/features/chat/data/models/message.dart';
+import 'package:localmind/features/chat/providers/chat_providers.dart';
+import 'package:localmind/features/chat/providers/fork_chat_notifier.dart';
 import 'package:localmind/features/chat/providers/fork_panel_overlay.dart';
 import 'package:localmind/features/chat/views/components/processing_indicator.dart';
 import 'package:localmind/features/chat/views/components/typing_indicator.dart';
@@ -21,6 +23,22 @@ import 'tool_bubble/tool_timeline.dart';
 import 'chat_error_display.dart';
 
 const Color kForkHighlightColor = Color(0xFFFEF3C7);
+
+/// Dark-aware fork band highlight: the pale-amber highlighter streak on
+/// light surfaces; on dark surfaces a translucent amber wash so the
+/// overlaid markdown keeps the default surface text colors (final-review
+/// fix 5, using the AppColors dark/light token pattern).
+Color forkHighlightColor(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+        ? AppColors.darkForkHighlight
+        : kForkHighlightColor;
+
+/// Dark-aware fallback chip: pale amber in light mode, the house warning
+/// amber in dark mode — label text stays near-black and legible on both.
+Color forkChipColor(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+        ? AppColors.darkForkChip
+        : AppColors.lightForkChip;
 
 class AssistantBubble extends StatelessWidget {
   const AssistantBubble({
@@ -348,16 +366,21 @@ class _ForkAwareAssistantContentState
     BuildContext context,
     SelectableRegionState selectableRegionState,
   ) {
+    // Final-review: forks anchor to fully completed assistant bubbles only
+    // — a bubble still in `error` state (even with partial content kept in
+    // the transcript) must not offer the fork action, because its next
+    // finalize can re-cast the anchored row.
     return AdaptiveTextSelectionToolbar.buttonItems(
       anchors: selectableRegionState.contextMenuAnchors,
       buttonItems: [
-        ContextMenuButtonItem(
-          label: AppLocalizations.of(context)!.forkFromSelection,
-          onPressed: () {
-            ContextMenuController.removeAny();
-            unawaited(_createAndOpenFork(_lastSelection?.plainText ?? ''));
-          },
-        ),
+        if (widget.message.status == MessageStatus.complete)
+          ContextMenuButtonItem(
+            label: AppLocalizations.of(context)!.forkFromSelection,
+            onPressed: () {
+              ContextMenuController.removeAny();
+              unawaited(_createAndOpenFork(_lastSelection?.plainText ?? ''));
+            },
+          ),
         ...selectableRegionState.contextMenuButtonItems,
       ],
     );
@@ -365,6 +388,21 @@ class _ForkAwareAssistantContentState
 
   Future<void> _createAndOpenFork(String selectedText) async {
     if (selectedText.trim().isEmpty) {
+      return;
+    }
+    // Final-review ruling: fork creation is rejected with a visible error
+    // when the target message cannot be resolved on the active timeline
+    // (inactive variant) — no anchor row persists for a fork that could
+    // only fail at its first submit.
+    final anchorSlice = ref
+        .read(chatProvider.notifier)
+        .mainTimelineUpTo(widget.message.id);
+    if (anchorSlice == null) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text(ForkChatNotifier.anchorUnavailableMessage),
+        ),
+      );
       return;
     }
     final anchor = await ref.read(forkServiceProvider).createFork(
@@ -442,7 +480,7 @@ class _ForkAwareAssistantContentState
       onTap: () => _openFork(anchor),
       child: Container(
         key: ValueKey<String>('fork_band_${anchor.id}'),
-        color: kForkHighlightColor,
+        color: forkHighlightColor(context),
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
         child: MarkdownBodyContent(
@@ -468,7 +506,7 @@ class _ForkAwareAssistantContentState
         key: ValueKey<String>('fork_chip_${anchor.id}'),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: kForkHighlightColor,
+          color: forkChipColor(context),
           borderRadius: BorderRadius.circular(999),
         ),
         child: Text(

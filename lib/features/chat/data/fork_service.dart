@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,6 +6,7 @@ import '../../../core/models/enums.dart';
 import '../../../core/providers/storage_providers.dart';
 import '../../../core/storage/entities.dart';
 import '../../../core/storage/objectbox_store.dart';
+import '../../../core/utils/uuid.dart';
 import '../../../objectbox.g.dart';
 import '../../conversations/data/models/conversation.dart';
 import 'models/fork_anchor.dart';
@@ -67,8 +67,8 @@ class ForkService {
       mainConversationId: mainConversationId,
       anchorMessageId: anchorMessageId,
       selectedText: trimmed,
-      forkConversationId: _generateUuid(),
-      anchorId: _generateUuid(),
+      forkConversationId: generateUuidV4(),
+      anchorId: generateUuidV4(),
       createdAt: DateTime.now(),
     );
     return db.store.runInTransactionAsync(
@@ -101,9 +101,17 @@ class ForkService {
   }
 
   /// The fork request context: [mainTimelineUpToAnchor] (already composed
-  /// with system + skills by the notifier) + [forkTurns] + one new user
-  /// turn. The marked-quote contract puts the selection verbatim into the
-  /// fork's FIRST user turn; follow-up questions pass through plain.
+  /// with system + skills, and already filtered through
+  /// [shouldIncludeMessageInChatContext] by the notifier) + [forkTurns] +
+  /// one new user turn. The marked-quote contract puts the selection
+  /// verbatim into the fork's FIRST user turn; follow-up questions pass
+  /// through plain.
+  ///
+  /// [forkTurns] is filtered through the SAME wire predicate the main path
+  /// applies before mark the fork wire: a persisted empty-content
+  /// assistant error row stays visible in the panel transcript but is
+  /// excluded from the request, so a restart-reopened fork never sends
+  /// wire-poisoning empty turns to strict OpenAI-compatible backends.
   List<Message> buildForkContextMessages({
     required List<Message> mainTimelineUpToAnchor,
     required List<Message> forkTurns,
@@ -113,11 +121,14 @@ class ForkService {
     final content = forkTurns.isEmpty
         ? 'Selected: "$selectedText"\n\n$question'
         : question;
+    final wireTurns = forkTurns
+        .where(shouldIncludeMessageInChatContext)
+        .toList(growable: false);
     return [
       ...mainTimelineUpToAnchor,
-      ...forkTurns,
+      ...wireTurns,
       Message(
-        id: _generateUuid(),
+        id: generateUuidV4(),
         conversationId: '',
         role: MessageRole.user,
         content: content,
@@ -220,14 +231,6 @@ class ForkService {
 
     anchorBox.remove(entity.internalId);
     return true;
-  }
-
-  String _generateUuid() {
-    final secure = Random.secure();
-    final now = DateTime.now().microsecondsSinceEpoch.toRadixString(16);
-    final r1 = secure.nextInt(0xFFFFFFFF).toRadixString(16).padLeft(8, '0');
-    final r2 = secure.nextInt(0xFFFFFFFF).toRadixString(16).padLeft(8, '0');
-    return '$now-$r1-$r2';
   }
 }
 

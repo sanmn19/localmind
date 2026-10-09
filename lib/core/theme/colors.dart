@@ -39,4 +39,13 @@ class AppColors {
   static const Color success = Color(0xFF22C55E);
   static const Color error = Color(0xFFEF4444);
   static const Color warning = Color(0xFFF59E0B);
+
+  // Selection-fork highlight (selection-fork-chats): a pale amber
+  // "highlighter" streak in light mode. In dark mode the band becomes a
+  // low-alpha amber wash so the overlaid markdown keeps the surface text
+  // colors, and the fallback chip swaps to the house warning amber.
+  static const Color lightForkHighlight = Color(0xFFFEF3C7);
+  static const Color darkForkHighlight = Color(0x29FEF3C7);
+  static const Color lightForkChip = Color(0xFFFEF3C7);
+  static const Color darkForkChip = warning;
 }

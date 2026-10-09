@@ -66,14 +66,18 @@ class _SeededMainChatNotifier extends ChatNotifier {
 class _SandboxForkChatNotifier extends ForkChatNotifier {
   _SandboxForkChatNotifier({
     required this.onPersist,
+    this.seedTurns = const [],
     super.forkConversationId = '',
   });
 
   final void Function(Message message) onPersist;
+  /// Persisted fork rows the fake disk-load returns — simulates what a
+  /// restart-reopened fork reads from ObjectBox (final-review fix 1).
+  final List<Message> seedTurns;
 
   @override
   Future<List<Message>> loadForkMessages(String forkConversationId) =>
-      Future.value(const []);
+      Future.value(List.of(seedTurns));
 
   @override
   Future<void> persistMessage(Message message) => Future.sync(() {
@@ -188,7 +192,10 @@ Widget _buildHarness({
   required ChatService chatService,
   void Function(Message)? onPersist,
   FocusNode? composerFocusNode,
+  List<Message> forkSeed = const [],
+  List<Message>? mainSeed,
 }) {
+  final mainTimeline = mainSeed ?? [ _mainUserRow(), _assistantMessage('Ada Lovelace wrote it')];
   Widget body;
   if (composerFocusNode == null) {
     body = MaterialApp(
@@ -250,14 +257,13 @@ Widget _buildHarness({
       chatParamsProvider.overrideWithValue(ChatParameters.defaults()),
       chatServiceFactoryProvider.overrideWithValue((_) => chatService),
       chatProvider.overrideWith(
-        () => _SeededMainChatNotifier(
-          seed: [_mainUserRow(), _assistantMessage('Ada Lovelace wrote it')],
-        ),
+        () => _SeededMainChatNotifier(seed: mainTimeline),
       ),
       forkChatNotifierProvider.overrideWith2(
         (forkConversationId) => _SandboxForkChatNotifier(
           forkConversationId: forkConversationId,
           onPersist: onPersist ?? (m) {},
+          seedTurns: forkSeed,
         ),
       ),
     ],
@@ -542,6 +548,103 @@ void main() {
         find.byKey(const ValueKey<String>('fork_band_anchor-seed')),
         findsNothing,
       );
+    },
+  );
+
+  testWidgets(
+    'restart-reopen shows the persisted fork transcript without submit '
+    '(fix 1)',
+    (tester) async {
+      final service = _FakeForkService([_seedAnchor()]);
+      // A fresh harness/container IS the restart: nothing submitted here.
+      final chatService = _StreamingChatService(const []);
+      final saved = <Message>[];
+
+      await tester.pumpWidget(
+        _buildHarness(
+          prefs: await _prefs(),
+          service: service,
+          chatService: chatService,
+          onPersist: saved.add,
+          forkSeed: [
+            Message(
+              id: 'rk-u-1',
+              conversationId: 'fork-seed',
+              role: MessageRole.user,
+              content: 'who wrote it?',
+              createdAt: DateTime(2026, 10, 8, 10),
+              status: MessageStatus.complete,
+            ),
+            Message(
+              id: 'rk-a-1',
+              conversationId: 'fork-seed',
+              role: MessageRole.assistant,
+              content: 'Persisted fork reply',
+              createdAt: DateTime(2026, 10, 8, 10, 1),
+              status: MessageStatus.complete,
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('fork_band_anchor-seed')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(kForkPanelContainerKey), findsOneWidget);
+      // The seeded transcript renders immediately — no submit required.
+      expect(find.text('Persisted fork reply'), findsOneWidget);
+      expect(find.textContaining('who wrote it?'), findsOneWidget);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(kForkPanelContainerKey)),
+      );
+      final state = container.read(forkChatNotifierProvider('fork-seed'));
+      expect(state.transcript, hasLength(2));
+      expect(state.transcript.first.id, 'rk-u-1');
+      expect(state.transcript.last.id, 'rk-a-1');
+      // Seeding never re-persisted the seeded rows.
+      expect(saved, isEmpty);
+    },
+  );
+
+  testWidgets(
+    'band tap on an anchor whose message left the active timeline shows the '
+    'failure banner at open time (fix 3)',
+    (tester) async {
+      final service = _FakeForkService([_seedAnchor()]);
+      final chatService = _StreamingChatService(const []);
+
+      await tester.pumpWidget(
+        _buildHarness(
+          prefs: await _prefs(),
+          service: service,
+          chatService: chatService,
+          // The fork's anchor row is missing from the resolved main
+          // timeline (e.g. an inactive variant): mainTimelineUpTo is null.
+          mainSeed: [_mainUserRow()],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('fork_band_anchor-seed')),
+      );
+      await tester.pumpAndSettle();
+
+      // Panel opens straight into the typed rejection — no submit happened.
+      expect(find.byKey(kForkPanelContainerKey), findsOneWidget);
+      expect(
+        find.textContaining("This selection's anchor is unavailable"),
+        findsOneWidget,
+      );
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(kForkPanelContainerKey)),
+      );
+      final state = container.read(forkChatNotifierProvider('fork-seed'));
+      expect(state.failure, ForkChatNotifier.anchorUnavailableMessage);
+      expect(state.transcript, isEmpty);
     },
   );
 }
