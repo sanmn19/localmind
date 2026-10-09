@@ -2283,6 +2283,52 @@ class AppLocalizationsKo extends AppLocalizations {
   String get enable_example_server => '예제 서버 활성화';
 
   @override
+  String get skills_name => 'Skills';
+
+  @override
+  String get skills_toggle => 'Enable skills';
+
+  @override
+  String get skills_add => 'Add skill';
+
+  @override
+  String get skills_edit_title => 'Edit skill';
+
+  @override
+  String get skills_new_title => 'New skill';
+
+  @override
+  String skills_delete_confirm(String name) {
+    return 'Delete skill \"$name\"?';
+  }
+
+  @override
+  String get skills_delete => 'Delete';
+
+  @override
+  String get skills_empty =>
+      'No skills yet. Ask the AI in a chat, or add one here.';
+
+  @override
+  String get skill_name_label => 'Name';
+
+  @override
+  String get skill_description_label => 'Short description';
+
+  @override
+  String get skill_body_label => 'Skill content (markdown)';
+
+  @override
+  String get skills_save => 'Save';
+
+  @override
+  String get name_invalid_hint =>
+      'Lowercase letters, digits and underscores only';
+
+  @override
+  String get duplicate_name_hint => 'A skill with this name already exists';
+
+  @override
   String get built_in_label => '내장';
 
   @override

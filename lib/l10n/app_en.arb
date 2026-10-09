@@ -2900,6 +2900,65 @@
   "example_mcp_server_desc": "Registers example.echo and example.word_count through the same MCP tool provider used by external servers.",
   "disable_example_server": "Disable example server",
   "enable_example_server": "Enable example server",
+  "skills_name": "Skills",
+  "@skills_name": {
+    "description": "Title of the skills management screen and settings entry"
+  },
+  "skills_toggle": "Enable skills",
+  "@skills_toggle": {
+    "description": "Master switch that turns skill injection on or off"
+  },
+  "skills_add": "Add skill",
+  "@skills_add": {
+    "description": "Floating action button opening the skill editor for a new skill"
+  },
+  "skills_edit_title": "Edit skill",
+  "@skills_edit_title": {
+    "description": "Title of the skill editor when editing an existing skill"
+  },
+  "skills_new_title": "New skill",
+  "@skills_new_title": {
+    "description": "Title of the skill editor when creating a skill"
+  },
+  "skills_delete_confirm": "Delete skill \"{name}\"?",
+  "@skills_delete_confirm": {
+    "description": "Confirmation title before deleting a skill",
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "skills_delete": "Delete",
+  "@skills_delete": {
+    "description": "Confirm button deleting a skill"
+  },
+  "skills_empty": "No skills yet. Ask the AI in a chat, or add one here.",
+  "@skills_empty": {
+    "description": "Empty state on the skills screen"
+  },
+  "skill_name_label": "Name",
+  "@skill_name_label": {
+    "description": "Label of the skill name field in the editor"
+  },
+  "skill_description_label": "Short description",
+  "@skill_description_label": {
+    "description": "Label of the skill description field in the editor"
+  },
+  "skill_body_label": "Skill content (markdown)",
+  "@skill_body_label": {
+    "description": "Label of the skill body field in the editor"
+  },
+  "skills_save": "Save",
+  "@skills_save": {
+    "description": "Save button of the skill editor"
+  },
+  "name_invalid_hint": "Lowercase letters, digits and underscores only",
+  "@name_invalid_hint": {
+    "description": "Inline error shown when a skill name is invalid"
+  },
+  "duplicate_name_hint": "A skill with this name already exists",
+  "@duplicate_name_hint": {
+    "description": "Inline error shown when a skill name clashes with an existing skill"
+  },
   "built_in_label": "Built-in",
   "highlights_label": "Highlights",
   "built_with_label": "Built with",

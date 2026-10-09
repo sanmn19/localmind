@@ -34,6 +34,9 @@ import 'features/servers/views/server_list_screen.dart';
 import 'features/tts/views/tts_model_manager_screen.dart';
 import 'features/saved_messages/views/saved_messages_screen.dart';
 import 'features/settings/views/settings_screen.dart';
+import 'features/skills/data/skills_store.dart';
+import 'features/skills/views/skill_editor_screen.dart';
+import 'features/skills/views/skills_screen.dart';
 import 'features/cloud_sync/views/cloud_sync_screen.dart';
 import 'features/lm_studio_catalog/views/lm_studio_model_browser_screen.dart';
 import 'features/sidebar/sidebar_drawer.dart';
@@ -176,6 +179,23 @@ final routerProvider = Provider<GoRouter>((ref) {
             pageBuilder: (context, state) => const NoTransitionPage(
               child: ShellBackScope(child: McpToolsScreen()),
             ),
+          ),
+          GoRoute(
+            path: AppRoutes.skills,
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: ShellBackScope(child: SkillsScreen()),
+            ),
+          ),
+          GoRoute(
+            path: AppRoutes.skillEditor,
+            pageBuilder: (context, state) {
+              final skill = state.extra as SkillEntry?;
+              return MaterialPage(
+                child: ShellBackScope(
+                  child: SkillEditorScreen(existing: skill),
+                ),
+              );
+            },
           ),
           GoRoute(
             path: AppRoutes.onDeviceModels,
