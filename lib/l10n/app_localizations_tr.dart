@@ -3528,4 +3528,12 @@ class AppLocalizationsTr extends AppLocalizations {
   @override
   String get imap_fields_required =>
       'Enter an e-mail and an app password to connect.';
+
+  @override
+  String get forkFromSelection => 'Fork from this selection';
+
+  @override
+  String forkChipLabel(String text) {
+    return 'Forked · $text';
+  }
 }

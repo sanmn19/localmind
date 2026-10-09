@@ -3408,6 +3408,14 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get imap_fields_required =>
       'Enter an e-mail and an app password to connect.';
+
+  @override
+  String get forkFromSelection => 'Fork from this selection';
+
+  @override
+  String forkChipLabel(String text) {
+    return 'Forked · $text';
+  }
 }
 
 /// The translations for Chinese, as used in Taiwan (`zh_TW`).

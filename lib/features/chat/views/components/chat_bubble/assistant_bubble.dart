@@ -1,9 +1,15 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show SelectedContent;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:localmind/l10n/app_localizations.dart';
 import 'package:localmind/core/models/enums.dart';
 import 'package:localmind/core/theme/colors.dart';
+import 'package:localmind/features/chat/data/fork_service.dart';
+import 'package:localmind/features/chat/data/models/fork_anchor.dart';
 import 'package:localmind/features/chat/data/models/message.dart';
+import 'package:localmind/features/chat/providers/fork_panel_overlay.dart';
 import 'package:localmind/features/chat/views/components/processing_indicator.dart';
 import 'package:localmind/features/chat/views/components/typing_indicator.dart';
 import 'package:localmind/features/chat/views/components/reasoning_widget.dart';
@@ -13,6 +19,8 @@ import 'package:localmind/features/chat/views/components/message_variant_navigat
 import 'markdown/themed_gpt_markdown.dart';
 import 'tool_bubble/tool_timeline.dart';
 import 'chat_error_display.dart';
+
+const Color kForkHighlightColor = Color(0xFFFEF3C7);
 
 class AssistantBubble extends StatelessWidget {
   const AssistantBubble({
@@ -91,7 +99,7 @@ class AssistantBubble extends StatelessWidget {
               ),
             )
           else if (message.content.trim().isNotEmpty)
-            MarkdownContent(content: message.content, isDark: isDark),
+            _ForkAwareAssistantContent(message: message, isDark: isDark),
           if (message.status == MessageStatus.error &&
               message.errorMessage != null &&
               message.errorMessage!.isNotEmpty)
@@ -302,5 +310,243 @@ class _StreamingIndicatorState extends State<_StreamingIndicator>
         );
       }),
     );
+  }
+}
+
+class _ForkAwareAssistantContent extends ConsumerStatefulWidget {
+  const _ForkAwareAssistantContent({
+    required this.message,
+    required this.isDark,
+  });
+
+  final Message message;
+  final bool isDark;
+
+  @override
+  ConsumerState<_ForkAwareAssistantContent> createState() =>
+      _ForkAwareAssistantContentState();
+}
+
+class _ForkAwareAssistantContentState
+    extends ConsumerState<_ForkAwareAssistantContent> {
+  final LayerLink _forkLayerLink = LayerLink();
+
+  /// Latest selection inside this bubble's SelectionArea, fed by the
+  /// SelectionArea contract needed at menu-press time.
+  SelectedContent? _lastSelection;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final overlay = Overlay.maybeOf(context);
+    if (overlay != null) {
+      ref.read(forkPanelOverlayProvider.notifier).attach(overlay);
+    }
+  }
+
+  Widget _buildForkMenu(
+    BuildContext context,
+    SelectableRegionState selectableRegionState,
+  ) {
+    return AdaptiveTextSelectionToolbar.buttonItems(
+      anchors: selectableRegionState.contextMenuAnchors,
+      buttonItems: [
+        ContextMenuButtonItem(
+          label: AppLocalizations.of(context)!.forkFromSelection,
+          onPressed: () {
+            ContextMenuController.removeAny();
+            unawaited(_createAndOpenFork(_lastSelection?.plainText ?? ''));
+          },
+        ),
+        ...selectableRegionState.contextMenuButtonItems,
+      ],
+    );
+  }
+
+  Future<void> _createAndOpenFork(String selectedText) async {
+    if (selectedText.trim().isEmpty) {
+      return;
+    }
+    final anchor = await ref.read(forkServiceProvider).createFork(
+      mainConversationId: widget.message.conversationId,
+      anchorMessageId: widget.message.id,
+      selectedText: selectedText,
+    );
+    if (!mounted) {
+      return;
+    }
+    ref.invalidate(
+      forkAnchorsForConversationProvider(widget.message.conversationId),
+    );
+    _openFork(anchor);
+  }
+
+  void _openFork(ForkAnchor anchor) {
+    ref.read(forkPanelOverlayProvider.notifier).open(anchor, _forkLayerLink);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final anchors = (ref.watch(
+              forkAnchorsForConversationProvider(widget.message.conversationId),
+            ).value ??
+            const <ForkAnchor>[])
+        .where((a) => a.anchorMessageId == widget.message.id)
+        .toList()
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+
+    final chips = <ForkAnchor>[];
+    final segments =
+        _ForkBandLayout.compute(widget.message.content, anchors, chips);
+
+    return CompositedTransformTarget(
+      link: _forkLayerLink,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (chips.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [for (final anchor in chips) _buildChip(anchor)],
+              ),
+            ),
+          SelectionArea(
+            contextMenuBuilder: _buildForkMenu,
+            onSelectionChanged: (content) => _lastSelection = content,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final segment in segments) _buildSegment(segment),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSegment(_ForkSegment segment) {
+    final anchor = segment.anchor;
+    if (anchor == null) {
+      return MarkdownBodyContent(
+        content: segment.text,
+        isDark: widget.isDark,
+        selectable: false,
+      );
+    }
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () => _openFork(anchor),
+      child: Container(
+        key: ValueKey<String>('fork_band_${anchor.id}'),
+        color: kForkHighlightColor,
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: MarkdownBodyContent(
+          content: segment.text,
+          isDark: widget.isDark,
+          selectable: false,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChip(ForkAnchor anchor) {
+    final text = anchor.selectedText;
+    final clipped = text.length <= 32 ? text : text.substring(0, 32);
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () => _openFork(anchor),
+      child: Container(
+        key: ValueKey<String>('fork_chip_${anchor.id}'),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: kForkHighlightColor,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          AppLocalizations.of(context)!.forkChipLabel(clipped),
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ForkSegment {
+  const _ForkSegment.plain(this.text) : anchor = null;
+  const _ForkSegment.band(this.text, this.anchor);
+
+  final String text;
+  final ForkAnchor? anchor;
+}
+
+class _ForkBandLayout {
+  static int _fenceCount(String input) => '```'.allMatches(input).length;
+
+  static List<_ForkSegment> compute(
+    String content,
+    List<ForkAnchor> anchors,
+    List<ForkAnchor> chipsOut,
+  ) {
+    final candidates = <(int, int, ForkAnchor)>[];
+    for (final anchor in anchors) {
+      final span = anchor.selectedText.trim();
+      final start = content.indexOf(span);
+      if (span.isEmpty || start < 0) {
+        chipsOut.add(anchor);
+        continue;
+      }
+      final lineStart =
+          start == 0 ? 0 : content.lastIndexOf('\n', start - 1) + 1;
+      final matchEnd = start + span.length;
+      final int lineEnd;
+      if (content.codeUnitAt(matchEnd - 1) == 0x0A) {
+        lineEnd = matchEnd;
+      } else {
+        final newline = content.indexOf('\n', matchEnd);
+        lineEnd = newline < 0 ? content.length : newline;
+      }
+      final beforeFences = _fenceCount(content.substring(0, lineStart));
+      final bandFences = _fenceCount(content.substring(lineStart, lineEnd));
+      final afterFences = _fenceCount(content.substring(lineEnd));
+      if (beforeFences != afterFences ||
+          beforeFences.isOdd ||
+          bandFences.isOdd) {
+        chipsOut.add(anchor);
+        continue;
+      }
+      candidates.add((lineStart, lineEnd, anchor));
+    }
+    candidates.sort((a, b) => a.$1.compareTo(b.$1));
+    final segments = <_ForkSegment>[];
+    var cursor = 0;
+    for (final (start, end, anchor) in candidates) {
+      if (start < cursor) {
+        chipsOut.add(anchor);
+        continue;
+      }
+      final before = content.substring(cursor, start);
+      if (before.trim().isNotEmpty) {
+        segments.add(_ForkSegment.plain(before));
+      }
+      segments.add(_ForkSegment.band(content.substring(start, end), anchor));
+      cursor = end;
+      if (cursor < content.length && content[cursor] == '\n') {
+        cursor++;
+      }
+    }
+    final after = content.substring(cursor);
+    if (after.trim().isNotEmpty) {
+      segments.add(_ForkSegment.plain(after));
+    }
+    return segments;
   }
 }

@@ -6452,6 +6452,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enter an e-mail and an app password to connect.'**
   String get imap_fields_required;
+
+  /// Context menu action to start a selection-anchored fork chat from selected assistant text
+  ///
+  /// In en, this message translates to:
+  /// **'Fork from this selection'**
+  String get forkFromSelection;
+
+  /// Fallback chip label for a fork anchor that cannot render as an inline highlight band
+  ///
+  /// In en, this message translates to:
+  /// **'Forked · {text}'**
+  String forkChipLabel(String text);
 }
 
 class _AppLocalizationsDelegate

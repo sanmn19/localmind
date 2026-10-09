@@ -67,7 +67,9 @@
     "imap_password_hint",
     "imap_host_hint",
     "imap_connect",
-    "imap_fields_required"
+    "imap_fields_required",
+    "forkFromSelection",
+    "forkChipLabel"
   ],
 
   "bn": [
@@ -142,7 +144,9 @@
     "imap_password_hint",
     "imap_host_hint",
     "imap_connect",
-    "imap_fields_required"
+    "imap_fields_required",
+    "forkFromSelection",
+    "forkChipLabel"
   ],
 
   "de": [
@@ -217,7 +221,9 @@
     "imap_password_hint",
     "imap_host_hint",
     "imap_connect",
-    "imap_fields_required"
+    "imap_fields_required",
+    "forkFromSelection",
+    "forkChipLabel"
   ],
 
   "es": [
@@ -292,7 +298,9 @@
     "imap_password_hint",
     "imap_host_hint",
     "imap_connect",
-    "imap_fields_required"
+    "imap_fields_required",
+    "forkFromSelection",
+    "forkChipLabel"
   ],
 
   "fr": [
@@ -367,7 +375,9 @@
     "imap_password_hint",
     "imap_host_hint",
     "imap_connect",
-    "imap_fields_required"
+    "imap_fields_required",
+    "forkFromSelection",
+    "forkChipLabel"
   ],
 
   "hi": [
@@ -442,7 +452,9 @@
     "imap_password_hint",
     "imap_host_hint",
     "imap_connect",
-    "imap_fields_required"
+    "imap_fields_required",
+    "forkFromSelection",
+    "forkChipLabel"
   ],
 
   "it": [
@@ -517,7 +529,9 @@
     "imap_password_hint",
     "imap_host_hint",
     "imap_connect",
-    "imap_fields_required"
+    "imap_fields_required",
+    "forkFromSelection",
+    "forkChipLabel"
   ],
 
   "ja": [
@@ -592,7 +606,9 @@
     "imap_password_hint",
     "imap_host_hint",
     "imap_connect",
-    "imap_fields_required"
+    "imap_fields_required",
+    "forkFromSelection",
+    "forkChipLabel"
   ],
 
   "ko": [
@@ -653,7 +669,9 @@
     "imap_password_hint",
     "imap_host_hint",
     "imap_connect",
-    "imap_fields_required"
+    "imap_fields_required",
+    "forkFromSelection",
+    "forkChipLabel"
   ],
 
   "pt": [
@@ -714,7 +732,9 @@
     "imap_password_hint",
     "imap_host_hint",
     "imap_connect",
-    "imap_fields_required"
+    "imap_fields_required",
+    "forkFromSelection",
+    "forkChipLabel"
   ],
 
   "ru": [
@@ -789,7 +809,9 @@
     "imap_password_hint",
     "imap_host_hint",
     "imap_connect",
-    "imap_fields_required"
+    "imap_fields_required",
+    "forkFromSelection",
+    "forkChipLabel"
   ],
 
   "tr": [
@@ -864,7 +886,9 @@
     "imap_password_hint",
     "imap_host_hint",
     "imap_connect",
-    "imap_fields_required"
+    "imap_fields_required",
+    "forkFromSelection",
+    "forkChipLabel"
   ],
 
   "zh": [
@@ -939,7 +963,9 @@
     "imap_password_hint",
     "imap_host_hint",
     "imap_connect",
-    "imap_fields_required"
+    "imap_fields_required",
+    "forkFromSelection",
+    "forkChipLabel"
   ],
 
   "zh_TW": [
@@ -1014,6 +1040,8 @@
     "imap_password_hint",
     "imap_host_hint",
     "imap_connect",
-    "imap_fields_required"
+    "imap_fields_required",
+    "forkFromSelection",
+    "forkChipLabel"
   ]
 }

@@ -3649,5 +3649,16 @@
   "imap_connect": "Connect",
   "@imap_connect": {"description": "Button validating and saving the IMAP account"},
   "imap_fields_required": "Enter an e-mail and an app password to connect.",
-  "@imap_fields_required": {"description": "Validation message for an incomplete IMAP connect form"}
+  "@imap_fields_required": {"description": "Validation message for an incomplete IMAP connect form"},
+  "forkFromSelection": "Fork from this selection",
+  "@forkFromSelection": {"description": "Context menu action to start a selection-anchored fork chat from selected assistant text"},
+  "forkChipLabel": "Forked · {text}",
+  "@forkChipLabel": {
+    "description": "Fallback chip label for a fork anchor that cannot render as an inline highlight band",
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  }
 }
