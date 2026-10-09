@@ -336,8 +336,71 @@ void main() {
     },
   );
 
-  test('empty reply surfaces the failure and persists the error turn',
-      () async {
+  test(
+    'error turn is not re-finalized as complete when the stream closes after the error',
+    () async {
+      final chatService = _ErrorAfterPartialContentChatService();
+      final saved = <Message>[];
+      final container = await _forkTestContainer(
+        chatService: chatService,
+        onPersist: saved.add,
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(chatProvider.notifier)
+          .loadConversation(_mainConversation);
+      final notifier = container.read(
+        forkChatNotifierProvider('forkC1').notifier,
+      );
+
+      await notifier.submit(
+        'forkC1',
+        'who wrote it?',
+        selectedText: 'Ada Lovelace wrote it',
+        anchorMessageId: 'a-1',
+      );
+
+      final state = container.read(forkChatNotifierProvider('forkC1'));
+      expect(state.isStreaming, isFalse);
+      // The failed turn stays failed: status/error surfaced and the
+      // failure field keeps the typed stream error.
+      expect(state.failure, 'The model failed mid-stream.');
+      expect(state.transcript, hasLength(2));
+      expect(state.transcript.last.status, MessageStatus.error);
+      expect(
+        state.transcript.last.errorMessage,
+        'The model failed mid-stream.',
+      );
+      // Partial content received before the failure is preserved instead
+      // of being re-cast as a `complete` reply by onDone.
+      expect(state.transcript.last.content, 'Hel');
+      expect(state.transcript.last.stopReason, isNot('complete'));
+
+      // Exactly two upserts (user + the one error row): onDone must not
+      // bounce the same row through a second "complete" finalize.
+      expect(saved, hasLength(2));
+      expect(
+        saved.where((m) => m.role == MessageRole.assistant),
+        hasLength(1),
+      );
+      expect(saved.last.status, MessageStatus.error);
+      expect(
+        saved
+            .where(
+              (m) =>
+                  m.role == MessageRole.assistant &&
+                  m.status == MessageStatus.complete,
+            )
+            .toList(),
+        isEmpty,
+      );
+    },
+  );
+
+  test(
+    'empty reply surfaces the failure and persists the error turn',
+    () async {
     final chatService = _StreamingChatService(const []);
     final saved = <Message>[];
     final container = await _forkTestContainer(
@@ -633,6 +696,35 @@ class _StreamingChatService implements ChatService {
       yield ChatResponse(type: ChatResponseType.message, content: chunk);
     }
     yield const ChatResponse(type: ChatResponseType.done);
+  }
+
+  @override
+  void cancelStream() {}
+}
+
+/// Mirrors the real services' mid-stream failure shape: partial message
+/// content, then the error as a `data` event, then the stream simply
+/// closes (yield + return) — no explicit `done` event. Without the
+/// error-finalize guard, onDone re-finalizes the row as `complete`.
+class _ErrorAfterPartialContentChatService implements ChatService {
+  final List<List<Message>> requests = [];
+
+  @override
+  Stream<ChatResponse> sendMessage({
+    required Server server,
+    required String modelId,
+    required List<Message> messages,
+    required ChatParameters params,
+    List<McpIntegration>? integrations,
+    List<ToolDefinition>? tools,
+    bool continueGeneration = false,
+  }) async* {
+    requests.add(messages);
+    yield const ChatResponse(type: ChatResponseType.message, content: 'Hel');
+    yield const ChatResponse(
+      type: ChatResponseType.error,
+      content: 'The model failed mid-stream.',
+    );
   }
 
   @override

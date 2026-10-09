@@ -186,6 +186,11 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
 
     _chatService = chatService;
     final finished = Completer<void>();
+    // Mirrors ChatNotifier's streamHadError guard: real services yield the
+    // error/timeoutError as a data event and then return, which closes the
+    // stream — onDone fires AFTER the failure already finalized the turn,
+    // so the done branch must not re-finalize over the error state.
+    var errorFinalized = false;
 
     _streamSubscription = chatService
         .sendMessage(
@@ -222,15 +227,16 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
                 break;
               case ChatResponseType.error:
               case ChatResponseType.timeoutError:
-                final failure =
-                    response.content ?? 'The model failed to respond.';
+                errorFinalized = true;
+                streamingAssistant = streamingAssistant.copyWith(
+                  status: MessageStatus.error,
+                  errorMessage:
+                      response.content ?? 'The model failed to respond.',
+                  isProcessing: false,
+                );
                 await _finalize(
-                  streamingAssistant.copyWith(
-                    status: MessageStatus.error,
-                    errorMessage: failure,
-                    isProcessing: false,
-                  ),
-                  failure: failure,
+                  streamingAssistant,
+                  failure: streamingAssistant.errorMessage,
                 );
                 if (!finished.isCompleted) finished.complete();
                 break;
@@ -243,6 +249,14 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
             }
           },
           onDone: () async {
+            if (errorFinalized) {
+              // The error branch already finalized this turn and left the
+              // failure surfaced — do not overwrite the error state (e.g.
+              // re-upserting the row as `complete`) when the stream simply
+              // closes after the error response.
+              if (!finished.isCompleted) finished.complete();
+              return;
+            }
             final hasContent =
                 streamingAssistant.content.trim().isNotEmpty ||
                 (streamingAssistant.reasoningContent?.trim().isNotEmpty ??
