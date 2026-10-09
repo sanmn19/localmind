@@ -138,9 +138,12 @@ Future<GoRouter> _pumpRoutedHarness(
     ),
   );
   await tester.pump();
+  // Settle the push transition: pumping only a few frames leaves the editor
+  // page mid-slide from the right, so header actions (save/delete) sit
+  // ~0.22x the viewport width off the right edge and taps miss the root
+  // bounds. The hosts are in-memory, so nothing blocks pumpAndSettle here.
   router.push('/skills/edit');
-  await tester.pump();
-  await tester.pump(const Duration(milliseconds: 50));
+  await tester.pumpAndSettle();
   return router;
 }
 
@@ -242,7 +245,7 @@ void main() {
     testWidgets('an invalid name shows the inline hint and saves nothing', (
       tester,
     ) async {
-      final router = await _pumpRoutedHarness(tester, host, editorEntry: null);
+      await _pumpRoutedHarness(tester, host, editorEntry: null);
       final l10n = lookupAppLocalizations(const Locale('en'));
 
       await tester.enterText(find.byKey(const Key('skill_name_field')), '!!!');
@@ -253,11 +256,10 @@ void main() {
       expect(find.byKey(const Key('skill_name_error')), findsOneWidget);
       expect(find.text(l10n.name_invalid_hint), findsOneWidget);
       expect(host.writes, isEmpty);
-      // Still on the editor: no pop back home.
-      expect(
-        router.routerDelegate.currentConfiguration.uri.path,
-        '/skills/edit',
-      );
+      // Still on the editor: no pop back home. (Don't assert the router uri
+      // here — for imperative pushes `currentConfiguration.uri` reflects only
+      // non-imperative matches and stays at the base location.)
+      expect(find.byType(SkillEditorScreen), findsOneWidget);
     });
 
     testWidgets('the normalized name previews live while typing', (
