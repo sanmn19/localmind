@@ -1436,7 +1436,18 @@ class ChatNotifier extends Notifier<ChatState> {
     }
   }
 
-  List<Message> _buildMessagesForApi(ModelInfo? selectedModel) {
+  List<Message> _buildMessagesForApi(ModelInfo? selectedModel) =>
+      _assembleApiMessages(selectedModel, state.messages);
+
+  /// Shared request-assembly path for the open chat's sends and the
+  /// fork-context slice: composes the system message (persona + skills
+  /// section + /no_think), filters [mainTimeline], splices tool-chain rows
+  /// back in from `allMessages` and truncates to the context window. One
+  /// path so fork contexts can never drift from what the main thread sends.
+  List<Message> _assembleApiMessages(
+    ModelInfo? selectedModel,
+    List<Message> mainTimeline,
+  ) {
     final settings = ref.read(settingsProvider);
     final messages = <Message>[];
 
@@ -1501,7 +1512,7 @@ class ChatNotifier extends Notifier<ChatState> {
       );
     }
 
-    for (final message in state.messages) {
+    for (final message in mainTimeline) {
       if (!shouldIncludeMessageInChatContext(message)) {
         continue;
       }
@@ -1683,7 +1694,34 @@ class ChatNotifier extends Notifier<ChatState> {
       result.insert(0, message);
     }
 
-    return result;
+      return result;
+    }
+
+  /// Fork-context slice (selection-fork feature): the composed API history
+  /// for the OPEN conversation truncated at [anchorMessageId] inclusive —
+  /// system (+skills) + resolved main timeline up to the anchor. Returns
+  /// null when the anchor is not on the current resolved timeline.
+  List<Message>? mainTimelineUpTo(String anchorMessageId) {
+    final anchorIndex = state.messages.indexWhere(
+      (message) => message.id == anchorMessageId,
+    );
+    if (anchorIndex < 0) return null;
+    final selectedModel = ref.read(activeChatTargetProvider).selectedModel;
+    return _assembleApiMessages(
+      selectedModel,
+      state.messages.sublist(0, anchorIndex + 1),
+    );
+  }
+
+  /// Fork-context lookup: the row [id] inside [conversationId] when that
+  /// conversation is open. The notifier only caches the open chat's rows;
+  /// [state.allMessages] holds every row including inactive variants.
+  Message? messageById(String id, String conversationId) {
+    if (conversationId != _currentConversationId) return null;
+    for (final message in state.allMessages) {
+      if (message.id == id) return message;
+    }
+    return null;
   }
 
   /// Waits for any in-flight AI title generation on [conversationId] to complete.
