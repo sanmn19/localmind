@@ -28,6 +28,7 @@ import 'package:localmind/features/servers/data/models/server.dart';
 import 'package:localmind/features/servers/providers/server_providers.dart';
 import 'package:localmind/objectbox.g.dart';
 import '../data/chat_service.dart';
+import '../../mcp/data/device_mcp_server.dart' show parseScreenshotAttachPath;
 import '../data/mcp_server_manager.dart' show webMcpServerUrl;
 import '../data/models/chat_parameters.dart';
 import '../data/models/message.dart' hide ToolCallData;
@@ -2204,6 +2205,7 @@ class ChatNotifier extends Notifier<ChatState> {
   Future<void> _sendFollowupWithToolResults({
     required Message previousAssistant,
     required List<ToolEvent> toolEvents,
+    String? attachedScreenshotId,
     required Server server,
     required ModelInfo? selectedModel,
     required String effectiveModelId,
@@ -2333,7 +2335,11 @@ class ChatNotifier extends Notifier<ChatState> {
       variantIndex: previousAssistant.variantIndex,
       threadOrder: continuationThreadOrder,
       isActiveVariant: true,
-      parentMessageId: previousAssistant.parentMessageId,
+      // An attached screenshot row re-roots the chain: the image row sits
+      // between the demoted round and the follow-up tail so the resolver's
+      // parent walk keeps BOTH on the active timeline.
+      parentMessageId:
+          attachedScreenshotId ?? previousAssistant.parentMessageId,
     );
 
     final newAllWithAssistant = [...newAll, continuationMessage];
@@ -2489,6 +2495,8 @@ class ChatNotifier extends Notifier<ChatState> {
               args: call.arguments,
               webToolsEnabled: settings.webToolsEnabled,
               terminalToolsEnabled: settings.terminalToolsEnabled,
+              deviceToolsEnabled: settings.deviceToolsEnabled,
+              mailAccountsConnected: settings.mailConnectorAccounts.isNotEmpty,
               skillsEnabled: settings.skillsEnabled,
               registry: registry,
               whitelist: TerminalWhitelist(settings.toolWhitelist),
@@ -2564,6 +2572,34 @@ class ChatNotifier extends Notifier<ChatState> {
         finalMessage = finalMessage.copyWith(toolEvents: toolEvents);
       }
 
+      // A completed `apps.screenshot` embeds the saved capture as a
+      // `[path=<abs>]` marker. Attach that image as a user-role row (saved
+      // + injected, no generation — the same mechanics as
+      // `insertMessageWithoutGenerating`) so the follow-up request below
+      // carries the image to the vision-capable model. If the result
+      // carries no readable marker, nothing extra is inserted: the tool
+      // text alone tells the model what happened.
+      Message? attachedScreenshotRow;
+      if (ref.mounted) {
+        final completedScreenshot = toolEvents
+            .where(
+              (e) =>
+                  e.status == ToolEventStatus.completed &&
+                  e.toolName == 'apps.screenshot',
+            )
+            .lastOrNull;
+        if (completedScreenshot != null) {
+          try {
+            attachedScreenshotRow = await _insertScreenshotAttachmentRow(
+              completedScreenshot,
+              previousAssistant: finalMessage,
+            );
+          } catch (attachError) {
+            Log.error('Screenshot attachment insert failed: $attachError');
+          }
+        }
+      }
+
       // After successful tool execution the chat must continue: the model
       // has emitted a tool call, the client (or server) executed it, and now
       // we need to send a follow-up chat completion containing the tool-role
@@ -2578,6 +2614,7 @@ class ChatNotifier extends Notifier<ChatState> {
         await _sendFollowupWithToolResults(
           previousAssistant: finalMessage,
           toolEvents: toolEvents,
+          attachedScreenshotId: attachedScreenshotRow?.id,
           server: server,
           selectedModel: selectedModel,
           effectiveModelId: effectiveModelId,
@@ -2622,6 +2659,80 @@ class ChatNotifier extends Notifier<ChatState> {
       finalMessage: finalMessage,
       followUpStarted: false,
     );
+  }
+
+  /// Mirrors `insertMessageWithoutGenerating` for a completed screenshot
+  /// tool call: parses the `[path=<abs>]` marker out of [event]'s result,
+  /// saves the file into the attachments dir and injects a user-role row.
+  /// The row parents to [previousAssistant]'s PARENT (not its tail) so the
+  /// variant resolver keeps it on the active timeline, and the caller hands
+  /// its id to `_sendFollowupWithToolResults` to re-root the continuation.
+  /// Missing marker or vanished file short-circuit silently — the tool text
+  /// still reached the model.
+  Future<Message?> _insertScreenshotAttachmentRow(
+    ToolEvent event, {
+    required Message previousAssistant,
+  }) async {
+    final path = parseScreenshotAttachPath(event.result ?? '');
+    if (path == null || path.isEmpty) return null;
+    final file = File(path);
+    if (!await file.exists()) return null;
+
+    final package = (event.arguments?['package'] as String?)?.trim() ?? '';
+    final label = package.isEmpty ? 'screen' : package;
+    final content = '📸 [screenshot of $label]';
+
+    final appDir = await ref.read(storageDirectoryProvider.future);
+    final attachmentsDir = Directory('${appDir.path}/attachments');
+    if (!await attachmentsDir.exists()) {
+      await attachmentsDir.create(recursive: true);
+    }
+    final savedPath = await AttachmentHelpers.saveAttachment(
+      file,
+      attachmentsDir,
+    );
+    if (savedPath == null) return null;
+
+    final threadOrder = MessageVariants.nextThreadOrder(state.messages);
+    final message = Message(
+      id: generateUuid(),
+      conversationId: previousAssistant.conversationId,
+      role: MessageRole.user,
+      content: content,
+      createdAt: DateTime.now(),
+      status: MessageStatus.complete,
+      attachmentPaths: [savedPath],
+      variantGroupId: generateUuid(),
+      variantIndex: 0,
+      threadOrder: threadOrder,
+      isActiveVariant: true,
+      parentMessageId: previousAssistant.parentMessageId,
+    );
+
+    final updatedAll = [...state.allMessages, message];
+    state = state.copyWith(
+      allMessages: updatedAll,
+      messages: MessageVariants.resolveActiveTimeline(updatedAll),
+      clearError: true,
+    );
+    await _saveMessage(message);
+    if (!ref.mounted) return message;
+
+    if (!_isInMemoryChat && _currentConversationId != null) {
+      final timeline = state.messages;
+      await ref
+          .read(conv.conversationsProvider.notifier)
+          .syncConversationStats(
+            _currentConversationId!,
+            messageCount: timeline.length,
+            characterCount: timeline.fold<int>(
+              0,
+              (sum, message) => sum + message.content.length,
+            ),
+            preview: content,
+          );
+    }
+    return message;
   }
 
   Future<void> _runAssistantStream(

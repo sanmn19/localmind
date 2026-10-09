@@ -17,18 +17,26 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import android.content.pm.PackageManager
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : AudioServiceActivity() {
     private val CHANNEL = "localmind/chat_background"
     private val MEMORY_CHANNEL = "localmind/device_memory"
     private val ASSISTANT_CHANNEL = "localmind/android_assistant"
+    private val SHARE_CHANNEL = "localmind/share_receive"
+    private val DEVICE_TOOLS_CHANNEL = "localmind/device_tools"
 
     private var assistantChannel: MethodChannel? = null
     private var pendingAssistantInvocation = false
     private var pendingRoleRequest: MethodChannel.Result? = null
+    private var shareChannel: MethodChannel? = null
+    private var pendingSharePayload: Map<String, Any?>? = null
+    private val shareIoExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val shareMainHandler = Handler(Looper.getMainLooper())
 
     // Assistant screen-capture staging: the capture is requested on the
     // invocation itself so it reflects the screen the assistant was fired
@@ -41,6 +49,7 @@ class MainActivity : AudioServiceActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         captureAssistantInvocation(intent)
+        captureSharePayload(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -48,6 +57,8 @@ class MainActivity : AudioServiceActivity() {
         setIntent(intent)
         captureAssistantInvocation(intent)
         deliverAssistantInvocation()
+        captureSharePayload(intent)
+        deliverSharePayload()
     }
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
@@ -161,7 +172,40 @@ class MainActivity : AudioServiceActivity() {
                 }
             }
         }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DEVICE_TOOLS_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "composeEmail" -> composeDeviceEmail(call, result)
+                "openApp" -> openDeviceApp(call, result)
+                "listInstalledApps" -> listInstalledDeviceApps(result)
+                "screenshot" -> screenshotDeviceTools(call, result)
+                else -> result.notImplemented()
+            }
+        }
+
+        shareChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            SHARE_CHANNEL
+        ).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "consumePendingShare" -> {
+                        val payload = pendingSharePayload
+                        pendingSharePayload = null
+                        result.success(
+                            if (payload != null) mapOf(
+                                "pending" to true,
+                                "payload" to payload
+                            ) else mapOf("pending" to false)
+                        )
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        }
     }
+
+
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
@@ -322,8 +366,343 @@ class MainActivity : AudioServiceActivity() {
         return false
     }
 
+    /** Builds the same mailto: intent [composeEmailIntent] does on the Dart
+     *  side and hands it to the OS mail app. `to` stays verbatim in the
+     *  opaque part; subject/body/cc values are percent-encoded per part with
+     *  Dart's Uri.encodeComponent leave-set, and the cc list is comma-joined
+     *  with literal separators. */
+    private fun composeDeviceEmail(call: MethodCall, result: MethodChannel.Result) {
+        val to = call.argument<String>("to") ?: ""
+        val subject = call.argument<String>("subject") ?: ""
+        val body = call.argument<String>("body") ?: ""
+        val cc = call.argument<List<String>>("cc") ?: emptyList()
+
+        val segments = mutableListOf(
+            "subject=" + Uri.encode(subject, URI_COMPONENT_LEAVE_CHARS),
+            "body=" + Uri.encode(body, URI_COMPONENT_LEAVE_CHARS)
+        )
+        if (cc.isNotEmpty()) {
+            segments.add(
+                "cc=" + cc.map { Uri.encode(it.trim(), URI_COMPONENT_LEAVE_CHARS) }
+                    .joinToString(",")
+            )
+        }
+        val intent = Intent(
+            Intent.ACTION_SENDTO,
+            Uri.parse("mailto:$to?${segments.joinToString("&")}")
+        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+        try {
+            startActivity(intent)
+            result.success(true)
+        } catch (error: ActivityNotFoundException) {
+            result.error("no_mail_app", "No mail app available on this device", null)
+        } catch (error: SecurityException) {
+            result.error(
+                "security_exception",
+                error.message ?: "Launching the mail app was not allowed.",
+                null
+            )
+        }
+    }
+
+    /** Package names go through the app launcher; anything else that carries
+     *  a scheme is treated as a deep link. Unresolvable targets and missing
+     *  handlers surface `app_not_installed` in both cases. */
+    private fun openDeviceApp(call: MethodCall, result: MethodChannel.Result) {
+        val target = call.argument<String>("target") ?: ""
+        val launch = resolveOpenIntent(target)
+
+        if (launch == null) {
+            result.error(
+                "app_not_installed",
+                "No app installed for this target: $target",
+                null
+            )
+            return
+        }
+
+        try {
+            startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            result.success(true)
+        } catch (error: ActivityNotFoundException) {
+            result.error(
+                "app_not_installed",
+                "No app installed to handle this target: $target",
+                null
+            )
+        } catch (error: SecurityException) {
+            result.error(
+                "security_exception",
+                error.message ?: "Opening this app was not allowed.",
+                null
+            )
+        }
+    }
+
+    /** Launch-intent carrier shared by [openDeviceApp] and the
+     *  `apps.screenshot` package pre-launch: packages resolve through the
+     *  launcher, scheme-carrying targets through an action-view intent. */
+    private fun resolveOpenIntent(target: String): Intent? {
+        return if (target.matches(PACKAGE_NAME_PATTERN.toRegex())) {
+            packageManager.getLaunchIntentForPackage(target)
+        } else {
+            val link = Uri.parse(target)
+            if (link.scheme.isNullOrBlank()) {
+                null
+            } else {
+                Intent(Intent.ACTION_VIEW, link)
+            }
+        }
+    }
+
+    /** `apps.screenshot` host. Optionally launches [package] first and lets
+     *  it settle, then captures through the accessibility service — one
+     *  frame, or a scroll-and-stitch tall capture when `scroll` is true.
+     *  The accessibility instance is an in-process singleton, so the
+     *  capture callback completes the pending Flutter method call directly.
+     *  Error codes: `screen_capture_service_off`, `app_not_installed`,
+     *  `security_exception`, `screenshot_failed`. */
+    private fun screenshotDeviceTools(call: MethodCall, result: MethodChannel.Result) {
+        val packageArg = call.argument<String>("package")?.trim()
+        val scroll = call.argument<Boolean>("scroll") ?: false
+        var settled = false
+
+        fun replySuccess(path: String, frames: Int) {
+            if (settled) return
+            settled = true
+            result.success(mapOf("path" to path, "frames" to frames))
+        }
+
+        fun replyCaptureFailed() {
+            if (settled) return
+            settled = true
+            result.error(
+                SCREENSHOT_FAILED_CODE,
+                "Screen capture failed on this device.",
+                null
+            )
+        }
+
+        fun performCapture() {
+            val service = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                ScreenCaptureAccessibilityService.instance
+            } else {
+                null
+            }
+            if (service == null) {
+                if (settled) return
+                settled = true
+                result.error(
+                    SCREEN_CAPTURE_OFF_CODE,
+                    "LocalMind's Screen Capture accessibility service is not enabled.",
+                    null
+                )
+                return
+            }
+            if (scroll) {
+                service.captureScrollingScreens { path, frames ->
+                    if (path == null) replyCaptureFailed() else replySuccess(path, frames)
+                }
+            } else {
+                service.captureScreenTo(
+                    ScreenCaptureAccessibilityService.TOOL_SCREENSHOTS_DIR,
+                    "tool"
+                ) { path ->
+                    if (path == null) replyCaptureFailed() else replySuccess(path, 1)
+                }
+            }
+        }
+
+        if (packageArg.isNullOrEmpty()) {
+            performCapture()
+            return
+        }
+
+        val launch = resolveOpenIntent(packageArg)
+        if (launch == null) {
+            if (settled) return
+            settled = true
+            result.error(
+                "app_not_installed",
+                "No app installed for this target: $packageArg",
+                null
+            )
+            return
+        }
+        try {
+            startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (error: ActivityNotFoundException) {
+            if (settled) return
+            settled = true
+            result.error(
+                "app_not_installed",
+                "No app installed to handle this target: $packageArg",
+                null
+            )
+            return
+        } catch (error: SecurityException) {
+            if (settled) return
+            settled = true
+            result.error(
+                "security_exception",
+                error.message ?: "Opening this app was not allowed.",
+                null
+            )
+            return
+        }
+        // Let the app render before the screen is captured.
+        mainHandler.postDelayed(::performCapture, SCREENSHOT_LAUNCH_SETTLE_MS)
+    }
+
+    /** [label, package] rows for the model, ordered alphabetically by label.
+     *  Rows without usable metadata (hidden/stripped system components) are
+     *  skipped rather than listed with blank names. */
+    private fun listInstalledDeviceApps(result: MethodChannel.Result) {
+        try {
+            val rows = packageManager.getInstalledPackages(0)
+                .mapNotNull { info ->
+                    val appInfo = info.applicationInfo ?: return@mapNotNull null
+                    val label = runCatching {
+                        packageManager.getApplicationLabel(appInfo).toString()
+                    }.getOrNull() ?: return@mapNotNull null
+                    mapOf("label" to label, "package" to info.packageName)
+                }
+                .sortedBy { (it["label"] ?: "").toString().lowercase() }
+            result.success(rows)
+        } catch (error: SecurityException) {
+            result.error(
+                "security_exception",
+                error.message ?: "Listing installed apps was not allowed.",
+                null
+            )
+        }
+    }
+
+
+    /** Receive a share-sheet payload from another app; files get copied into
+     *  the app cache so the sender can be released, delivery waits for Dart. */
+    private fun captureSharePayload(intent: Intent?) {
+        val action = intent?.action
+        val payloadMap: MutableMap<String, Any?> = mutableMapOf()
+        when (action) {
+            Intent.ACTION_SEND -> {
+                val text: CharSequence? = intent.getStringExtra(Intent.EXTRA_TEXT)
+                val stream: Uri? = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                } else {
+                    @Suppress("DEPRECATION") intent.getParcelableExtra(Intent.EXTRA_STREAM)
+                }
+                when {
+                    stream != null -> {
+                        val type = intent.type ?: "application/octet-stream"
+                        val path = copyStreamToShareCache(stream, type) ?: return
+                        payloadMap["kind"] = "file"
+                        payloadMap["path"] = path
+                        payloadMap["mimeType"] = type
+                    }
+                    text != null && text.isNotBlank() -> {
+                        payloadMap["kind"] = "text"
+                        payloadMap["text"] = text.toString()
+                    }
+                    else -> return
+                }
+            }
+            Intent.ACTION_SEND_MULTIPLE -> {
+                val streams: ArrayList<Uri>? = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                } else {
+                    @Suppress("DEPRECATION") intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM)
+                }
+                val uris = streams ?: return
+                val copied = mutableListOf<String>()
+                val types = mutableListOf<String>()
+                for (uri in uris) {
+                    val type = contentResolver.getType(uri) ?: "application/octet-stream"
+                    val path = copyStreamToShareCache(uri, type) ?: continue
+                    copied.add(path)
+                    types.add(type)
+                }
+                if (copied.isEmpty()) return
+                payloadMap["kind"] = "files"
+                payloadMap["paths"] = copied
+                payloadMap["mimeTypes"] = types
+            }
+            else -> return
+        }
+
+        // Newest share wins: a superseded stash (text or copied files) is
+        // released before being replaced.
+        pendingSharePayload?.let { releaseSharePayload(it) }
+        pendingSharePayload = payloadMap
+    }
+
+    private fun copyStreamToShareCache(source: Uri, mimeType: String): String? {
+        return try {
+            shareIoExecutor.submit<String?> {
+                val dir = java.io.File(cacheDir, "share")
+                if (!dir.exists()) dir.mkdirs()
+                val extension = when {
+                    mimeType.endsWith("jpeg") || mimeType.endsWith("jpg") -> ".jpg"
+                    mimeType.endsWith("png") -> ".png"
+                    mimeType.endsWith("gif") -> ".gif"
+                    mimeType.endsWith("webp") -> ".webp"
+                    mimeType.endsWith("pdf") -> ".pdf"
+                    mimeType.endsWith("text") -> ".txt"
+                    else -> ""
+                }
+                val target = java.io.File(dir, "shared_${System.currentTimeMillis()}$extension")
+                contentResolver.openInputStream(source)?.use { input ->
+                    target.outputStream().use { output -> input.copyTo(output) }
+                } ?: return@submit null
+                target.absolutePath
+            }.get()
+        } catch (error: Exception) {
+            Log.w("LocalMindShare", "Share copy failed: $error")
+            null
+        }
+    }
+
+    private fun releaseSharePayload(payload: Map<String, Any?>) {
+        val paths = mutableListOf<String>()
+        (payload["path"] as? String)?.let(paths::add)
+        (payload["paths"] as? List<*>)?.forEach { (it as? String)?.let(paths::add) }
+        for (path in paths) {
+            try {
+                java.io.File(path).delete()
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    private fun deliverSharePayload() {
+        val payload = pendingSharePayload ?: return
+        val channel = shareChannel ?: return
+
+        channel.invokeMethod(
+            "shareReceived",
+            mapOf("payload" to payload),
+            object : MethodChannel.Result {
+                override fun success(result: Any?) {
+                    if (result != null) {
+                        pendingSharePayload = null
+                    }
+                }
+
+                override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) = Unit
+
+                override fun notImplemented() = Unit
+            }
+        )
+    }
+
     companion object {
         private const val ASSISTANT_ROLE_REQUEST_CODE = 4101
         private const val SCREENSHOT_TIMEOUT_MS = 2000L
+        private const val SCREENSHOT_LAUNCH_SETTLE_MS = 1200L
+        private const val SCREEN_CAPTURE_OFF_CODE = "screen_capture_service_off"
+        private const val SCREENSHOT_FAILED_CODE = "screenshot_failed"
+        private const val PACKAGE_NAME_PATTERN = "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)+\$"
+        private const val URI_COMPONENT_LEAVE_CHARS = "-_.!~*'()"
     }
 }

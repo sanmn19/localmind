@@ -3439,4 +3439,58 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get searx_base_url_hint => 'http://your-rig:8888';
+
+  @override
+  String get device_card_title => 'Device';
+
+  @override
+  String get device_card_desc =>
+      'Gives models local device tools: list and launch installed apps, compose mail drafts, and search contacts. Everything runs through OS surfaces; actual sends stay user-tapped.';
+
+  @override
+  String get share_target_label => 'Receive shared content';
+
+  @override
+  String get mail_connectors_card_title => 'Mail connectors';
+
+  @override
+  String get mail_connectors_card_desc =>
+      'Connects a Gmail or Outlook account so the mail tools read, search and send with it. Tokens stay on-device and each connector can be disconnected at any time.';
+
+  @override
+  String get mail_connect_gmail => 'Connect Gmail';
+
+  @override
+  String get mail_connect_outlook => 'Connect Outlook';
+
+  @override
+  String mail_connected_as(String email) {
+    return 'Connected: $email';
+  }
+
+  @override
+  String get mail_disconnect => 'Disconnect';
+
+  @override
+  String get mail_connect_imap => 'Connect IMAP account';
+
+  @override
+  String get imap_hint =>
+      'Uses an e-mail address plus app password. Gmail needs an app password (Google Account → Security → 2-Step Verification → App passwords); Microsoft consumer accounts no longer allow this — use the Outlook connector.';
+
+  @override
+  String get imap_email_hint => 'you@example.com';
+
+  @override
+  String get imap_password_hint => 'App password';
+
+  @override
+  String get imap_host_hint => 'Host (auto unless the provider is unknown)';
+
+  @override
+  String get imap_connect => 'Connect';
+
+  @override
+  String get imap_fields_required =>
+      'Enter an e-mail and an app password to connect.';
 }

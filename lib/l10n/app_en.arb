@@ -3608,5 +3608,46 @@
   "web_search_provider_key": "Provider API key",
   "web_search_key_hint": "API key…",
   "searx_base_url_label": "SearXNG server URL",
-  "searx_base_url_hint": "http://your-rig:8888"
+  "searx_base_url_hint": "http://your-rig:8888",
+  "device_card_title": "Device",
+  "@device_card_title": {"description": "Device tools card title"},
+  "device_card_desc": "Gives models local device tools: list and launch installed apps, compose mail drafts, and search contacts. Everything runs through OS surfaces; actual sends stay user-tapped.",
+  "@device_card_desc": {"description": "Device tools card description"},
+  "share_target_label": "Receive shared content",
+  "@share_target_label": {
+    "description": "Toggle label for landing share-sheet content into a chat"
+  },
+  "mail_connectors_card_title": "Mail connectors",
+  "@mail_connectors_card_title": {"description": "Mail connectors card title"},
+  "mail_connectors_card_desc": "Connects a Gmail or Outlook account so the mail tools read, search and send with it. Tokens stay on-device and each connector can be disconnected at any time.",
+  "@mail_connectors_card_desc": {"description": "Mail connectors card description"},
+  "mail_connect_gmail": "Connect Gmail",
+  "@mail_connect_gmail": {"description": "Action to connect a Gmail account"},
+  "mail_connect_outlook": "Connect Outlook",
+  "@mail_connect_outlook": {"description": "Action to connect an Outlook account"},
+  "mail_connected_as": "Connected: {email}",
+  "@mail_connected_as": {
+    "description": "Row status showing the connected mail account",
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "mail_disconnect": "Disconnect",
+  "@mail_disconnect": {"description": "Action to disconnect a mail account"},
+  "mail_connect_imap": "Connect IMAP account",
+  "@mail_connect_imap": {"description": "Title of the IMAP connect form"},
+  "imap_hint": "Uses an e-mail address plus app password. Gmail needs an app password (Google Account → Security → 2-Step Verification → App passwords); Microsoft consumer accounts no longer allow this — use the Outlook connector.",
+  "@imap_hint": {"description": "Explains the IMAP/app-password connector setup"},
+  "imap_email_hint": "you@example.com",
+  "@imap_email_hint": {"description": "Placeholder for the IMAP e-mail field"},
+  "imap_password_hint": "App password",
+  "@imap_password_hint": {"description": "Placeholder for the IMAP app-password field"},
+  "imap_host_hint": "Host (auto unless the provider is unknown)",
+  "@imap_host_hint": {"description": "Placeholder for the optional IMAP host override field"},
+  "imap_connect": "Connect",
+  "@imap_connect": {"description": "Button validating and saving the IMAP account"},
+  "imap_fields_required": "Enter an e-mail and an app password to connect.",
+  "@imap_fields_required": {"description": "Validation message for an incomplete IMAP connect form"}
 }

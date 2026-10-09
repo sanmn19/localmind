@@ -1,0 +1,224 @@
+import 'package:flutter/services.dart';
+
+/// Dart-side contract for the `local://device` MCP server's backing services.
+///
+/// TASK-SPAN NOTE: the launcher methods (compose/open/list) answer native
+/// handlers on Android (MainActivity.kt); the contacts pieces are bound to
+/// the real flutter_contacts-backed repository
+/// (features/mcp/data/device_contacts_repository.dart) as of Task 3.
+
+/// Method channel the native device-tools host answers on.
+const deviceToolsChannel = MethodChannel('localmind/device_tools');
+
+const deviceToolsMethodNameComposeEmail = 'composeEmail';
+const deviceToolsMethodNameOpenApp = 'openApp';
+const deviceToolsMethodNameListInstalledApps = 'listInstalledApps';
+const deviceToolsMethodNameScreenshot = 'screenshot';
+const deviceToolsMethodNameSearchContacts = 'searchContacts';
+const deviceToolsMethodNameContactByEmail = 'contactByEmail';
+const deviceToolsMethodNameContactByPhone = 'contactByPhone';
+
+/// Native error codes the device_tools host raises. Every one of them
+/// surfaces through [DeviceChannelUnavailable] with the code as the reason;
+/// the server renders the generic `ERROR: device channel unavailable` line
+/// for the model regardless of the code — except the screen-capture-off
+/// code below, which gets its own guidance line in the device dispatch.
+const deviceToolsErrorNoMailApp = 'no_mail_app';
+const deviceToolsErrorAppNotInstalled = 'app_not_installed';
+const deviceToolsErrorSecurityException = 'security_exception';
+const deviceToolsErrorScreenCaptureServiceOff = 'screen_capture_service_off';
+
+/// Raised by the channel-backed device services when the platform has no
+/// handler for a device-tools call (or the call errors natively). The device
+/// MCP server maps it to a readable `ERROR: ...` tool result for the model.
+class DeviceChannelUnavailable implements Exception {
+  const DeviceChannelUnavailable([this.reason]);
+
+  final String? reason;
+
+  @override
+  String toString() => 'DeviceChannelUnavailable: device channel unavailable';
+}
+
+/// Channel-backed launcher over the intent channels MainActivity.kt hosts.
+/// The native side answers `true`-or-throws; the readable result lines below
+/// are what the device server renders for the model.
+class MethodChannelDeviceAppLauncher implements DeviceAppLauncher {
+  const MethodChannelDeviceAppLauncher();
+
+  @override
+  Future<String> composeEmail({
+    required String to,
+    required String subject,
+    required String body,
+    List<String>? cc,
+  }) async {
+    // The URI build itself lives native-side (the mail app receives the
+    // Android intent); the fields travel under this contract.
+    await _invokeDeviceTools(deviceToolsMethodNameComposeEmail, {
+      'to': to,
+      'subject': subject,
+      'body': body,
+      if (cc != null && cc.isNotEmpty) 'cc': cc,
+    });
+    return 'Opened your mail app with a message to $to';
+  }
+
+  @override
+  Future<String> open(String target) async {
+    await _invokeDeviceTools(deviceToolsMethodNameOpenApp, {'target': target});
+    return 'Opened $target';
+  }
+
+  @override
+  Future<List<DeviceAppEntry>> listInstalled() async {
+    final payload = await _invokeDeviceTools(
+      deviceToolsMethodNameListInstalledApps,
+      const {},
+    );
+    return [
+      for (final row in payload is List ? payload : const [])
+        if (row is Map)
+          DeviceAppEntry(
+            label: row['label']?.toString() ?? '',
+            package: row['package']?.toString() ?? '',
+          ),
+    ];
+  }
+}
+
+/// Channel-backed contacts look-up. Superseded in production by the
+/// flutter_contacts-backed repository (Task 3); kept for the pinned
+/// channel-shape tests and as a fallback wiring seam.
+class MethodChannelDeviceContactsService implements DeviceContactsService {
+  const MethodChannelDeviceContactsService();
+
+  @override
+  Future<List<ContactSummary>> search(String query) =>
+      _contactsQuery(deviceToolsMethodNameSearchContacts, {'query': query});
+
+  @override
+  Future<List<ContactSummary>> byEmail(String email) =>
+      _contactsQuery(deviceToolsMethodNameContactByEmail, {'email': email});
+
+  @override
+  Future<List<ContactSummary>> byPhone(String phone) =>
+      _contactsQuery(deviceToolsMethodNameContactByPhone, {'phone': phone});
+
+  Future<List<ContactSummary>> _contactsQuery(
+    String method,
+    Map<String, Object?> args,
+  ) async {
+    final payload = await _invokeDeviceTools(method, args);
+    return [
+      for (final row in payload is List ? payload : const [])
+        if (row is Map)
+          ContactSummary(
+            name: row['name']?.toString() ?? '',
+            emails: _stringList(row['emails']),
+            phones: _stringList(row['phones']),
+          ),
+    ];
+  }
+}
+
+/// Channel-backed screenshot capture over the device_tools channel.
+/// The native side answers with `{path: <abs png path>, frames: <count>}`;
+/// this impl composes the model-readable result lines whose `[path=…]`
+/// marker the chat layer parses to attach the image.
+class MethodChannelDeviceScreenshotService implements DeviceScreenshotService {
+  const MethodChannelDeviceScreenshotService();
+
+  @override
+  Future<String> screenshot({String? package, bool scroll = false}) async {
+    final payload = await _invokeDeviceTools(deviceToolsMethodNameScreenshot, {
+      if (package != null && package.trim().isNotEmpty) 'package': package,
+      'scroll': scroll,
+    });
+    final map = payload is Map ? payload : const <String, dynamic>{};
+    final path = map['path']?.toString() ?? '';
+    final frames = map['frames'] is int ? map['frames'] as int : 1;
+    if (path.isEmpty) {
+      return 'ERROR: screenshot capture failed';
+    }
+    final screens = frames <= 1 ? '1 screen' : '$frames screens stitched';
+    return 'Screenshot captured ($screens)\n[path=$path]\n[frames=$frames]';
+  }
+}
+
+Future<Object?> _invokeDeviceTools(
+  String method,
+  Map<String, Object?> args,
+) async {
+  try {
+    return await deviceToolsChannel.invokeMethod<Object?>(method, args);
+  } on PlatformException catch (e) {
+    throw DeviceChannelUnavailable(e.code);
+  } on MissingPluginException catch (e) {
+    throw DeviceChannelUnavailable(e.message);
+  }
+}
+
+List<String> _stringList(dynamic raw) => [
+  if (raw is List)
+    for (final item in raw)
+      if (item is String) item,
+];
+
+/// Launcher seam behind the `apps.*` tools. Production wires the method
+/// channel implementation; tests fake it and record the calls.
+abstract class DeviceAppLauncher {
+  /// Opens the device mail app pre-filled with the message. Returns a
+  /// user-readable result line (the mail app itself is the send gate).
+  Future<String> composeEmail({
+    required String to,
+    required String subject,
+    required String body,
+    List<String>? cc,
+  });
+
+  /// Launches an app by package name or a deep link URI.
+  Future<String> open(String target);
+
+  /// Installed apps (label + package) for `apps.list_installed`.
+  Future<List<DeviceAppEntry>> listInstalled();
+}
+
+/// Contacts seam behind the `contacts.*` tools. Bound to the real
+/// flutter_contacts-backed repository in production; tests fake it with
+/// fixture rows.
+abstract class DeviceContactsService {
+  Future<List<ContactSummary>> search(String query);
+  Future<List<ContactSummary>> byEmail(String email);
+  Future<List<ContactSummary>> byPhone(String phone);
+}
+
+/// Capture seam behind `apps.screenshot`. Production wires the
+/// accessibility-backed method channel implementation; tests fake it and
+/// return the canned `[path=…]`-marked result line.
+abstract class DeviceScreenshotService {
+  /// Captures the current screen, optionally first launching [package] and
+  /// letting it settle. With [scroll] the native side swipes up, re-captures
+  /// and stitches until the content ends (sanity-capped), returning ONE tall
+  /// PNG. The result is a model-readable string embedding `[path=<abs>]`.
+  Future<String> screenshot({String? package, bool scroll = false});
+}
+
+class DeviceAppEntry {
+  const DeviceAppEntry({required this.label, required this.package});
+
+  final String label;
+  final String package;
+}
+
+class ContactSummary {
+  const ContactSummary({
+    required this.name,
+    required this.emails,
+    required this.phones,
+  });
+
+  final String name;
+  final List<String> emails;
+  final List<String> phones;
+}

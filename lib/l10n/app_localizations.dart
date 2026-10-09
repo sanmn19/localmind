@@ -6356,6 +6356,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'http://your-rig:8888'**
   String get searx_base_url_hint;
+
+  /// Device tools card title
+  ///
+  /// In en, this message translates to:
+  /// **'Device'**
+  String get device_card_title;
+
+  /// Device tools card description
+  ///
+  /// In en, this message translates to:
+  /// **'Gives models local device tools: list and launch installed apps, compose mail drafts, and search contacts. Everything runs through OS surfaces; actual sends stay user-tapped.'**
+  String get device_card_desc;
+
+  /// Toggle label for landing share-sheet content into a chat
+  ///
+  /// In en, this message translates to:
+  /// **'Receive shared content'**
+  String get share_target_label;
+
+  /// Mail connectors card title
+  ///
+  /// In en, this message translates to:
+  /// **'Mail connectors'**
+  String get mail_connectors_card_title;
+
+  /// Mail connectors card description
+  ///
+  /// In en, this message translates to:
+  /// **'Connects a Gmail or Outlook account so the mail tools read, search and send with it. Tokens stay on-device and each connector can be disconnected at any time.'**
+  String get mail_connectors_card_desc;
+
+  /// Action to connect a Gmail account
+  ///
+  /// In en, this message translates to:
+  /// **'Connect Gmail'**
+  String get mail_connect_gmail;
+
+  /// Action to connect an Outlook account
+  ///
+  /// In en, this message translates to:
+  /// **'Connect Outlook'**
+  String get mail_connect_outlook;
+
+  /// Row status showing the connected mail account
+  ///
+  /// In en, this message translates to:
+  /// **'Connected: {email}'**
+  String mail_connected_as(String email);
+
+  /// Action to disconnect a mail account
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect'**
+  String get mail_disconnect;
+
+  /// Title of the IMAP connect form
+  ///
+  /// In en, this message translates to:
+  /// **'Connect IMAP account'**
+  String get mail_connect_imap;
+
+  /// Explains the IMAP/app-password connector setup
+  ///
+  /// In en, this message translates to:
+  /// **'Uses an e-mail address plus app password. Gmail needs an app password (Google Account → Security → 2-Step Verification → App passwords); Microsoft consumer accounts no longer allow this — use the Outlook connector.'**
+  String get imap_hint;
+
+  /// Placeholder for the IMAP e-mail field
+  ///
+  /// In en, this message translates to:
+  /// **'you@example.com'**
+  String get imap_email_hint;
+
+  /// Placeholder for the IMAP app-password field
+  ///
+  /// In en, this message translates to:
+  /// **'App password'**
+  String get imap_password_hint;
+
+  /// Placeholder for the optional IMAP host override field
+  ///
+  /// In en, this message translates to:
+  /// **'Host (auto unless the provider is unknown)'**
+  String get imap_host_hint;
+
+  /// Button validating and saving the IMAP account
+  ///
+  /// In en, this message translates to:
+  /// **'Connect'**
+  String get imap_connect;
+
+  /// Validation message for an incomplete IMAP connect form
+  ///
+  /// In en, this message translates to:
+  /// **'Enter an e-mail and an app password to connect.'**
+  String get imap_fields_required;
 }
 
 class _AppLocalizationsDelegate

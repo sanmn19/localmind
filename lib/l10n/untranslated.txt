@@ -51,7 +51,23 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ],
 
   "bn": [
@@ -110,7 +126,23 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ],
 
   "de": [
@@ -169,7 +201,23 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ],
 
   "es": [
@@ -228,7 +276,23 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ],
 
   "fr": [
@@ -287,7 +351,23 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ],
 
   "hi": [
@@ -346,7 +426,23 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ],
 
   "it": [
@@ -405,7 +501,23 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ],
 
   "ja": [
@@ -464,7 +576,23 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ],
 
   "ko": [
@@ -509,7 +637,23 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ],
 
   "pt": [
@@ -554,7 +698,23 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ],
 
   "ru": [
@@ -613,7 +773,23 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ],
 
   "tr": [
@@ -672,7 +848,23 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ],
 
   "zh": [
@@ -731,7 +923,23 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ],
 
   "zh_TW": [
@@ -790,6 +998,22 @@
     "web_search_provider_key",
     "web_search_key_hint",
     "searx_base_url_label",
-    "searx_base_url_hint"
+    "searx_base_url_hint",
+    "device_card_title",
+    "device_card_desc",
+    "share_target_label",
+    "mail_connectors_card_title",
+    "mail_connectors_card_desc",
+    "mail_connect_gmail",
+    "mail_connect_outlook",
+    "mail_connected_as",
+    "mail_disconnect",
+    "mail_connect_imap",
+    "imap_hint",
+    "imap_email_hint",
+    "imap_password_hint",
+    "imap_host_hint",
+    "imap_connect",
+    "imap_fields_required"
   ]
 }

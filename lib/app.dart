@@ -1,3 +1,4 @@
+import 'core/widgets/share_receive_host.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -110,7 +111,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           return OsWidgetInvocationHost(
             child: WebServerRegistrationHost(
               child: AndroidAssistantInvocationHost(
-                child: AppShell(child: child),
+                child: ShareReceiveHost(child: AppShell(child: child)),
               ),
             ),
           );

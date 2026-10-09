@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:localmind/features/chat/providers/tooling_providers.dart';
+import 'package:localmind/features/mail/data/mail_common.dart';
 import 'package:localmind/features/mcp/data/web/web_search_service.dart';
 import 'package:localmind/features/settings/data/models/app_settings.dart';
 
@@ -100,5 +101,75 @@ void main() {
     expect(restored.skillsEnabled, isTrue);
     final off = AppSettings().copyWith(skillsEnabled: false);
     expect(AppSettings.fromMap(off.toMap()).skillsEnabled, isFalse);
+  });
+
+  test('device tool settings default to disabled', () {
+    final settings = AppSettings();
+    expect(settings.deviceToolsEnabled, isFalse);
+  });
+
+  test('deviceToolsEnabled survives the toMap/fromMap round-trip', () {
+    final settings = AppSettings().copyWith(deviceToolsEnabled: true);
+    final map = settings.toMap();
+    expect(map['deviceToolsEnabled'], isTrue);
+    final restored = AppSettings.fromMap(map);
+    expect(restored.deviceToolsEnabled, isTrue);
+  });
+
+  test('fromMap tolerates missing deviceToolsEnabled (upgrade path)', () {
+    final restored = AppSettings.fromMap({'themeMode': 2});
+    expect(restored.deviceToolsEnabled, isFalse);
+  });
+
+  // Share-target receiving is ON by default: adding the intent-filter makes
+  // the app a share target no matter what, so the toggle only gates the
+  // Dart-side handling and must not silently flip off on upgrade.
+  test('shareTargetEnabled defaults to enabled', () {
+    final settings = AppSettings();
+    expect(settings.shareTargetEnabled, isTrue);
+  });
+
+  test('shareTargetEnabled survives the toMap/fromMap round-trip', () {
+    final settings = AppSettings().copyWith(shareTargetEnabled: false);
+    final map = settings.toMap();
+    expect(map['shareTargetEnabled'], isFalse);
+    final restored = AppSettings.fromMap(map);
+    expect(restored.shareTargetEnabled, isFalse);
+  });
+
+  test('fromMap tolerates missing shareTargetEnabled (upgrade path)', () {
+    final restored = AppSettings.fromMap({'themeMode': 2});
+    expect(restored.shareTargetEnabled, isTrue);
+  });
+
+  test('mail connector rows round-trip, including imap host overrides', () {
+    final rows = [
+      {'provider': 'gmail', 'email': 'g@gmail.com'},
+      {
+        'provider': 'imap',
+        'email': 'i@example.org',
+        'host': 'imap.example.org',
+      },
+    ];
+    final settings = AppSettings().copyWith(mailConnectorAccounts: rows);
+    final restored = AppSettings.fromMap(settings.toMap());
+    expect(restored.mailConnectorAccounts, rows);
+
+    final imap = MailAccount.fromMap(rows.last);
+    expect(imap.provider, MailProvider.imap);
+    expect(imap.email, 'i@example.org');
+  });
+
+  test('MailAccount.fromMap maps unknown providers to gmail (legacy '
+      'tolerance, imap exact)', () {
+    expect(
+      MailAccount.fromMap({'provider': 'imap'}).provider,
+      MailProvider.imap,
+    );
+    expect(MailAccount.fromMap({'provider': 'imap'}).email, '');
+    expect(
+      MailAccount.fromMap({'provider': 'yahoo', 'email': 'x@y'}).provider,
+      MailProvider.gmail,
+    );
   });
 }
