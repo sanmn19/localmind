@@ -648,7 +648,6 @@ class McpServerManager {
     if (_mailServices.containsKey(serverLabel)) {
       return _callMailTool(toolName, args);
     }
-    }
 
     if (_localExampleServers.contains(serverLabel)) {
       return _callExampleTool(toolName, args);
