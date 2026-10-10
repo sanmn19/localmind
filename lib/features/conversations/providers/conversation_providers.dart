@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/storage_providers.dart';
 import '../../../core/storage/entities.dart';
 import '../../../objectbox.g.dart';
+import '../../chat/data/background_task_service.dart';
 import '../../chat/utils/message_variants.dart';
 import '../data/message_search_service.dart';
 import '../data/models/message_search_hit.dart';
@@ -236,6 +237,12 @@ class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
         .build();
     db.conversationBox.removeMany(convQuery.findIds());
     convQuery.close();
+
+    // Delete-state cascade: task rows owned by the conversation go with it
+    // (live-run cancel is relayed through the engine seam).
+    await ref
+        .read(backgroundTasksServiceProvider)
+        .deleteTasksOwnedBy(id);
 
     await _updateState();
   }
@@ -517,6 +524,12 @@ class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
 
   Future<void> deleteAll() async {
     final db = ref.read(databaseProvider);
+    // Delete-state cascade: every conversation's task rows go first, so
+    // the wipe leaves no orphaned background tasks behind.
+    final service = ref.read(backgroundTasksServiceProvider);
+    for (final owner in (state.value ?? []).map((c) => c.id).toSet()) {
+      await service.deleteTasksOwnedBy(owner);
+    }
     db.messageBox.removeAll();
     db.conversationBox.removeAll();
     await _updateState();
@@ -685,10 +698,12 @@ final filteredConversationsProvider = Provider<AsyncValue<List<Conversation>>>((
   final sortOption = ref.watch(historySortOptionProvider);
 
   return conversationsAsync.whenData((conversations) {
-    // Hidden fork conversations (selection-fork feature) never surface in
-    // history; their turns live only in the fork panel.
+    // Hidden fork conversations (selection-fork feature) and hidden
+    // background-task conversations (background sub-agents feature) never
+    // surface in history; fork turns live in the fork panel, task turns in
+    // the task chat pane.
     var filtered = conversations
-        .where((c) => !c.isTemporary && !c.isFork)
+        .where((c) => !c.isTemporary && !c.isFork && !c.isBackground)
         .toList();
 
     switch (listFilter) {
@@ -982,10 +997,10 @@ final messageSearchResultsProvider = Provider<List<MessageSearchHit>>((ref) {
   }
 
   final db = ref.watch(databaseProvider);
-  // Hidden fork conversations (selection-fork feature) are excluded at
-  // search time — the box query, not the cached conversation list, is the
-  // authoritative freshness point because fork rows are written directly.
-  final exclude = _messageSearchService.forkConversationIds(db);
+  // Hidden fork + background-task conversations are excluded at search
+  // time — the box query, not the cached conversation list, is the
+  // authoritative freshness point because hidden rows are written directly.
+  final exclude = _messageSearchService.hiddenConversationIds(db);
   return _messageSearchService.searchMessages(
     db,
     query: query,

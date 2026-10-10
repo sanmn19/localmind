@@ -802,7 +802,9 @@ class BackgroundTaskEntity {
       runCount: runCount,
       state: BackgroundTaskState.values.firstWhere(
         (s) => s.name == state,
-        orElse: () => BackgroundTaskState.running,
+        // T1 review ruling: unknown stored state names degrade to failed,
+        // never to running (running would wrongly re-arm the engine loop).
+        orElse: () => BackgroundTaskState.failed,
       ),
       lastRunAt: lastRunAt,
       createdAt: createdAt,
