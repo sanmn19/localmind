@@ -95,6 +95,14 @@ void main() {
     expect(restored.webSearxUrl, isNull);
   });
 
+  test('skillsEnabled defaults to true and survives the round-trip', () {
+    expect(AppSettings().skillsEnabled, isTrue);
+    final restored = AppSettings.fromMap({'themeMode': 2});
+    expect(restored.skillsEnabled, isTrue);
+    final off = AppSettings().copyWith(skillsEnabled: false);
+    expect(AppSettings.fromMap(off.toMap()).skillsEnabled, isFalse);
+  });
+
   test('device tool settings default to disabled', () {
     final settings = AppSettings();
     expect(settings.deviceToolsEnabled, isFalse);

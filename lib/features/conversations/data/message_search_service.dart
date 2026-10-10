@@ -10,6 +10,7 @@ class MessageSearchService {
     ObjectBoxStore db, {
     required String query,
     int limit = 50,
+    Set<String> excludedConversationIds = const {},
   }) {
     final normalizedQuery = query.trim().toLowerCase();
     if (normalizedQuery.isEmpty) return const [];
@@ -28,6 +29,9 @@ class MessageSearchService {
     messageQuery.close();
 
     for (final entity in messages) {
+      // Hidden fork conversations (selection-fork feature) must not surface
+      // in message search; their turns live only in the fork panel.
+      if (excludedConversationIds.contains(entity.conversationUid)) continue;
       if (!entity.content.toLowerCase().contains(normalizedQuery)) continue;
 
       final content = entity.content;
@@ -68,6 +72,19 @@ class MessageSearchService {
           ),
         )
         .toList();
+  }
+
+  /// Ids of hidden fork conversations. Callers pass this via
+  /// `excludedConversationIds` so fork-only turns never leak into chat
+  /// history search.
+  Set<String> forkConversationIds(ObjectBoxStore db) {
+    final query = db.conversationBox
+        .query(ConversationEntity_.isFork.equals(true))
+        .build();
+    final entities = query.find();
+    query.close();
+
+    return {for (final entity in entities) entity.id};
   }
 
   Map<String, String> _loadConversationTitles(

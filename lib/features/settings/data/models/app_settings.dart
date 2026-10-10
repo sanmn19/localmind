@@ -89,6 +89,11 @@ class AppSettings {
   /// default — nothing auto-runs until the user opt-ins.
   final List<String> toolWhitelist;
 
+  /// Whether the named markdown skills feature injects its context section
+  /// into every chat's system prompt. Default ON — the injection is the
+  /// feature.
+  final bool skillsEnabled;
+
   /// Connected mail connector accounts as raw maps (provider/email only —
   /// non-secret identity rows; tokens never live in here).
   final List<Map<String, dynamic>> mailConnectorAccounts;
@@ -159,6 +164,7 @@ class AppSettings {
     this.deviceToolsEnabled = false,
     this.shareTargetEnabled = true,
     this.toolWhitelist = const [],
+    this.skillsEnabled = true,
     this.mailConnectorAccounts = const [],
     this.autoCollapseThinking = false,
     this.sendTemperature = true,
@@ -222,6 +228,7 @@ class AppSettings {
     bool? deviceToolsEnabled,
     bool? shareTargetEnabled,
     List<String>? toolWhitelist,
+    bool? skillsEnabled,
     List<Map<String, dynamic>>? mailConnectorAccounts,
     bool? autoCollapseThinking,
     bool? sendTemperature,
@@ -311,6 +318,7 @@ class AppSettings {
       deviceToolsEnabled: deviceToolsEnabled ?? this.deviceToolsEnabled,
       shareTargetEnabled: shareTargetEnabled ?? this.shareTargetEnabled,
       toolWhitelist: toolWhitelist ?? this.toolWhitelist,
+      skillsEnabled: skillsEnabled ?? this.skillsEnabled,
       mailConnectorAccounts:
           mailConnectorAccounts ?? this.mailConnectorAccounts,
       autoCollapseThinking: autoCollapseThinking ?? this.autoCollapseThinking,
@@ -377,6 +385,7 @@ class AppSettings {
       'deviceToolsEnabled': deviceToolsEnabled,
       'shareTargetEnabled': shareTargetEnabled,
       'toolWhitelist': toolWhitelist,
+      'skillsEnabled': skillsEnabled,
       'mailConnectorAccounts': mailConnectorAccounts,
       'autoCollapseThinking': autoCollapseThinking,
       'sendTemperature': sendTemperature,
@@ -447,6 +456,7 @@ class AppSettings {
       shareTargetEnabled: map['shareTargetEnabled'] ?? true,
       toolWhitelist:
           (map['toolWhitelist'] as List?)?.cast<String>() ?? const [],
+      skillsEnabled: map['skillsEnabled'] ?? true,
       mailConnectorAccounts:
           (map['mailConnectorAccounts'] as List?)
               ?.whereType<Map>()

@@ -19,6 +19,7 @@ import 'package:localmind/features/servers/providers/server_providers.dart';
 import 'package:localmind/features/tts/views/components/tts_player_bar.dart';
 import '../data/export_service.dart';
 import '../providers/chat_providers.dart';
+import '../providers/fork_panel_overlay.dart';
 import 'components/notification_permission_banner.dart';
 import 'components/top_bar/connection_banner.dart';
 import 'components/top_bar/persona_indicator.dart';
@@ -88,11 +89,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       },
     );
 
-    return _ChatBody(
-      scrollController: _scrollController,
-      inputFocusNode: _inputFocusNode,
-      onModelPicker: () => _showModelPicker(context),
-      onMenuAction: (action) => _handleMenuAction(action, context),
+    return ForkPanelAutoCloseBridge(
+      focusNode: _inputFocusNode,
+      child: _ChatBody(
+        scrollController: _scrollController,
+        inputFocusNode: _inputFocusNode,
+        onModelPicker: () => _showModelPicker(context),
+        onMenuAction: (action) => _handleMenuAction(action, context),
+      ),
     );
   }
 

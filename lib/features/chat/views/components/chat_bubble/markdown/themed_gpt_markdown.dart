@@ -145,14 +145,20 @@ class MarkdownContent extends StatelessWidget {
     super.key,
     required this.content,
     required this.isDark,
+    this.contextMenuBuilder,
   });
 
   final String content;
   final bool isDark;
+  final SelectableRegionContextMenuBuilder? contextMenuBuilder;
 
   @override
   Widget build(BuildContext context) {
-    return MarkdownBodyContent(content: content, isDark: isDark);
+    return MarkdownBodyContent(
+      content: content,
+      isDark: isDark,
+      contextMenuBuilder: contextMenuBuilder,
+    );
   }
 }
 
@@ -161,17 +167,23 @@ class MarkdownContent extends StatelessWidget {
 /// Set [selectable] to false during active streaming to prevent Flutter
 /// SelectionContainer concurrent modification crashes while the widget
 /// tree is rapidly mutating (Issue #80).
+///
+/// [contextMenuBuilder] is passed through to the wrapping SelectionArea so
+/// callers can extend the selection toolbar (e.g. the fork action); it is
+/// only consulted when [selectable] is true.
 class MarkdownBodyContent extends StatelessWidget {
   const MarkdownBodyContent({
     super.key,
     required this.content,
     required this.isDark,
     this.selectable = true,
+    this.contextMenuBuilder,
   });
 
   final String content;
   final bool isDark;
   final bool selectable;
+  final SelectableRegionContextMenuBuilder? contextMenuBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -189,7 +201,10 @@ class MarkdownBodyContent extends StatelessWidget {
       return markdown;
     }
 
-    return SelectionArea(child: markdown);
+    return SelectionArea(
+      contextMenuBuilder: contextMenuBuilder,
+      child: markdown,
+    );
   }
 }
 

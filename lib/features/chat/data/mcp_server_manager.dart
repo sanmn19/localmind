@@ -9,6 +9,8 @@ import 'package:localmind/features/mail/data/mail_common.dart';
 import 'package:localmind/features/mail/mail_mcp_server.dart';
 import 'package:localmind/features/mcp/data/web/web_fetch_service.dart';
 import 'package:localmind/features/mcp/data/web/web_search_service.dart';
+import 'package:localmind/features/skills/data/skills_mcp_server.dart';
+import 'package:localmind/features/skills/data/skills_store.dart';
 
 import 'mcp_client.dart';
 
@@ -47,6 +49,7 @@ class McpServerManager {
   final Map<String, String> _serverUrls = {};
   final Map<String, WebServices> _webServices = {};
   final Map<String, TerminalServices> _terminalServices = {};
+  final Map<String, SkillsServices> _skillsServices = {};
   final Map<String, DeviceServices> _deviceServices = {};
   final Map<String, MailServices> _mailServices = {};
   final Set<String> _localExampleServers = {};
@@ -98,6 +101,7 @@ class McpServerManager {
     _serverUrls.remove(label);
     _webServices.remove(label);
     _terminalServices.remove(label);
+    _skillsServices.remove(label);
     _deviceServices.remove(label);
     _mailServices.remove(label);
     _localExampleServers.remove(label);
@@ -273,6 +277,88 @@ class McpServerManager {
     ];
     _serverUrls[terminalMcpServerLabel] = terminalMcpServerUrl;
   }
+
+  /// Registers the in-process skills MCP server (`skills.list` /
+  /// `skills.read` / `skills.add` / `skills.delete`). Mirrors
+  /// [addTerminalServer]'s idempotent re-add semantics so a settings
+  /// rebuild just replaces it. Writes stay approval-gated: the bundles
+  /// handed here are the only execution path, and auto-approval never
+  /// covers `skills.add` / `skills.delete` (see `shouldAutoApproveTool` in
+  /// tooling_providers.dart).
+  Future<void> addSkillsServer(SkillsServices services) async {
+    await removeServer(skillsMcpServerLabel);
+
+    _skillsServices[skillsMcpServerLabel] = services;
+    _capabilities[skillsMcpServerLabel] = const McpCapabilities(tools: true);
+    _tools[skillsMcpServerLabel] = const [
+      McpTool(
+        name: 'skills.list',
+        description:
+            'List the user\'s saved skills. Each row is `- name: '
+            'description`; the system context carries only this index — '
+            'call skills.read {name} to load a skill\'s full instructions.',
+        inputSchema: {'type': 'object'},
+      ),
+      McpTool(
+        name: 'skills.read',
+        description:
+            'Return the full instructions of one skill by name; use it '
+            'before following a skill\'s details.',
+        inputSchema: {
+          'type': 'object',
+          'properties': {
+            'name': {'type': 'string', 'description': 'The skill name.'},
+          },
+          'required': ['name'],
+        },
+      ),
+      McpTool(
+        name: 'skills.add',
+        description:
+            'Save a new reusable skill: the markdown body is injected into '
+            'every future chat when relevant. Names allow lowercase '
+            'letters, digits and underscores (max 48).',
+        inputSchema: {
+          'type': 'object',
+          'properties': {
+            'name': {
+              'type': 'string',
+              'description':
+                  'The skill name; lowercase letters, digits and underscores '
+                  '(max 48).',
+            },
+            'content': {
+              'type': 'string',
+              'description': 'The markdown body of the skill.',
+            },
+            'description': {
+              'type': 'string',
+              'description':
+                  'One-line description of when to follow the skill.',
+            },
+          },
+          'required': ['name', 'content'],
+        },
+      ),
+      McpTool(
+        name: 'skills.delete',
+        description:
+            'Delete one of the user\'s saved skills by its exact name.',
+        inputSchema: {
+          'type': 'object',
+          'properties': {
+            'name': {'type': 'string', 'description': 'The skill name.'},
+          },
+          'required': ['name'],
+        },
+      ),
+    ];
+    _serverUrls[skillsMcpServerLabel] = skillsMcpServerUrl;
+  }
+
+  /// Test/inspection seam for the skills services bundle.
+  @visibleForTesting
+  SkillsServices? getSkillsServices() => _skillsServices[skillsMcpServerLabel];
 
   /// Test/inspection seam for the terminal services bundle.
   @visibleForTesting
@@ -514,6 +600,7 @@ class McpServerManager {
       _localExampleServers.contains(label) ||
       _webServices.containsKey(label) ||
       _terminalServices.containsKey(label) ||
+      _skillsServices.containsKey(label) ||
       _deviceServices.containsKey(label) ||
       _mailServices.containsKey(label);
 
@@ -524,6 +611,8 @@ class McpServerManager {
 
   bool hasTerminalServer() =>
       _terminalServices.containsKey(terminalMcpServerLabel);
+
+  bool hasSkillsServer() => _skillsServices.containsKey(skillsMcpServerLabel);
 
   bool hasDeviceServer() => _deviceServices.containsKey(deviceMcpServerLabel);
 
@@ -546,6 +635,10 @@ class McpServerManager {
 
     if (_terminalServices.containsKey(serverLabel)) {
       return _callTerminalTool(toolName, args);
+    }
+
+    if (_skillsServices.containsKey(serverLabel)) {
+      return _callSkillsTool(toolName, args);
     }
 
     if (_deviceServices.containsKey(serverLabel)) {
@@ -595,6 +688,7 @@ class McpServerManager {
     _serverUrls.clear();
     _webServices.clear();
     _terminalServices.clear();
+    _skillsServices.clear();
     _deviceServices.clear();
     _mailServices.clear();
     _localExampleServers.clear();
@@ -770,6 +864,97 @@ class McpServerManager {
       default:
         throw McpException('Terminal MCP tool not found: $toolName');
     }
+  }
+
+  /// NOTE: the settings kill switch is NOT re-checked here beyond the
+  /// bundle's `enabled` flag — the server only stays registered while
+  /// `skillsEnabled` is on, so a refusal here guards the stale-registration
+  /// window, not general policy. `skills.add`/`skills.delete` reaching this
+  /// point always went through the user's approval dialog.
+  Future<String> _callSkillsTool(
+    String toolName,
+    Map<String, dynamic> args,
+  ) async {
+    final services = _skillsServices[skillsMcpServerLabel];
+    if (services == null) {
+      throw McpException('MCP server not connected: $skillsMcpServerLabel');
+    }
+
+    if (!services.enabled) {
+      throw McpException('the skills feature is disabled');
+    }
+
+    switch (toolName) {
+      case 'skills.list':
+        return formatSkillsList(await services.list());
+
+      case 'skills.read':
+        final name = args['name'];
+        if (name is! String) {
+          throw McpException('skills.read requires a string name');
+        }
+        final normalizedName = SkillsStore.normalizeName(name);
+        final entry = await _findSkill(services, normalizedName);
+        if (entry == null) {
+          throw McpException('skills.read: no skill named $normalizedName');
+        }
+        return formatSkillsRead(entry);
+
+      case 'skills.add':
+        final name = args['name'];
+        if (name is! String) {
+          throw McpException('skills.add requires a string name');
+        }
+        final content = args['content'];
+        if (content is! String) {
+          throw McpException('skills.add requires a string content');
+        }
+        final description = args['description'] is String
+            ? args['description'] as String
+            : '';
+        final normalizedName = SkillsStore.normalizeName(name);
+        final nameFailure = skillsNameFailure(name);
+        if (nameFailure != null) {
+          throw McpException('skills.add: $nameFailure');
+        }
+        final existing = await services.list();
+        if (existing.any((entry) => entry.name == normalizedName)) {
+          throw McpException(
+            'skills.add: a skill named $normalizedName already exists',
+          );
+        }
+        await services.add(normalizedName, description, content);
+        return 'Added skill: $normalizedName';
+
+      case 'skills.delete':
+        final name = args['name'];
+        if (name is! String) {
+          throw McpException('skills.delete requires a string name');
+        }
+        final normalizedName = SkillsStore.normalizeName(name);
+        final existing = await services.list();
+        if (!existing.any((entry) => entry.name == normalizedName)) {
+          throw McpException('skills.delete: no skill named $normalizedName');
+        }
+        await services.delete(normalizedName);
+        return 'Deleted skill: $normalizedName';
+
+      default:
+        throw McpException('Skills MCP tool not found: $toolName');
+    }
+  }
+
+  /// The stored skill matching [name] exactly, or null — the shared
+  /// lookup behind the read/delete dispatchers (fresh list each time,
+  /// matching `skills.list` semantics).
+  static Future<SkillEntry?> _findSkill(
+    SkillsServices services,
+    String name,
+  ) async {
+    for (final entry in await services.list()) {
+      if (entry.name == name) return entry;
+    }
+    return null;
   }
 
   Map<String, String>? _stringHeaders(dynamic raw) {

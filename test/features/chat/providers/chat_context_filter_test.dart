@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:localmind/core/models/enums.dart';
 import 'package:localmind/features/chat/data/models/message.dart';
-import 'package:localmind/features/chat/providers/chat_notifier.dart';
 
 void main() {
   group('shouldIncludeMessageInChatContext', () {

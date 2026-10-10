@@ -151,6 +151,11 @@ class _SettingsViewsState extends ConsumerState<SettingsViews> {
           current: settings.codeThemeLight,
           onChanged: notifier.setCodeThemeLight,
         ),
+        _SectionActionButton(
+          icon: HugeIcons.strokeRoundedMagicWand01,
+          label: l10n.skills_name,
+          onPressed: () => context.push(AppRoutes.skills),
+        ),
       ],
     );
 

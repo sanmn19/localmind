@@ -159,3 +159,22 @@ class ToolCallData {
   factory ToolCallData.fromJson(String source) =>
       ToolCallData.fromMap(json.decode(source));
 }
+
+/// Leaf-level wire filter shared by the main send assembly
+/// (ChatNotifier._assembleApiMessages) and the fork-context assembly
+/// (ForkService.buildForkContextMessages).
+///
+/// A failed fork or main turn that ended with no content (assistant
+/// `error` row with empty content — e.g. an empty-reply failure) persists
+/// into the transcript but is poison for an OpenAI-compatible wire: it
+/// must not ride any request context. Rows are kept VISIBLE in the
+/// timeline by the callers; this predicate decides inclusion on outgoing
+/// request wires only.
+bool shouldIncludeMessageInChatContext(Message message) {
+  if (message.role == MessageRole.assistant &&
+      message.status == MessageStatus.error &&
+      message.content.trim().isEmpty) {
+    return false;
+  }
+  return true;
+}
