@@ -6494,6 +6494,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'An error occurred: {message}'**
   String forkTurnErrorLabel(String message);
+
+  /// Background tasks card title
+  ///
+  /// In en, this message translates to:
+  /// **'Background tasks'**
+  String get backgroundCardTitle;
+
+  /// Background tasks card description
+  ///
+  /// In en, this message translates to:
+  /// **'Lets models spawn sub-agent tasks that run in a hidden chat thread and post results back into the conversation. Tasks can repeat on a schedule; every spawn asks first.'**
+  String get backgroundCardDesc;
+
+  /// Semantics label of the background tasks toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Enable background tasks'**
+  String get backgroundTasksToggleLabel;
+
+  /// Empty state of the background tasks card
+  ///
+  /// In en, this message translates to:
+  /// **'No background tasks yet.'**
+  String get backgroundNoTasksLabel;
+
+  /// Tooltip of a background task row's cancel button
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel task'**
+  String get backgroundCancelTooltip;
+
+  /// Chip label for a running background task
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get backgroundStateRunning;
+
+  /// Chip label for a finished background task
+  ///
+  /// In en, this message translates to:
+  /// **'Finished'**
+  String get backgroundStateFinished;
+
+  /// Chip label for a cancelled background task
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get backgroundStateCancelled;
+
+  /// Chip label for a failed background task
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get backgroundStateFailed;
+
+  /// Static note stating the background task concurrency cap and loop floor
+  ///
+  /// In en, this message translates to:
+  /// **'At most 3 tasks run at once; recurring tasks repeat every 10 minutes or more.'**
+  String get backgroundCapNote;
 }
 
 class _AppLocalizationsDelegate

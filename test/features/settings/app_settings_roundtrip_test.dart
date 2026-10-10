@@ -103,6 +103,15 @@ void main() {
     expect(AppSettings.fromMap(off.toMap()).skillsEnabled, isFalse);
   });
 
+  test('backgroundTasksEnabled defaults to false and survives the round-trip',
+      () {
+    expect(AppSettings().backgroundTasksEnabled, isFalse);
+    final restored = AppSettings.fromMap({'themeMode': 2});
+    expect(restored.backgroundTasksEnabled, isFalse);
+    final on = AppSettings().copyWith(backgroundTasksEnabled: true);
+    expect(AppSettings.fromMap(on.toMap()).backgroundTasksEnabled, isTrue);
+  });
+
   test('device tool settings default to disabled', () {
     final settings = AppSettings();
     expect(settings.deviceToolsEnabled, isFalse);

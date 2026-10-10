@@ -111,6 +111,7 @@ class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
     String? modelId,
     bool? mcpEnabled,
     bool isTemporary = false,
+    bool isBackground = false,
     String? folderId,
   }) async {
     final db = ref.read(databaseProvider);
@@ -131,6 +132,7 @@ class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
       systemPrompt: systemPrompt,
       mcpEnabled: mcpEnabled,
       isTemporary: isTemporary,
+      isBackground: isBackground,
       folderId: folderId,
     );
 

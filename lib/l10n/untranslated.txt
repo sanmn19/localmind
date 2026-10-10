@@ -74,7 +74,17 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote"
   ],
 
   "bn": [
@@ -156,7 +166,17 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote"
   ],
 
   "de": [
@@ -238,7 +258,17 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote"
   ],
 
   "es": [
@@ -320,7 +350,17 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote"
   ],
 
   "fr": [
@@ -402,7 +442,17 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote"
   ],
 
   "hi": [
@@ -484,7 +534,17 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote"
   ],
 
   "it": [
@@ -566,7 +626,17 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote"
   ],
 
   "ja": [
@@ -648,7 +718,17 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote"
   ],
 
   "ko": [
@@ -716,7 +796,17 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote"
   ],
 
   "pt": [
@@ -784,7 +874,17 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote"
   ],
 
   "ru": [
@@ -866,7 +966,17 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote"
   ],
 
   "tr": [
@@ -948,7 +1058,17 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote"
   ],
 
   "zh": [
@@ -1030,7 +1150,17 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote"
   ],
 
   "zh_TW": [
@@ -1112,6 +1242,16 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote"
   ]
 }

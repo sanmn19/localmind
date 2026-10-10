@@ -6,6 +6,8 @@ import '../data/tools/builtin_tool_provider.dart';
 import '../data/tools/mcp_tool_provider.dart';
 import '../data/tools/tool_definition.dart';
 import '../data/mcp_server_manager.dart';
+import '../data/background_task_service.dart';
+import '../data/models/background_task.dart';
 import 'package:localmind/features/mail/data/google_auth_client.dart';
 import 'package:localmind/features/mail/data/gmail_repository.dart';
 import 'package:localmind/features/mail/data/imap_repository.dart';
@@ -26,6 +28,7 @@ import '../../mcp/data/web/web_search_service.dart';
 import '../../skills/data/skills_mcp_server.dart';
 import '../../skills/data/skills_provider.dart';
 import '../../skills/data/skills_store.dart';
+import 'package:localmind/features/conversations/providers/conversation_providers.dart';
 
 /// Per-turn web-tool budgets, owning state in the notifier's tool path.
 /// One instance per app session: consecutive tool rounds of a reply SHARE
@@ -73,6 +76,7 @@ Future<bool> shouldAutoApproveTool(
   bool deviceToolsEnabled = false,
   bool mailAccountsConnected = false,
   bool skillsEnabled = false,
+  bool backgroundTasksEnabled = false,
   required ToolRegistry registry,
   required TerminalWhitelist? whitelist,
 }) async {
@@ -121,6 +125,15 @@ Future<bool> shouldAutoApproveTool(
       return skillsEnabled;
     }
     return false;
+  }
+
+  if (await registry.isLocalTool(toolName, {bgMcpServerUrl})) {
+    // bg.spawn NEVER auto-approves: standing up an autonomous scheduled
+    // thread always crosses the approval dialog, whatever the toggle says
+    // (mail.send precedent). The read/status surface and the cancel relay
+    // ride the toggle, like web/terminal reads.
+    if (toolName == 'bg.spawn') return false;
+    return backgroundTasksEnabled;
   }
 
   return false;
@@ -230,6 +243,41 @@ final webServerRegistrationProvider = Provider<void>((ref) {
   } else if (manager.hasDeviceServer()) {
     manager.removeServer(deviceMcpServerLabel);
   }
+  if (settings.backgroundTasksEnabled) {
+    // The spawn orchestration lives HERE (riverpod context): the hidden
+    // task conversation rides the same create path as normal chats, stamped
+    // isBackground at creation (fork stamp parity), the task row goes through
+    // BackgroundTasksService.createTask (cap enforced there), and the run
+    // request relays through the v1 no-op `runRequester` (Task 4 wires the
+    // engine loop to this seam).
+    final service = ref.watch(backgroundTasksServiceProvider);
+    manager.addBackgroundServer(
+      BackgroundServices(
+        currentOwnerConversationId: () =>
+            ref.read(activeConversationIdProvider),
+        spawn: ({required String ownerConversationId, required String prompt,
+              int? loopMinutes, int? maxRuns}) {
+          return _spawnBackgroundTask(
+            ref,
+            service,
+            ownerConversationId: ownerConversationId,
+            prompt: prompt,
+            loopMinutes: loopMinutes,
+            maxRuns: maxRuns,
+          );
+        },
+        tasksFor: (ownerConversationId) => ref
+            .read(backgroundTasksServiceProvider)
+            .tasksFor(ownerConversationId),
+        cancelTask: (taskId) => ref
+            .read(backgroundTasksServiceProvider)
+            .cancelTask(taskId),
+        runRequester: (taskId) {},
+      ),
+    );
+  } else if (manager.hasBackgroundServer()) {
+    manager.removeServer(bgMcpServerLabel);
+  }
   // Mail connectors register from the connected accounts list (provider +
   // email rows) — the connected toggle lives with the account, and each
   // repository owns the token gateway for its account. Only rows that
@@ -310,5 +358,80 @@ final webServerRegistrationProvider = Provider<void>((ref) {
     if (manager.hasDeviceServer()) {
       manager.removeServer(deviceMcpServerLabel);
     }
+    if (manager.hasBackgroundServer()) {
+      manager.removeServer(bgMcpServerLabel);
+    }
   });
+});
+
+/// The bg.spawn orchestration (registration-side closure): create the
+/// hidden `isBackground` task conversation off the shared create path, seed
+/// the task row through [BackgroundTasksService.createTask] (the engine cap
+/// is enforced there), and return the task for the dispatch's run-request
+/// relay. A cap refusal must not leave the freshly minted hidden
+/// conversation dangling — it is deleted again on the way out.
+Future<BackgroundTask> _spawnBackgroundTask(
+  Ref ref,
+  BackgroundTasksService service, {
+  required String ownerConversationId,
+  required String prompt,
+  int? loopMinutes,
+  int? maxRuns,
+}) async {
+  final conversations = ref.read(conversationsProvider.notifier);
+  final taskConversation = await conversations.createConversation(
+    title: backgroundSpawnTitle(prompt),
+    isBackground: true,
+  );
+  try {
+    return await service.createTask(
+      ownerConversationId: ownerConversationId,
+      prompt: prompt,
+      loopMinutes: loopMinutes,
+      maxRuns: maxRuns,
+      taskConversationId: taskConversation.id,
+    );
+  } catch (error) {
+    await conversations.deleteConversation(taskConversation.id);
+    rethrow;
+  }
+}
+
+/// `BG: <prompt-32>` — the hidden task thread's title (same flattened
+/// prompt the task row stores, truncated once at creation), where
+/// `<prompt-32>` stands for the first 32 chars of the flattened prompt.
+String backgroundSpawnTitle(String prompt) {
+  final flattened = prompt.replaceAll(RegExp(r'\s+'), ' ').trim();
+  final head = flattened.length <= 32
+      ? flattened
+      : '${flattened.substring(0, 32)}…';
+  return 'BG: $head';
+}
+
+/// One rendered row of the Background card: a task plus the display title
+/// of the conversation that owns it.
+class BackgroundTaskRow {
+  const BackgroundTaskRow({required this.task, required this.ownerTitle});
+
+  final BackgroundTask task;
+  final String ownerTitle;
+}
+
+/// Background-card rows: every task owned by a conversation in the
+/// conversations state, oldest first per owner. Riding the conversations
+/// state means delete cascades re-render the card automatically; the
+/// dispatch + card invalidate this provider after writes (cancel/spawn).
+final backgroundTaskRowsProvider = FutureProvider<List<BackgroundTaskRow>>((
+  ref,
+) async {
+  final conversations = ref.watch(conversationsProvider).value;
+  final service = ref.watch(backgroundTasksServiceProvider);
+  if (conversations == null || conversations.isEmpty) return const [];
+  final rows = <BackgroundTaskRow>[];
+  for (final conversation in conversations) {
+    for (final task in await service.tasksFor(conversation.id)) {
+      rows.add(BackgroundTaskRow(task: task, ownerTitle: conversation.title));
+    }
+  }
+  return rows;
 });

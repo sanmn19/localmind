@@ -3670,5 +3670,25 @@
   "forkPanelInputHint": "Ask about this selection…",
   "@forkPanelInputHint": {"description": "Hint text of the fork panel's question input"},
   "forkTurnErrorLabel": "An error occurred: {message}",
-  "@forkTurnErrorLabel": {"description": "Prefix for a failed fork turn rendered in the fork panel transcript", "placeholders": {"message": {"type": "String"}}}
-  }
+  "@forkTurnErrorLabel": {"description": "Prefix for a failed fork turn rendered in the fork panel transcript", "placeholders": {"message": {"type": "String"}}},
+  "backgroundCardTitle": "Background tasks",
+  "@backgroundCardTitle": {"description": "Background tasks card title"},
+  "backgroundCardDesc": "Lets models spawn sub-agent tasks that run in a hidden chat thread and post results back into the conversation. Tasks can repeat on a schedule; every spawn asks first.",
+  "@backgroundCardDesc": {"description": "Background tasks card description"},
+  "backgroundTasksToggleLabel": "Enable background tasks",
+  "@backgroundTasksToggleLabel": {"description": "Semantics label of the background tasks toggle"},
+  "backgroundNoTasksLabel": "No background tasks yet.",
+  "@backgroundNoTasksLabel": {"description": "Empty state of the background tasks card"},
+  "backgroundCancelTooltip": "Cancel task",
+  "@backgroundCancelTooltip": {"description": "Tooltip of a background task row's cancel button"},
+  "backgroundStateRunning": "Running",
+  "@backgroundStateRunning": {"description": "Chip label for a running background task"},
+  "backgroundStateFinished": "Finished",
+  "@backgroundStateFinished": {"description": "Chip label for a finished background task"},
+  "backgroundStateCancelled": "Cancelled",
+  "@backgroundStateCancelled": {"description": "Chip label for a cancelled background task"},
+  "backgroundStateFailed": "Failed",
+  "@backgroundStateFailed": {"description": "Chip label for a failed background task"},
+  "backgroundCapNote": "At most 3 tasks run at once; recurring tasks repeat every 10 minutes or more.",
+  "@backgroundCapNote": {"description": "Static note stating the background task concurrency cap and loop floor"}
+}

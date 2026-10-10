@@ -74,4 +74,5 @@ const localServerManagerUrls = {
   terminalMcpServerUrl,
   skillsMcpServerUrl,
   deviceMcpServerUrl,
+  bgMcpServerUrl,
 };

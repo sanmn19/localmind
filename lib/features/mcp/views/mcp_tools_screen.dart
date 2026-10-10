@@ -5,7 +5,9 @@ import 'package:hugeicons/hugeicons.dart';
 import 'package:localmind/l10n/app_localizations.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+import '../../chat/data/background_task_service.dart';
 import '../../chat/data/mcp_server_manager.dart';
+import '../../chat/data/models/background_task.dart';
 import '../../chat/data/tools/calendar_service.dart';
 import '../../chat/data/tools/location_service.dart';
 import '../../chat/data/tools/tool_definition.dart';
@@ -217,6 +219,8 @@ class McpToolsScreen extends ConsumerWidget {
                           const _DeviceCard(),
                           const SizedBox(height: 16),
                           const _MailConnectorsCard(),
+                          const SizedBox(height: 16),
+                          const _BackgroundCard(),
                           if (settings.mcpEnabled) ...[
                             const SizedBox(height: 16),
                             _ConfiguredMcpServersCard(
@@ -1272,6 +1276,213 @@ class _DeviceCard extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The Background sub-agents card: settings toggle + the task rows fed by
+/// [backgroundTaskRowsProvider] (BackgroundTasksService.tasksFor per open
+/// conversation) + the static cap note. Mirrors [_DeviceCard]'s structure,
+/// styles and Key conventions.
+class _BackgroundCard extends ConsumerWidget {
+  const _BackgroundCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final settings = ref.watch(settingsProvider);
+    final enabled = settings.backgroundTasksEnabled;
+    final rowsAsync = ref.watch(backgroundTaskRowsProvider);
+
+    return _McpSectionCard(
+      title: l10n.backgroundCardTitle,
+      accent: const Color(0xFF06B6D4),
+      icon: HugeIcons.strokeRoundedClock01,
+      trailing: Semantics(
+        label: l10n.backgroundTasksToggleLabel,
+        child: ShadSwitch(
+          key: const Key('background_tasks_toggle'),
+          value: enabled,
+          onChanged: (value) {
+            ref
+                .read(settingsProvider.notifier)
+                .setBackgroundTasksEnabled(value);
+            ref.invalidate(availableToolsProvider);
+            ref.invalidate(backgroundTaskRowsProvider);
+          },
+        ),
+      ),
+      children: [
+        Text(
+          l10n.backgroundCardDesc,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        Text(
+          l10n.backgroundCapNote,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        Opacity(
+          opacity: enabled ? 1.0 : 0.55,
+          child: IgnorePointer(
+            ignoring: !enabled,
+            child: _McpPanel(
+              child: rowsAsync.when(
+                loading: () => const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                ),
+                error: (error, _) => Text(
+                  error.toString(),
+                  style: theme.textTheme.bodyMedium,
+                ),
+                data: (rows) {
+                  if (rows.isEmpty) {
+                    return Text(
+                      l10n.backgroundNoTasksLabel,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    );
+                  }
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final row in rows)
+                        _BackgroundTaskRow(row: row),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// One task row of the Background card: prompt + owner chat, a state chip
+/// and a cancel IconButton (Key terraced by the task id, like the card's
+/// other keyed controls).
+class _BackgroundTaskRow extends ConsumerWidget {
+  const _BackgroundTaskRow({required this.row});
+
+  final BackgroundTaskRow row;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final task = row.task;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        key: Key('background_task_row_${task.id}'),
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  task.prompt,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  row.ownerTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          _BackgroundStateChip(state: task.state),
+          const SizedBox(width: 4),
+          Tooltip(
+            message: l10n.backgroundCancelTooltip,
+            child: ShadIconButton.ghost(
+              key: Key('background_cancel_${task.id}'),
+              icon: const HugeIcon(
+                icon: HugeIcons.strokeRoundedCancel01,
+                size: 18,
+                color: Colors.red,
+              ),
+              onPressed: () async {
+                await ref
+                    .read(backgroundTasksServiceProvider)
+                    .cancelTask(task.id);
+                ref.invalidate(backgroundTaskRowsProvider);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BackgroundStateChip extends StatelessWidget {
+  const _BackgroundStateChip({required this.state});
+
+  final BackgroundTaskState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final (String label, Color color) = switch (state) {
+      BackgroundTaskState.running => (
+        l10n.backgroundStateRunning,
+        const Color(0xFFF59E0B),
+      ),
+      BackgroundTaskState.finished => (
+        l10n.backgroundStateFinished,
+        const Color(0xFF22C55E),
+      ),
+      BackgroundTaskState.cancelled => (
+        l10n.backgroundStateCancelled,
+        theme.colorScheme.outline,
+      ),
+      BackgroundTaskState.failed => (
+        l10n.backgroundStateFailed,
+        const Color(0xFFEF4444),
+      ),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
   }
 }

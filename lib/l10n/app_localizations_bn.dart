@@ -3543,4 +3543,36 @@ class AppLocalizationsBn extends AppLocalizations {
   String forkTurnErrorLabel(String message) {
     return 'An error occurred: $message';
   }
+
+  @override
+  String get backgroundCardTitle => 'Background tasks';
+
+  @override
+  String get backgroundCardDesc =>
+      'Lets models spawn sub-agent tasks that run in a hidden chat thread and post results back into the conversation. Tasks can repeat on a schedule; every spawn asks first.';
+
+  @override
+  String get backgroundTasksToggleLabel => 'Enable background tasks';
+
+  @override
+  String get backgroundNoTasksLabel => 'No background tasks yet.';
+
+  @override
+  String get backgroundCancelTooltip => 'Cancel task';
+
+  @override
+  String get backgroundStateRunning => 'Running';
+
+  @override
+  String get backgroundStateFinished => 'Finished';
+
+  @override
+  String get backgroundStateCancelled => 'Cancelled';
+
+  @override
+  String get backgroundStateFailed => 'Failed';
+
+  @override
+  String get backgroundCapNote =>
+      'At most 3 tasks run at once; recurring tasks repeat every 10 minutes or more.';
 }

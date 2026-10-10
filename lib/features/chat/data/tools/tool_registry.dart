@@ -76,5 +76,6 @@ class ToolRegistry {
       providerRef == webMcpServerUrl ||
       providerRef == terminalMcpServerUrl ||
       providerRef == skillsMcpServerUrl ||
-      providerRef == deviceMcpServerUrl;
+      providerRef == deviceMcpServerUrl ||
+      providerRef == bgMcpServerUrl;
 }

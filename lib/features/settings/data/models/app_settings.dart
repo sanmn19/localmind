@@ -94,6 +94,11 @@ class AppSettings {
   /// feature.
   final bool skillsEnabled;
 
+  /// Whether the in-process `local://background` MCP server (bg.spawn +
+  /// bg.status + bg.cancel) is registered at all. Default OFF: autonomous
+  /// background sub-agent threads only exist once the user opts in.
+  final bool backgroundTasksEnabled;
+
   /// Connected mail connector accounts as raw maps (provider/email only —
   /// non-secret identity rows; tokens never live in here).
   final List<Map<String, dynamic>> mailConnectorAccounts;
@@ -165,6 +170,7 @@ class AppSettings {
     this.shareTargetEnabled = true,
     this.toolWhitelist = const [],
     this.skillsEnabled = true,
+    this.backgroundTasksEnabled = false,
     this.mailConnectorAccounts = const [],
     this.autoCollapseThinking = false,
     this.sendTemperature = true,
@@ -229,6 +235,7 @@ class AppSettings {
     bool? shareTargetEnabled,
     List<String>? toolWhitelist,
     bool? skillsEnabled,
+    bool? backgroundTasksEnabled,
     List<Map<String, dynamic>>? mailConnectorAccounts,
     bool? autoCollapseThinking,
     bool? sendTemperature,
@@ -319,6 +326,8 @@ class AppSettings {
       shareTargetEnabled: shareTargetEnabled ?? this.shareTargetEnabled,
       toolWhitelist: toolWhitelist ?? this.toolWhitelist,
       skillsEnabled: skillsEnabled ?? this.skillsEnabled,
+      backgroundTasksEnabled:
+          backgroundTasksEnabled ?? this.backgroundTasksEnabled,
       mailConnectorAccounts:
           mailConnectorAccounts ?? this.mailConnectorAccounts,
       autoCollapseThinking: autoCollapseThinking ?? this.autoCollapseThinking,
@@ -386,6 +395,7 @@ class AppSettings {
       'shareTargetEnabled': shareTargetEnabled,
       'toolWhitelist': toolWhitelist,
       'skillsEnabled': skillsEnabled,
+      'backgroundTasksEnabled': backgroundTasksEnabled,
       'mailConnectorAccounts': mailConnectorAccounts,
       'autoCollapseThinking': autoCollapseThinking,
       'sendTemperature': sendTemperature,
@@ -457,6 +467,7 @@ class AppSettings {
       toolWhitelist:
           (map['toolWhitelist'] as List?)?.cast<String>() ?? const [],
       skillsEnabled: map['skillsEnabled'] ?? true,
+      backgroundTasksEnabled: map['backgroundTasksEnabled'] ?? false,
       mailConnectorAccounts:
           (map['mailConnectorAccounts'] as List?)
               ?.whereType<Map>()

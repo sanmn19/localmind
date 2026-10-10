@@ -2526,6 +2526,7 @@ class ChatNotifier extends Notifier<ChatState> {
               deviceToolsEnabled: settings.deviceToolsEnabled,
               mailAccountsConnected: settings.mailConnectorAccounts.isNotEmpty,
               skillsEnabled: settings.skillsEnabled,
+              backgroundTasksEnabled: settings.backgroundTasksEnabled,
               registry: registry,
               whitelist: TerminalWhitelist(settings.toolWhitelist),
             )) {

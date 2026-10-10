@@ -21,6 +21,11 @@ const int bgMaxRunsDefault = 10;
 const int bgMaxRunsCap = 25;
 const int bgMaxConcurrentTasks = 3;
 
+/// Engine-relay seam shape (Task 2 review ruling): a zero-or-nothing closure
+/// wired to `cancelRunsFor`/delete cascades; the construction site decides
+/// whether it is a genuine engine relay or a no-op.
+typedef CancelRequester = void Function(String taskId);
+
 /// CRUD + normalization for background-agent task rows living in the
 /// `BackgroundTaskEntity` box (docs/specs/2026-10-09-background-subagents.md).
 ///
@@ -39,7 +44,7 @@ class BackgroundTasksService {
   /// [_db] may be omitted when only pure normalization is needed
   /// (unit tests); persistence operations then throw [StateError].
   /// [cancelRequester] is the Task 4 engine seam; v1 omits it (no-op).
-  BackgroundTasksService([this._db, void Function(String taskId)? cancelRequester])
+  BackgroundTasksService([this._db, CancelRequester? cancelRequester])
       : _cancelRequester = cancelRequester;
 
   final ObjectBoxStore? _db;
