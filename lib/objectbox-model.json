@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "1:6060443518060866028",
-      "lastPropertyId": "27:5205524731612525260",
+      "lastPropertyId": "28:5491618122077238252",
       "name": "ConversationEntity",
       "properties": [
         {
@@ -144,6 +144,11 @@
         {
           "id": "27:5205524731612525260",
           "name": "isFork",
+          "type": 1
+        },
+        {
+          "id": "28:5491618122077238252",
+          "name": "isBackground",
           "type": 1
         }
       ],
@@ -655,10 +660,90 @@
         }
       ],
       "relations": []
+    },
+    {
+      "id": "9:4259778768971352693",
+      "lastPropertyId": "13:2424803949206843021",
+      "name": "BackgroundTaskEntity",
+      "properties": [
+        {
+          "id": "1:8264945170995383641",
+          "name": "internalId",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:2747249318395952904",
+          "name": "id",
+          "indexId": "16:7237672624095062846",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "3:2980414009138731474",
+          "name": "ownerConversationId",
+          "indexId": "17:1836274154634831998",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:726255219052977140",
+          "name": "taskConversationId",
+          "indexId": "18:9214790592331218716",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "5:464471746561374896",
+          "name": "prompt",
+          "type": 9
+        },
+        {
+          "id": "6:4739030742865769347",
+          "name": "loopMinutes",
+          "type": 6
+        },
+        {
+          "id": "7:8531011841985498677",
+          "name": "maxRuns",
+          "type": 6
+        },
+        {
+          "id": "8:6055901789201619104",
+          "name": "runCount",
+          "type": 6
+        },
+        {
+          "id": "9:1802237654814163315",
+          "name": "state",
+          "type": 9
+        },
+        {
+          "id": "10:2707522523034969810",
+          "name": "lastRunAt",
+          "type": 10
+        },
+        {
+          "id": "11:1823982757969541244",
+          "name": "createdAt",
+          "type": 10
+        },
+        {
+          "id": "12:8218730214853294328",
+          "name": "resultMessageId",
+          "type": 9
+        },
+        {
+          "id": "13:2424803949206843021",
+          "name": "ownerMessageId",
+          "type": 9
+        }
+      ],
+      "relations": []
     }
   ],
-  "lastEntityId": "8:7895365751563937927",
-  "lastIndexId": "15:7170761428673485654",
+  "lastEntityId": "9:4259778768971352693",
+  "lastIndexId": "18:9214790592331218716",
   "lastRelationId": "0:0",
   "lastSequenceId": "0:0",
   "modelVersion": 5,

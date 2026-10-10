@@ -25,6 +25,7 @@ class Conversation {
   final String? forkOfMessageId;
   final String? forkSpan;
   final bool isFork;
+  final bool isBackground;
 
   Conversation({
     required this.id,
@@ -53,6 +54,7 @@ class Conversation {
     this.forkOfMessageId,
     this.forkSpan,
     this.isFork = false,
+    this.isBackground = false,
   });
 
   Conversation copyWith({
@@ -94,6 +96,7 @@ class Conversation {
     String? forkSpan,
     bool clearForkSpan = false,
     bool? isFork,
+    bool? isBackground,
   }) {
     return Conversation(
       id: id ?? this.id,
@@ -132,6 +135,7 @@ class Conversation {
           : (forkOfMessageId ?? this.forkOfMessageId),
       forkSpan: clearForkSpan ? null : (forkSpan ?? this.forkSpan),
       isFork: isFork ?? this.isFork,
+      isBackground: isBackground ?? this.isBackground,
     );
   }
 }
