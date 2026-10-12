@@ -62,6 +62,25 @@ const List<String> bgNeverAvailableToolPrefixes = [
   'notifications.',
 ];
 
+/// Composes the child-safe toolset for a background snapshot (review I2):
+/// structurally minus [bgNeverAvailableToolPrefixes] (bg.* and
+/// notifications.* are never exposed to a child) AND keeps only tools whose
+/// [approvable] verdict is true under the spawn-time settings. Pure and
+/// dependency-injected — the tooling wiring supplies the real approval
+/// predicate; tests supply a fake.
+Future<List<ToolDefinition>> backgroundChildSafeTools({
+  required List<ToolDefinition> allDefs,
+  required Future<bool> Function(String toolName) approvable,
+}) async {
+  final defs = <ToolDefinition>[];
+  for (final def in allDefs) {
+    if (bgNeverAvailableToolPrefixes.any(def.name.startsWith)) continue;
+    if (!await approvable(def.name)) continue;
+    defs.add(def);
+  }
+  return defs;
+}
+
 /// True when the content ENDS with the literal `[BG_DONE]` marker on its own
 /// line (strip-normalized: last content line, whitespace-tolerant). Markers
 /// quoted mid-prose do NOT finish a task.
@@ -97,6 +116,20 @@ class BackgroundRunException implements Exception {
 
   @override
   String toString() => 'BackgroundRunException: $reason';
+}
+
+/// A run could not START because no model target was ready for the snapshot
+/// (review M7: the on-device pre-load case at boot-resume). Transient and
+/// resumable — the driver returns WITHOUT [markFailed] so the task row stays
+/// in the running state and the next engine pass picks it up.
+class BackgroundTargetUnavailableException implements Exception {
+  BackgroundTargetUnavailableException(this.reason);
+
+  final String reason;
+
+  @override
+  String toString() =>
+      'BackgroundTargetUnavailableException: $reason';
 }
 
 /// Outcome of one generation turn.
@@ -587,6 +620,15 @@ Future<void> driveBackgroundTaskLoop(
     final BackgroundRunResult result;
     try {
       result = await seams.runTurn(task);
+    } on BackgroundTargetUnavailableException {
+      // Review M7: an unreachable model target is transient (on-device
+      // pre-load etc.). The row stays RUNNING and resumable — no markFailed,
+      // no finalize; a later engine pass resumes it.
+      Log.info(
+        'Background task $taskId waits for a ready model target '
+        '(target unavailable).',
+      );
+      return;
     } on BackgroundRunException catch (error, stack) {
       Log.error('Background task $taskId run failed: $error\n$stack');
       await seams.markFailed(taskId);

@@ -13,14 +13,10 @@ import '../../../objectbox.g.dart';
 import '../data/chat_service.dart';
 import '../data/background_engine.dart';
 import '../data/background_runner.dart';
-import '../data/tools/tool_registry.dart';
-import '../data/tools/builtin_tool_provider.dart';
-import '../data/tools/mcp_tool_provider.dart';
-import '../data/tools/tool_definition.dart';
-import '../data/mcp_server_manager.dart';
 import '../data/background_task_service.dart';
 import '../data/models/background_task.dart';
 import '../data/models/message.dart';
+import '../utils/message_variants.dart';
 import 'package:localmind/features/mail/data/google_auth_client.dart';
 import 'package:localmind/features/mail/data/gmail_repository.dart';
 import 'package:localmind/features/mail/data/imap_repository.dart';
@@ -32,6 +28,11 @@ import 'package:localmind/features/mail/data/outlook_repository.dart';
 import 'package:localmind/features/mail/mail_mcp_server.dart';
 import 'package:dio/dio.dart';
 import '../data/tool_budget.dart';
+import '../data/tools/tool_registry.dart';
+import '../data/tools/builtin_tool_provider.dart';
+import '../data/tools/mcp_tool_provider.dart';
+import '../data/tools/tool_definition.dart';
+import '../data/mcp_server_manager.dart';
 import '../../mcp/data/device_contacts_repository.dart';
 import '../../mcp/data/device_mcp_server.dart';
 import '../../mcp/data/terminal_mcp_server.dart';
@@ -533,6 +534,13 @@ final backgroundEngineProvider = Provider<BackgroundRunEngine>((ref) {
       task: task,
       content: content,
     ),
+    // Review C1: the owner result row anchors onto the owner conversation's
+    // RESOLVED active-timeline tail (real resolver over the persisted rows)
+    // — an independent root would be dropped by the timeline render.
+    ownerTailResolver: (ownerConversationId) => _ownerTimelineTail(
+      ref.read(databaseProvider),
+      ownerConversationId,
+    ),
     onEngineTouched: () {
       if (ref.mounted) ref.invalidate(backgroundTaskRowsProvider);
     },
@@ -632,18 +640,22 @@ Future<BackgroundRunSnapshot> _backgroundRunSnapshot(Ref ref) async {
   final server = target.server;
   final modelId = target.effectiveModelId;
   if (server == null || modelId == null) {
-    throw StateError('No ready model target for background sub-agent runs.');
+    // Review M7: surfaced as the resumable "target unavailable" failure —
+    // the driver returns without markFailed so a boot-resume against an
+    // on-device pre-load survives and re-resumes later.
+    throw BackgroundTargetUnavailableException(
+      'No ready model target for background sub-agent runs.',
+    );
   }
   final settings = ref.read(settingsProvider);
   final registry = ref.read(toolRegistryProvider);
   final whitelist = settings.toolWhitelist.isEmpty
       ? null
       : TerminalWhitelist(settings.toolWhitelist);
-  final defs = <ToolDefinition>[];
-  for (final def in await registry.listTools()) {
-    if (bgNeverAvailableToolPrefixes.any(def.name.startsWith)) continue;
-    final approved = await shouldAutoApproveTool(
-      def.name,
+  final defs = await backgroundChildSafeTools(
+    allDefs: await registry.listTools(),
+    approvable: (toolName) => shouldAutoApproveTool(
+      toolName,
       webToolsEnabled: settings.webToolsEnabled,
       terminalToolsEnabled: settings.terminalToolsEnabled,
       deviceToolsEnabled: settings.deviceToolsEnabled,
@@ -651,14 +663,36 @@ Future<BackgroundRunSnapshot> _backgroundRunSnapshot(Ref ref) async {
       skillsEnabled: settings.skillsEnabled,
       registry: registry,
       whitelist: whitelist,
-    );
-    if (approved) defs.add(def);
-  }
+    ),
+  );
   return BackgroundRunSnapshot(
     server: server,
     modelId: modelId,
     params: ref.read(chatParamsProvider),
     toolDefs: defs,
+  );
+}
+
+/// Review C1 wiring: the resolver the engine calls in _finalizeFinished.
+/// Runs the REAL [MessageVariants.resolveActiveTimeline] over the owner rows
+/// and returns the resolved tail's id (null when the timeline is empty) plus
+/// the next free thread order taken across ALL owner rows (max + 1, 0 when
+/// empty).
+Future<({String? parentMessageId, int nextThreadOrder})> _ownerTimelineTail(
+  ObjectBoxStore db,
+  String ownerConversationId,
+) async {
+  final rows = await _backgroundRows(db, ownerConversationId);
+  final timeline = MessageVariants.resolveActiveTimeline(rows);
+  final nextThreadOrder = rows.isEmpty
+      ? 0
+      : rows.map((row) => row.threadOrder).reduce(
+            (a, b) => a > b ? a : b,
+          ) +
+          1;
+  return (
+    parentMessageId: timeline.isEmpty ? null : timeline.last.id,
+    nextThreadOrder: nextThreadOrder,
   );
 }
 

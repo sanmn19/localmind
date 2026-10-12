@@ -139,7 +139,12 @@ class BackgroundTasksService {
   /// Marks [taskId] cancelled. Idempotent: cancelling an already-cancelled
   /// task returns true without re-writing; finished/failed rows are
   /// terminal and refuse the regression (false); unknown ids return false.
+  ///
+  /// Review I1: relays [cancelRunsFor] to the engine BEFORE the DB flip — a
+  /// live generator wakes even if the write below fails, and the relay is a
+  /// no-op for rows without a live loop (the write remains authoritative).
   Future<bool> cancelTask(String taskId) async {
+    _cancelRequester?.call(taskId);
     final db = _database;
     return db.store.runInTransactionAsync(
       TxMode.write,
@@ -178,6 +183,24 @@ class BackgroundTasksService {
       TxMode.write,
       _deleteTasksOwnedInBackground,
       ownerConversationId,
+    );
+    for (final id in removedIds) {
+      _cancelRequester?.call(id);
+    }
+    return removedIds.isNotEmpty;
+  }
+
+  /// Review M8: removes EVERY background task row (the conversation
+  /// delete-all sweep — includes rows whose owner conversation row already
+  /// vanished). Same contract shape as [deleteTasksOwnedBy]: rows go first,
+  /// then one [cancelRunsFor] relay per removed task id wakes any live loops
+  /// through the engine seam.
+  Future<bool> deleteAllTasks() async {
+    final db = _database;
+    final removedIds = await db.store.runInTransactionAsync(
+      TxMode.write,
+      _deleteAllTasksInBackground,
+      null,
     );
     for (final id in removedIds) {
       _cancelRequester?.call(id);
@@ -443,6 +466,19 @@ class BackgroundTasksService {
 
     box.removeMany(owned.map((row) => row.internalId).toList());
     return owned.map((row) => row.id).toList();
+  }
+
+  /// Table-wide variant of [_deleteTasksOwnedInBackground] (review M8):
+  /// fetches every row, removes them all, returns the removed task ids.
+  static List<String> _deleteAllTasksInBackground(Store store, void _) {
+    final box = store.box<BackgroundTaskEntity>();
+    final query = box.query().build();
+    final rows = query.find();
+    query.close();
+    if (rows.isEmpty) return const [];
+
+    box.removeMany(rows.map((row) => row.internalId).toList());
+    return rows.map((row) => row.id).toList();
   }
 
   /// Same mapping rule the entity enforces (T1 review ruling): unknown

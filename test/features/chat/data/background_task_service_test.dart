@@ -148,21 +148,42 @@ void main() {
 
       final stored = db.rows.single;
       expect(stored.state, BackgroundTaskState.cancelled.name);
-      // The seam is a cancel REQUEST relay (engine cancel lands in Task 4);
-      // cancelTask itself does not fire it — the cascade delete does.
-      expect(cancellations, isEmpty);
+      // Review I1: cancelTask relays the cancel REQUEST before the write —
+      // once per call (idempotent DB state, but a live generator must wake
+      // on every cancel attempt even if the write fails).
+      expect(cancellations, ['t-1', 't-1']);
     });
 
-    test('cancelTask hates regressions: finished/unknown → false', () async {
+    test('cancelTask relays to the live engine BEFORE the write (I1)',
+        () async {
+      final relays = <String>[];
+      final db = _FailingWriteTasksDb(
+        [_entity(id: 't-live', taskConversation: 'c-live')],
+      );
+      final service = BackgroundTasksService(db, relays.add);
+
+      // The write fails hard, yet the relay already fired — a live
+      // generator wakes regardless of DB outcome.
+      await expectLater(
+        service.cancelTask('t-live'),
+        throwsStateError,
+      );
+      expect(relays, ['t-live']);
+    });
+
+    test('cancelTask on terminal/unknown rows still relays (no-op engine '
+        'side), refuses the state regression', () async {
+      final relays = <String>[];
       final db = _FakeTasksDb([
         _entity(id: 't-done', state: 'finished'),
         _entity(id: 't-fail', state: 'failed'),
       ]);
-      final service = BackgroundTasksService(db);
+      final service = BackgroundTasksService(db, relays.add);
 
       expect(await service.cancelTask('t-done'), isFalse);
       expect(await service.cancelTask('t-fail'), isFalse);
       expect(await service.cancelTask('t-missing'), isFalse);
+      expect(relays, ['t-done', 't-fail', 't-missing']);
       expect(db.rows.map((e) => e.state).toSet(), {'finished', 'failed'});
     });
 
@@ -251,6 +272,25 @@ void main() {
       // Idempotent: the second sweep has nothing left to remove.
       expect(await service.deleteTasksOwnedBy('c1'), isFalse);
       expect(cancellations, ['t-1']);
+    });
+
+    test('deleteAllTasks wipes the whole table and relays every removed id '
+        '(M8)', () async {
+      final cancellations = <String>[];
+      final db = _FakeTasksDb([
+        _entity(id: 't-1', owner: 'c1', internalId: 1),
+        _entity(id: 't-2', owner: 'c2', internalId: 2),
+      ]);
+      final service = BackgroundTasksService(db, cancellations.add);
+
+      expect(await service.deleteAllTasks(), isTrue);
+      expect(db.rows, isEmpty);
+      expect(cancellations, containsAll(['t-1', 't-2']));
+      expect(cancellations, hasLength(2));
+
+      // Idempotent: an empty table is a no-op.
+      expect(await service.deleteAllTasks(), isFalse);
+      expect(cancellations, hasLength(2));
     });
   });
 
@@ -497,6 +537,28 @@ class _FakeTxStore extends Fake implements Store {
 
   @override
   Box<T> box<T>() => _FakeTaskBox(taskRows) as Box<T>;
+}
+
+/// Args-failing store: every write transaction throws — pins the I1
+/// relay-before-write ordering on cancelTask.
+class _FailingWriteTasksDb extends _FakeTasksDb {
+  _FailingWriteTasksDb(super.rows);
+
+  @override
+  Store get store => _FailingTxStore(rows);
+}
+
+class _FailingTxStore extends _FakeTxStore {
+  _FailingTxStore(super.taskRows);
+
+  @override
+  Future<R> runInTransactionAsync<R, T>(
+    TxMode mode,
+    R Function(Store, T) fn,
+    T args,
+  ) async {
+    throw StateError('simulated write failure');
+  }
 }
 
 class _FakeTaskBox extends Fake implements Box<BackgroundTaskEntity> {

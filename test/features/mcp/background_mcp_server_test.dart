@@ -734,6 +734,8 @@ class _FakeQuery<T> extends Fake implements Query<T> {
 
   @override
   int count() => rows.length;
+
+  @override
   List<T> find() => List.of(rows);
 
   @override

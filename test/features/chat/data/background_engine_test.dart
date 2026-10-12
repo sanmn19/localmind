@@ -13,6 +13,7 @@ import 'package:localmind/features/chat/data/models/chat_parameters.dart';
 import 'package:localmind/features/chat/data/models/mcp_integration.dart';
 import 'package:localmind/features/chat/data/models/message.dart';
 import 'package:localmind/features/chat/data/tools/tool_definition.dart';
+import 'package:localmind/features/chat/utils/message_variants.dart';
 import 'package:localmind/features/servers/data/models/server.dart';
 
 // Task 4's engine wiring: the requester seam relays run requests with the
@@ -139,6 +140,141 @@ void main() {
     expect(harness.notified, isEmpty);
   });
 
+  test('a no-ready-model StateError stays RUNNING, resumable (M7)', () async {
+    final harness = _EngineHarness();
+    harness.snapshotError =
+        StateError('No ready model target for background sub-agent runs.');
+    final engine = harness.buildEngine();
+    addTearDown(engine.dispose);
+
+    engine.requestRun('t-1');
+    await engine.waitForIdle();
+
+    // One turn attempt, then the driver returns WITHOUT markFailed: the row
+    // keeps its running state so a later engine pass resumes it.
+    expect(harness.turnedTasks, hasLength(1));
+    expect(harness.markedFailedIds, isEmpty);
+    expect(harness.recordedRuns, isEmpty);
+    expect(harness.markedFinishedIds, isEmpty);
+    expect(harness.ownerRows, isEmpty);
+    expect(harness.notified, isEmpty);
+  });
+
+  test('BgNotificationPayload parses our tap payloads only', () {
+    expect(BgNotificationPayload.tryParse('bg-task-result|owner-1'), 'owner-1');
+    expect(
+      BgNotificationPayload.tryParse('bg-task-result|c-with|pipe?'),
+      'c-with|pipe?',
+      reason: 'everything after the prefix is the id token',
+    );
+    expect(BgNotificationPayload.tryParse(null), isNull);
+    expect(BgNotificationPayload.tryParse(''), isNull);
+    expect(BgNotificationPayload.tryParse('other-source|owner-1'), isNull);
+    expect(BgNotificationPayload.tryParse('bg-task-result|'), isNull);
+    expect(
+      BgNotificationPayload.compose('owner-1'),
+      'bg-task-result|owner-1',
+    );
+  });
+
+  test('bgResultNotificationId is stable and stays in the 31-bit range',
+      () {
+    final task = _task();
+    final first = bgResultNotificationId(task);
+    // Stability pin: same task id → same notification slot, so an updated
+    // result re-addresses the same notification instead of stacking a new one.
+    expect(first, bgResultNotificationId(task));
+    expect(first, greaterThanOrEqualTo(0));
+    expect(first, lessThanOrEqualTo(0x7fffffff));
+  });
+
+  test('owner result row anchors onto the active timeline tail '
+      '(C1: live + reopened render)', () async {
+    final harness = _EngineHarness()
+      ..ownerSeedRows = [
+        Message(
+          id: 'u-1',
+          conversationId: 'owner-1',
+          role: MessageRole.user,
+          content: 'watch the mail',
+          createdAt: DateTime.utc(2026, 10, 9, 12),
+          status: MessageStatus.complete,
+          threadOrder: 0,
+        ),
+        Message(
+          id: 'a-1',
+          conversationId: 'owner-1',
+          role: MessageRole.assistant,
+          content: 'mail is quiet',
+          createdAt: DateTime.utc(2026, 10, 9, 12, 1),
+          status: MessageStatus.complete,
+          threadOrder: 1,
+          // A real persisted row keeps its ancestor: proper agent-linked
+          // timeline [user → assistant], NOT a second independent root.
+          parentMessageId: 'u-1',
+        ),
+      ];
+    final engine = harness.buildEngine();
+    addTearDown(engine.dispose);
+
+    engine.requestRun('t-1');
+    await engine.waitForIdle();
+
+    final bgRow = harness.ownerRows.single;
+    // Anchored onto the resolved tail, not an independent root.
+    expect(bgRow.parentMessageId, 'a-1');
+    expect(bgRow.threadOrder, 2);
+    expect(bgRow.isActiveVariant, isTrue);
+    expect(bgRow.status, MessageStatus.complete);
+
+    // LIVE semantics: the real resolver renders the seeded timeline with the
+    // background result row LAST.
+    final live = MessageVariants.resolveActiveTimeline(
+      [...harness.ownerSeedRows, bgRow],
+    );
+    expect(live.first.id, 'u-1');
+    expect(live[1].id, 'a-1');
+    expect(live.last.id, bgRow.id);
+
+    // REOPENED semantics: re-resolving the full persisted picture (row
+    // already in the store, parent chain read back from the DB) resolves to
+    // the identical timeline ending on the result row.
+    final reopened = MessageVariants.resolveActiveTimeline([
+      ...harness.ownerSeedRows,
+      Message(
+        id: bgRow.id,
+        conversationId: bgRow.conversationId,
+        role: bgRow.role,
+        content: bgRow.content,
+        createdAt: bgRow.createdAt,
+        status: bgRow.status,
+        isActiveVariant: true,
+        parentMessageId: bgRow.parentMessageId,
+        threadOrder: bgRow.threadOrder,
+      ),
+    ]);
+    expect(reopened.last.id, bgRow.id);
+
+    // The anchor row id the task commits is the row that renders last.
+    expect(harness.finishedIds.single.resultMessageId, bgRow.id);
+  });
+
+  test('owner row on an empty timeline is a root at order 0 (C1 edge)',
+      () async {
+    final harness = _EngineHarness();
+    final engine = harness.buildEngine();
+    addTearDown(engine.dispose);
+
+    engine.requestRun('t-1');
+    await engine.waitForIdle();
+
+    final bgRow = harness.ownerRows.single;
+    expect(bgRow.parentMessageId, isNull);
+    expect(bgRow.threadOrder, 0);
+    final timeline = MessageVariants.resolveActiveTimeline([bgRow]);
+    expect(timeline.single.id, bgRow.id);
+  });
+
   test('BackgroundResultNotifier posts via flutter_local_notifications '
       '(mocked plugin channel)', () async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
@@ -169,6 +305,8 @@ void main() {
     final show = calls.where((call) => call.method == 'show').single;
     expect(show.arguments['title'], 'Owner Chat');
     expect(show.arguments['body'], contains('the summer is over'));
+    // Tap routing payload (review I3): 'bg-task-result|<ownerConversationId>'.
+    expect(show.arguments['payload'], 'bg-task-result|owner-1');
 
     // Channel creation: the results channel runs silent-enough (no sound,
     // no vibration); the quiet foreground channel comes along for the
@@ -221,6 +359,10 @@ class _EngineHarness {
 
   Future<bool> Function(String conversationId)? existsByConversation;
 
+  /// M7: when set, buildRunSnapshot throws this error (StateError shape for
+  /// the no-ready-model case).
+  Object? snapshotError;
+
   BackgroundTask buildEngineRow(String taskId) => BackgroundTask(
         id: taskId,
         ownerConversationId: 'owner-1',
@@ -231,6 +373,29 @@ class _EngineHarness {
         state: BackgroundTaskState.running,
         createdAt: DateTime.utc(2026, 10, 9, 12),
       );
+
+  /// Seeded owner-conversation rows the resolver reads (stands in for the
+  /// DB rows the production wiring loads via _backgroundRows).
+  List<Message> ownerSeedRows = [];
+
+  /// Engine seam wiring for the C1 owner-row contract: runs the REAL
+  /// [MessageVariants.resolveActiveTimeline] over the persisted owner rows —
+  /// exactly the logic the production _ownerTimelineTail helper uses.
+  Future<({String? parentMessageId, int nextThreadOrder})>
+      resolveOwnerTail(String ownerConversationId) async {
+    final rows = [
+      ...ownerSeedRows,
+      ...persistedRows.where((row) => row.conversationId == ownerConversationId),
+    ];
+    final timeline = MessageVariants.resolveActiveTimeline(rows);
+    final nextThreadOrder = rows.isEmpty
+        ? 0
+        : rows.map((row) => row.threadOrder).reduce((a, b) => a > b ? a : b) + 1;
+    return (
+      parentMessageId: timeline.isEmpty ? null : timeline.last.id,
+      nextThreadOrder: nextThreadOrder,
+    );
+  }
 
   BackgroundRunEngine buildEngine({bool hangingChatService = false}) {
     return BackgroundRunEngine(
@@ -263,12 +428,16 @@ class _EngineHarness {
               conversationId == 'task-c1' || conversationId == 'owner-1',
       conversationTitle: (conversationId) async =>
           conversationId == 'owner-1' ? 'Owner Chat' : null,
-      buildRunSnapshot: () async => BackgroundRunSnapshot(
-        server: _remoteServer(),
-        modelId: 'model',
-        params: ChatParameters.defaults(),
-        toolDefs: const [],
-      ),
+      buildRunSnapshot: () async {
+        final error = snapshotError;
+        if (error != null) throw error;
+        return BackgroundRunSnapshot(
+          server: _remoteServer(),
+          modelId: 'model',
+          params: ChatParameters.defaults(),
+          toolDefs: const [],
+        );
+      },
       loadRows: (conversationId) async => persistedRows
           .where((row) => row.conversationId == conversationId)
           .toList(),
@@ -285,6 +454,7 @@ class _EngineHarness {
           content: content,
         ));
       },
+      ownerTailResolver: resolveOwnerTail,
       onEngineTouched: () {},
       onTurnObserved: turnedTasks.add,
     );

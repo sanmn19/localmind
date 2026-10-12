@@ -46,6 +46,58 @@ void main() {
     });
   });
 
+  group('backgroundChildSafeTools (I2 exclusion filter)', () {
+    ToolDefinition def(String name) => ToolDefinition(
+          name: name,
+          description: 'test $name',
+          inputSchema: const {},
+          providerType: ToolProviderType.mcp,
+        );
+
+    test('child set keeps only approvable non-bg tool names (fake verdicts)',
+        () async {
+      final child = await backgroundChildSafeTools(
+        allDefs: [
+          def('bg.spawn'),
+          def('bg.cancel'),
+          def('notifications.read_recent'),
+          def('web.search'),
+          def('terminal.run'),
+          def('calc.add'),
+        ],
+        approvable: (toolName) async => toolName != 'terminal.run',
+      );
+
+      expect(
+        child.map((d) => d.name),
+        unorderedEquals(['web.search', 'calc.add']),
+      );
+    });
+
+    test('bg.*/notifications.* drop structurally even when approvable',
+        () async {
+      final child = await backgroundChildSafeTools(
+        allDefs: [
+          def('bg.spawn'),
+          def('bg.status'),
+          def('notifications.read_recent'),
+        ],
+        approvable: (_) async => true,
+      );
+
+      expect(child, isEmpty,
+          reason: 'structural exclusion precedes the toggle verdict');
+    });
+
+    test('empty defs.resolve to an empty child set', () async {
+      final child = await backgroundChildSafeTools(
+        allDefs: const [],
+        approvable: (_) async => true,
+      );
+      expect(child, isEmpty);
+    });
+  });
+
   group('runBackgroundTurn (single-run pipeline)', () {
     test('streams one generation and persists user + assistant rows',
         () async {
@@ -439,6 +491,23 @@ void main() {
       expect(harness.finalized, isEmpty);
       expect(harness.markedFailed, [harness.taskId]);
     });
+
+    test('target-unavailable turns stay RUNNING (M7: no markFailed, '
+        'resumable)', () async {
+      final harness = _LoopHarness(loopMinutes: 0, maxRuns: 10);
+      harness.turnCrash =
+          BackgroundTargetUnavailableException('no ready model target');
+
+      await driveBackgroundTaskLoop(harness.taskId, seams: harness.seams());
+
+      expect(harness.turnCalls, 1);
+      expect(harness.markedFailed, isEmpty,
+          reason: 'unreachable target is transient — never a failure commit');
+      expect(harness.recordedRuns, isEmpty);
+      expect(harness.finalized, isEmpty);
+      // inspectRow state unchanged: the row is still running (resumable).
+      expect(harness.task.state, BackgroundTaskState.running);
+    });
   });
 }
 
@@ -617,6 +686,9 @@ class _LoopHarness {
   int turnCalls = 0;
   _TurnResult Function(int runNumber)? turnScript;
   BackgroundRunException? turnError;
+  /// M7: when set, runTurn throws this (non-BackgroundRunException) error —
+  /// the driver's crash-class catch must distinguish resumable crashes.
+  Object? turnCrash;
   int? cancelAfterTurns;
   bool conversationMissing = false;
 
@@ -652,6 +724,8 @@ class _LoopHarness {
       runTurn: (task) async {
         // count attempts (an erroring turn still burned its slot)
         final runNumber = ++turnCalls;
+        final crash = turnCrash;
+        if (crash != null) throw crash;
         final error = turnError;
         if (error != null) throw error;
         final script = turnScript!(runNumber);

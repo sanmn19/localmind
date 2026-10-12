@@ -526,12 +526,12 @@ class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
 
   Future<void> deleteAll() async {
     final db = ref.read(databaseProvider);
-    // Delete-state cascade: every conversation's task rows go first, so
-    // the wipe leaves no orphaned background tasks behind.
+    // Delete-state cascade: the whole background-task table goes in one
+    // sweep (review M8 — also lifts rows whose owner conversation row the
+    // wipe has no in-memory handle for), and each removed row wakes its
+    // live loop through the engine cancel seam.
     final service = ref.read(backgroundTasksServiceProvider);
-    for (final owner in (state.value ?? []).map((c) => c.id).toSet()) {
-      await service.deleteTasksOwnedBy(owner);
-    }
+    await service.deleteAllTasks();
     db.messageBox.removeAll();
     db.conversationBox.removeAll();
     await _updateState();
