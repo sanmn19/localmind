@@ -3494,4 +3494,23 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get backgroundCapNote =>
       'At most 3 tasks run at once; recurring tasks repeat every 10 minutes or more.';
+
+  @override
+  String get notifications_card_title => 'Notifications';
+
+  @override
+  String get notifications_card_desc =>
+      'Lets models read the notifications captured during this app session (notifications.read_recent). Nothing is stored durably; the reader starts fresh with each session and needs Android Notification access.';
+
+  @override
+  String get notifications_toggle_label => 'Enable notifications tools';
+
+  @override
+  String get notifications_access_granted => 'Notification access granted';
+
+  @override
+  String get notifications_access_missing => 'Notification access is off';
+
+  @override
+  String get notifications_grant_action => 'Grant in settings';
 }

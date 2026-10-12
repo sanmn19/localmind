@@ -6554,6 +6554,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'At most 3 tasks run at once; recurring tasks repeat every 10 minutes or more.'**
   String get backgroundCapNote;
+
+  /// Notifications reader card title
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get notifications_card_title;
+
+  /// Notifications reader card description
+  ///
+  /// In en, this message translates to:
+  /// **'Lets models read the notifications captured during this app session (notifications.read_recent). Nothing is stored durably; the reader starts fresh with each session and needs Android Notification access.'**
+  String get notifications_card_desc;
+
+  /// Semantics label of the notifications tools toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Enable notifications tools'**
+  String get notifications_toggle_label;
+
+  /// Label shown when the notifications listener is connected
+  ///
+  /// In en, this message translates to:
+  /// **'Notification access granted'**
+  String get notifications_access_granted;
+
+  /// Label shown when the notifications listener is not connected
+  ///
+  /// In en, this message translates to:
+  /// **'Notification access is off'**
+  String get notifications_access_missing;
+
+  /// Button label deep-linking to the Android Notification access settings
+  ///
+  /// In en, this message translates to:
+  /// **'Grant in settings'**
+  String get notifications_grant_action;
 }
 
 class _AppLocalizationsDelegate

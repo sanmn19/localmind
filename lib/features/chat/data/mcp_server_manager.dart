@@ -7,6 +7,7 @@ import 'package:localmind/features/mcp/data/device_mcp_server.dart';
 import 'package:localmind/features/mcp/data/terminal_mcp_server.dart';
 import 'package:localmind/features/mail/data/mail_common.dart';
 import 'package:localmind/features/mail/mail_mcp_server.dart';
+import 'package:localmind/features/notifications/notifications_mcp_server.dart';
 import 'package:localmind/features/mcp/data/web/web_fetch_service.dart';
 import 'package:localmind/features/mcp/data/web/web_search_service.dart';
 import 'package:localmind/features/skills/data/skills_mcp_server.dart';
@@ -99,6 +100,7 @@ class McpServerManager {
   final Map<String, DeviceServices> _deviceServices = {};
   final Map<String, MailServices> _mailServices = {};
   final Map<String, BackgroundServices> _backgroundServices = {};
+  final Map<String, NotificationsServices> _notificationsServices = {};
   final Set<String> _localExampleServers = {};
   final Set<String> _pendingLabels = {};
 
@@ -152,6 +154,7 @@ class McpServerManager {
     _deviceServices.remove(label);
     _mailServices.remove(label);
     _backgroundServices.remove(label);
+    _notificationsServices.remove(label);
     _localExampleServers.remove(label);
   }
 
@@ -716,6 +719,61 @@ class McpServerManager {
   bool hasBackgroundServer() =>
       _backgroundServices.containsKey(bgMcpServerLabel);
 
+  /// Registers the in-process notifications MCP server
+  /// (`notifications.read_recent`). Mirrors [addBackgroundServer]'s
+  /// idempotent re-add semantics so a settings rebuild just replaces it.
+  /// The tool is READ-ONLY observation of the same app session: rows come
+  /// from the listener's session ring and every filter (`max`,
+  /// `since_minutes`, `package`) is applied on the Dart side.
+  Future<void> addNotificationsServer(NotificationsServices services) async {
+    await removeServer(notificationsMcpServerLabel);
+
+    _notificationsServices[notificationsMcpServerLabel] = services;
+    _capabilities[notificationsMcpServerLabel] = const McpCapabilities(
+      tools: true,
+    );
+    _tools[notificationsMcpServerLabel] = const [
+      McpTool(
+        name: 'notifications.read_recent',
+        description:
+            'Read recent notifications captured while this app session has '
+            'been alive (newest first). Rows are `package · HH:MM · title: '
+            'text`. Use it to summarize missed activity or answer "what '
+            'did I miss" questions.',
+        inputSchema: {
+          'type': 'object',
+          'properties': {
+            'max': {
+              'type': 'integer',
+              'description': 'How many rows (1-50). Defaults to 20.',
+            },
+            'since_minutes': {
+              'type': 'integer',
+              'description':
+                  'Only rows posted within the last N minutes. Omit for '
+                  'the whole session ring.',
+            },
+            'package': {
+              'type': 'string',
+              'description':
+                  'Only rows from one app package name (exact match, e.g. '
+                  'com.example.app). Omit for all apps.',
+            },
+          },
+        },
+      ),
+    ];
+    _serverUrls[notificationsMcpServerLabel] = notificationsMcpServerUrl;
+  }
+
+  /// Test/inspection seam for the notifications services bundle.
+  @visibleForTesting
+  NotificationsServices? getNotificationsServices() =>
+      _notificationsServices[notificationsMcpServerLabel];
+
+  bool hasNotificationsServer() =>
+      _notificationsServices.containsKey(notificationsMcpServerLabel);
+
   /// Test/inspection seam for the device services bundle.
   @visibleForTesting
   DeviceServices? getDeviceServices() => _deviceServices[deviceMcpServerLabel];
@@ -728,7 +786,8 @@ class McpServerManager {
       _skillsServices.containsKey(label) ||
       _deviceServices.containsKey(label) ||
       _mailServices.containsKey(label) ||
-      _backgroundServices.containsKey(label);
+      _backgroundServices.containsKey(label) ||
+      _notificationsServices.containsKey(label);
 
   bool hasExampleServer() =>
       _localExampleServers.contains(exampleMcpServerLabel);
@@ -779,6 +838,10 @@ class McpServerManager {
       return _callBackgroundTool(toolName, args);
     }
 
+    if (_notificationsServices.containsKey(serverLabel)) {
+      return _callNotificationsTool(toolName, args);
+    }
+
     if (_localExampleServers.contains(serverLabel)) {
       return _callExampleTool(toolName, args);
     }
@@ -822,6 +885,7 @@ class McpServerManager {
     _deviceServices.clear();
     _mailServices.clear();
     _backgroundServices.clear();
+    _notificationsServices.clear();
     _localExampleServers.clear();
   }
 
@@ -835,6 +899,54 @@ class McpServerManager {
     final value = args[key];
     if (value is! int) return fallback;
     return value.clamp(min, max);
+  }
+
+  /// Notifications dispatch — read-only. `since_minutes` only accepts
+  /// integers, `package` is exact-matched after trim; empty/blank package
+  /// reads as "all apps" (null), never as an error.
+  Future<String> _callNotificationsTool(
+    String toolName,
+    Map<String, dynamic> args,
+  ) async {
+    final services = _notificationsServices[notificationsMcpServerLabel];
+    if (services == null) {
+      throw McpException(
+        'MCP server not connected: $notificationsMcpServerLabel',
+      );
+    }
+
+    switch (toolName) {
+      case 'notifications.read_recent':
+        final max = _clampInt(
+          args,
+          'max',
+          1,
+          notificationsReadRecentMaxCap,
+          notificationsReadRecentMaxDefault,
+        );
+        final rawSince = args['since_minutes'];
+        if (rawSince != null && rawSince is! int) {
+          throw McpException(
+            'notifications.read_recent requires an integer since_minutes',
+          );
+        }
+        final rawPackage = args['package'];
+        if (rawPackage != null && rawPackage is! String) {
+          throw McpException(
+            'notifications.read_recent requires a string package',
+          );
+        }
+        final package = (rawPackage as String?)?.trim();
+        final items = await services.recent(
+          max: max,
+          sinceMinutes: rawSince as int?,
+          package: (package == null || package.isEmpty) ? null : package,
+        );
+        return notificationsReadRender(items);
+
+      default:
+        throw McpException('Notifications MCP tool not found: $toolName');
+    }
   }
 
   /// The mail tools dispatch across every connected account. A single

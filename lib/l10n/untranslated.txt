@@ -84,7 +84,13 @@
     "backgroundStateFinished",
     "backgroundStateCancelled",
     "backgroundStateFailed",
-    "backgroundCapNote"
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ],
 
   "bn": [
@@ -176,7 +182,13 @@
     "backgroundStateFinished",
     "backgroundStateCancelled",
     "backgroundStateFailed",
-    "backgroundCapNote"
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ],
 
   "de": [
@@ -268,7 +280,13 @@
     "backgroundStateFinished",
     "backgroundStateCancelled",
     "backgroundStateFailed",
-    "backgroundCapNote"
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ],
 
   "es": [
@@ -360,7 +378,13 @@
     "backgroundStateFinished",
     "backgroundStateCancelled",
     "backgroundStateFailed",
-    "backgroundCapNote"
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ],
 
   "fr": [
@@ -452,7 +476,13 @@
     "backgroundStateFinished",
     "backgroundStateCancelled",
     "backgroundStateFailed",
-    "backgroundCapNote"
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ],
 
   "hi": [
@@ -544,7 +574,13 @@
     "backgroundStateFinished",
     "backgroundStateCancelled",
     "backgroundStateFailed",
-    "backgroundCapNote"
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ],
 
   "it": [
@@ -636,7 +672,13 @@
     "backgroundStateFinished",
     "backgroundStateCancelled",
     "backgroundStateFailed",
-    "backgroundCapNote"
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ],
 
   "ja": [
@@ -728,7 +770,13 @@
     "backgroundStateFinished",
     "backgroundStateCancelled",
     "backgroundStateFailed",
-    "backgroundCapNote"
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ],
 
   "ko": [
@@ -806,7 +854,13 @@
     "backgroundStateFinished",
     "backgroundStateCancelled",
     "backgroundStateFailed",
-    "backgroundCapNote"
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ],
 
   "pt": [
@@ -884,7 +938,13 @@
     "backgroundStateFinished",
     "backgroundStateCancelled",
     "backgroundStateFailed",
-    "backgroundCapNote"
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ],
 
   "ru": [
@@ -976,7 +1036,13 @@
     "backgroundStateFinished",
     "backgroundStateCancelled",
     "backgroundStateFailed",
-    "backgroundCapNote"
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ],
 
   "tr": [
@@ -1068,7 +1134,13 @@
     "backgroundStateFinished",
     "backgroundStateCancelled",
     "backgroundStateFailed",
-    "backgroundCapNote"
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ],
 
   "zh": [
@@ -1160,7 +1232,13 @@
     "backgroundStateFinished",
     "backgroundStateCancelled",
     "backgroundStateFailed",
-    "backgroundCapNote"
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ],
 
   "zh_TW": [
@@ -1252,6 +1330,12 @@
     "backgroundStateFinished",
     "backgroundStateCancelled",
     "backgroundStateFailed",
-    "backgroundCapNote"
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ]
 }

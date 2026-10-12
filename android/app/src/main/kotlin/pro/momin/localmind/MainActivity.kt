@@ -29,6 +29,7 @@ class MainActivity : AudioServiceActivity() {
     private val ASSISTANT_CHANNEL = "localmind/android_assistant"
     private val SHARE_CHANNEL = "localmind/share_receive"
     private val DEVICE_TOOLS_CHANNEL = "localmind/device_tools"
+    private val NOTIFICATIONS_CHANNEL = "localmind/notifications"
 
     private var assistantChannel: MethodChannel? = null
     private var pendingAssistantInvocation = false
@@ -170,6 +171,29 @@ class MainActivity : AudioServiceActivity() {
                     }
                     else -> result.notImplemented()
                 }
+            }
+        }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, NOTIFICATIONS_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "isListenerEnabled" ->
+                    result.success(NotificationsListenerService.instance != null)
+                "fetchRecent" -> result.success(notificationsSnapshot())
+                "ringSize" ->
+                    result.success(NotificationsListenerService.instance?.snapshot()?.size ?: 0)
+                "openNotificationAccessSettings" -> {
+                    try {
+                        startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                        result.success(null)
+                    } catch (error: ActivityNotFoundException) {
+                        result.error(
+                            "notification_settings_unavailable",
+                            "Notification access settings are unavailable.",
+                            null
+                        )
+                    }
+                }
+                else -> result.notImplemented()
             }
         }
 
@@ -553,6 +577,25 @@ class MainActivity : AudioServiceActivity() {
         }
         // Let the app render before the screen is captured.
         mainHandler.postDelayed(::performCapture, SCREENSHOT_LAUNCH_SETTLE_MS)
+    }
+
+    /** Whole ring, newest-first, as JSON-ready rows. Filtering/formatting
+     *  stays Dart-side; a disconnected listener yields an empty list. */
+    private fun notificationsSnapshot(): List<Map<String, Any?>> {
+        val service = NotificationsListenerService.instance ?: return emptyList()
+        return try {
+            service.snapshot().map {
+                mapOf(
+                    "packageName" to it.packageName,
+                    "title" to it.title,
+                    "text" to it.text,
+                    "postedAtMillis" to it.postedAtMillis
+                )
+            }
+        } catch (error: Exception) {
+            Log.w("LocalMindNotif", "Ring snapshot read failed: $error")
+            emptyList()
+        }
     }
 
     /** [label, package] rows for the model, ordered alphabetically by label.

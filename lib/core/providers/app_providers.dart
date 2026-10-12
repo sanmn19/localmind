@@ -159,6 +159,8 @@ class SettingsNotifier extends Notifier<AppSettings> {
       _update(state.copyWith(skillsEnabled: value));
   void setBackgroundTasksEnabled(bool value) =>
       _update(state.copyWith(backgroundTasksEnabled: value));
+  void setNotificationToolsEnabled(bool value) =>
+      _update(state.copyWith(notificationToolsEnabled: value));
   void setMailConnectorAccounts(List<Map<String, dynamic>> value) =>
       _update(state.copyWith(mailConnectorAccounts: value));
   void setShareTargetEnabled(bool value) =>

@@ -19,6 +19,7 @@ import '../../mail/data/mail_common.dart';
 import '../../mail/data/mail_connector_config.dart';
 import '../../mail/data/mail_token_store.dart';
 import '../../mail/data/outlook_auth_client.dart';
+import '../../notifications/notifications_listener_channel.dart';
 import '../../settings/data/models/app_settings.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/theme/colors.dart';
@@ -221,6 +222,8 @@ class McpToolsScreen extends ConsumerWidget {
                           const _MailConnectorsCard(),
                           const SizedBox(height: 16),
                           const _BackgroundCard(),
+                          const SizedBox(height: 16),
+                          const _NotificationsCard(),
                           if (settings.mcpEnabled) ...[
                             const SizedBox(height: 16),
                             _ConfiguredMcpServersCard(
@@ -1483,6 +1486,110 @@ class _BackgroundStateChip extends StatelessWidget {
           fontWeight: FontWeight.w600,
         ),
       ),
+    );
+  }
+}
+
+/// Live Notification access state for the card's grant row: a fresh
+/// channel check per watch (re-invalidated after returning from the
+/// settings deep-link).
+final notificationsListenerGrantProvider = FutureProvider<bool>((ref) {
+  return const NotificationListenerChannel().isListenerEnabled();
+});
+
+/// Notifications reader card: settings toggle + Notification access grant
+/// row with a live granted read and a settings deep-link button. Rows
+/// themselves live session-scoped on the Kotlin ring; nothing renders them
+/// here.
+class _NotificationsCard extends ConsumerWidget {
+  const _NotificationsCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final settings = ref.watch(settingsProvider);
+    final enabled = settings.notificationToolsEnabled;
+    final grantAsync = ref.watch(notificationsListenerGrantProvider);
+
+    return _McpSectionCard(
+      title: l10n.notifications_card_title,
+      accent: const Color(0xFFF59E0B),
+      icon: HugeIcons.strokeRoundedNotification03,
+      trailing: Semantics(
+        label: l10n.notifications_toggle_label,
+        child: ShadSwitch(
+          key: const Key('notifications_tools_toggle'),
+          value: enabled,
+          onChanged: (value) {
+            ref
+                .read(settingsProvider.notifier)
+                .setNotificationToolsEnabled(value);
+            ref.invalidate(availableToolsProvider);
+          },
+        ),
+      ),
+      children: [
+        Text(
+          l10n.notifications_card_desc,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        _McpPanel(
+          child: grantAsync.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 4),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+            error: (_, _) => Text(
+              l10n.notifications_access_missing,
+              style: theme.textTheme.bodyMedium,
+            ),
+            data: (granted) => Row(
+              key: Key(
+                granted ? 'notifications_grant_row_on' : 'notifications_grant_row_off',
+              ),
+              children: [
+                HugeIcon(
+                  icon: granted
+                      ? HugeIcons.strokeRoundedCheckmarkCircle01
+                      : HugeIcons.strokeRoundedAlertCircle,
+                  size: 18,
+                  color: granted
+                      ? const Color(0xFF22C55E)
+                      : theme.colorScheme.outline,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    granted
+                        ? l10n.notifications_access_granted
+                        : l10n.notifications_access_missing,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                ShadButton.outline(
+                  key: const Key('notifications_grant_access'),
+                  size: ShadButtonSize.sm,
+                  onPressed: () async {
+                    await const NotificationListenerChannel()
+                        .requestGrantOpenSettings();
+                    ref.invalidate(notificationsListenerGrantProvider);
+                  },
+                  child: Text(l10n.notifications_grant_action),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

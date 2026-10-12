@@ -41,6 +41,8 @@ import '../../mcp/data/web/web_search_service.dart';
 import '../../skills/data/skills_mcp_server.dart';
 import '../../skills/data/skills_provider.dart';
 import '../../skills/data/skills_store.dart';
+import '../../notifications/notifications_listener_channel.dart';
+import '../../notifications/notifications_mcp_server.dart';
 import 'package:localmind/features/conversations/providers/conversation_providers.dart';
 import 'chat_params_providers.dart';
 import 'model_selection_providers.dart';
@@ -92,6 +94,7 @@ Future<bool> shouldAutoApproveTool(
   bool mailAccountsConnected = false,
   bool skillsEnabled = false,
   bool backgroundTasksEnabled = false,
+  bool notificationToolsEnabled = false,
   required ToolRegistry registry,
   required TerminalWhitelist? whitelist,
 }) async {
@@ -149,6 +152,13 @@ Future<bool> shouldAutoApproveTool(
     // ride the toggle, like web/terminal reads.
     if (toolName == 'bg.spawn') return false;
     return backgroundTasksEnabled;
+  }
+
+  if (await registry.isLocalTool(toolName, {notificationsMcpServerUrl})) {
+    // notifications.read_recent is read-only observation of the current
+    // session's ring, so it rides its toggle like web/terminal reads — no
+    // per-tool whitelist needed.
+    return notificationToolsEnabled;
   }
 
   return false;
@@ -301,6 +311,24 @@ final webServerRegistrationProvider = Provider<void>((ref) {
   } else if (manager.hasBackgroundServer()) {
     manager.removeServer(bgMcpServerLabel);
   }
+  if (settings.notificationToolsEnabled) {
+    // Fresh services each rebuild; the channel closure resolves the
+    // listener's LIVE grant/ring at call time (the grant can change
+    // mid-session), and the fetch filter is applied DART-side per the
+    // tool's arguments. Tool-side clamping happens in the manager.
+    manager.addNotificationsServer(
+      NotificationsServices(
+        recent: ({int? max, int? sinceMinutes, String? package}) =>
+            const NotificationListenerChannel().fetchRecent(
+          max: max ?? notificationsReadRecentMaxDefault,
+          sinceMinutes: sinceMinutes,
+          package: package,
+        ),
+      ),
+    );
+  } else if (manager.hasNotificationsServer()) {
+    manager.removeServer(notificationsMcpServerLabel);
+  }
   // Mail connectors register from the connected accounts list (provider +
   // email rows) — the connected toggle lives with the account, and each
   // repository owns the token gateway for its account. Only rows that
@@ -383,6 +411,9 @@ final webServerRegistrationProvider = Provider<void>((ref) {
     }
     if (manager.hasBackgroundServer()) {
       manager.removeServer(bgMcpServerLabel);
+    }
+    if (manager.hasNotificationsServer()) {
+      manager.removeServer(notificationsMcpServerLabel);
     }
   });
 });

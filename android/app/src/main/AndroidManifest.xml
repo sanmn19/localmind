@@ -99,7 +99,8 @@
         <service
             android:name="id.flutter.flutter_background_service.BackgroundService"
             android:foregroundServiceType="dataSync"
-            android:exported="false" />
+            android:exported="false"
+            tools:replace="android:exported" />
 
         <service
             android:name=".ChatForegroundService"
@@ -122,6 +123,16 @@
             <meta-data
                 android:name="android.accessibilityservice"
                 android:resource="@xml/screen_capture_service_config" />
+        </service>
+
+        <service
+            android:name=".NotificationsListenerService"
+            android:label="@string/notifications_listener_label"
+            android:exported="false"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
         </service>
 
         <service
