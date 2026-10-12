@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/logger/app_logger.dart';
 import '../../../core/providers/storage_providers.dart';
 import '../../../core/storage/entities.dart';
 import '../../../core/storage/objectbox_store.dart';
@@ -204,10 +205,7 @@ class BackgroundTasksService {
       case _StateWrite.idempotent:
         return true;
       case _StateWrite.flipped:
-        await _noticeSink?.call(
-          taskId,
-          backgroundPauseNoticeContent(DateTime.now()),
-        );
+        await _emitNotice(taskId, backgroundPauseNoticeContent(DateTime.now()));
         return true;
     }
   }
@@ -231,8 +229,23 @@ class BackgroundTasksService {
       case _StateWrite.idempotent:
         return true;
       case _StateWrite.flipped:
-        await _noticeSink?.call(taskId, bgResumeNoticeContent);
+        await _emitNotice(taskId, bgResumeNoticeContent);
         return true;
+    }
+  }
+
+  /// Fires the notice sink, swallowing its failures into a log line
+  /// (Task-1 review #2): the state flip is COMMITTED by the time the sink
+  /// runs, so a notice-row write failure must never surface as a
+  /// pause/resume error to the caller.
+  Future<void> _emitNotice(String taskId, String content) async {
+    try {
+      await _noticeSink?.call(taskId, content);
+    } catch (error, stack) {
+      Log.error(
+        'Background task $taskId notice row write failed: '
+        '$error\n$stack',
+      );
     }
   }
 

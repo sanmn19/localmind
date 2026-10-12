@@ -589,6 +589,31 @@ void main() {
       expect(await service.pauseTask('t-p'), isTrue);
       expect(await service.resumeTask('t-p'), isTrue);
     });
+
+    test('a THROWING notice sink never surfaces: committed flips still '
+        'return true (Task-1 review #2)', () async {
+      final db = _FakeTasksDb([
+        _entity(id: 't-pause', taskConversation: 'c-sp'),
+        _entity(id: 't-resume', taskConversation: 'c-sr', state: 'paused'),
+      ]);
+      final service = BackgroundTasksService(db)
+        ..setNoticeSink((taskId, content) async {
+          throw StateError('notice row write exploded');
+        });
+
+      // The state flip is already committed — a sink failure is caught and
+      // logged (Log.error), never propagated as a transition failure.
+      expect(await service.pauseTask('t-pause'), isTrue);
+      expect(
+        (await service.taskById('t-pause'))!.state,
+        BackgroundTaskState.paused,
+      );
+      expect(await service.resumeTask('t-resume'), isTrue);
+      expect(
+        (await service.taskById('t-resume'))!.state,
+        BackgroundTaskState.running,
+      );
+    });
   });
 }
 

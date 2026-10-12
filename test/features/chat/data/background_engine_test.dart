@@ -7,6 +7,10 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart'
     as flutter_local_notifications;
 import 'package:localmind/core/models/enums.dart';
 import 'package:localmind/features/chat/data/background_engine.dart';
+import 'package:localmind/features/chat/data/background_runner.dart'
+    show bgRunnerSystemPrompt;
+import 'package:localmind/features/chat/data/background_task_service.dart'
+    show bgResumeNoticeContent;
 import 'package:localmind/features/chat/data/chat_service.dart';
 import 'package:localmind/features/chat/data/models/background_task.dart';
 import 'package:localmind/features/chat/data/models/chat_parameters.dart';
@@ -97,6 +101,111 @@ void main() {
     expect(harness.turnedTasks.single.state, BackgroundTaskState.running);
     expect(harness.markedFinishedIds, ['t-1']);
     expect(harness.ownerRows, hasLength(1));
+  });
+
+  test('a LIVE looping task parks subsecond when the pause relay fires '
+      'mid-stream; a resumed enqueue lands fresh', () async {
+    final harness = _EngineHarness();
+    final engine = harness.buildEngine(hangingChatService: true);
+    addTearDown(engine.dispose);
+    harness.rowLoopMinutes = 10; // LIVE looping task, run 1 in flight.
+
+    engine.requestRun('t-1');
+    expect(
+      engine.requestRun('t-1'),
+      isFalse,
+      reason: 'the registry still holds the live loop — bool pin',
+    );
+
+    // pauseTask order: the relay wakes the live stream FIRST, the flip
+    // makes the authoritative row paused (relayed + flipped mid-run).
+    engine.cancelRunsFor('t-1');
+    harness.forcedRowState = BackgroundTaskState.paused;
+    final watch = Stopwatch()..start();
+    await engine.waitForIdle().timeout(const Duration(seconds: 3));
+    watch.stop();
+
+    // Subsecond removal pin (Task-1 review #1): the parked loop's future
+    // leaves the registry within a second — this is exactly what makes a
+    // resumed requestRun no longer no-op.
+    expect(watch.elapsed, lessThan(const Duration(seconds: 1)));
+    expect(harness.turnedTasks, hasLength(1));
+    expect(harness.recordedRuns, isEmpty);
+    expect(harness.markedFinishedIds, isEmpty);
+    expect(harness.ownerRows, isEmpty);
+    expect(harness.notified, isEmpty);
+
+    // RESUME: the service flipped the row back to running; the fresh
+    // enqueue must LAND (the registry entry is gone).
+    harness.forcedRowState = BackgroundTaskState.running;
+    harness.rowLoopMinutes = 0; // resumed leg: single-run shape
+    harness.hangingRuns = 0; // the resumed run completes its stream
+    expect(engine.requestRun('t-1'), isTrue);
+    await engine.waitForIdle().timeout(const Duration(seconds: 3));
+
+    expect(harness.turnedTasks, hasLength(2));
+    expect(harness.markedFinishedIds, ['t-1']);
+    expect(harness.ownerRows, hasLength(1));
+  });
+
+  test('a resumed run\'s wire carries the paused + resumed notice rows in '
+      'order before the run prompt (loadRows closure capture pin, '
+      'Task-1 review #3)', () async {
+    final harness = _EngineHarness();
+    final engine = harness.buildEngine();
+    addTearDown(engine.dispose);
+
+    // The hidden task thread exactly as the pause/resume notices left it:
+    // two USER-role rows injected by the noticeSink, riding every resumed
+    // run's context (the child must see its own pause history).
+    harness.persistedRows.addAll([
+      Message(
+        id: 'a-earlier',
+        conversationId: 'task-c1',
+        role: MessageRole.assistant,
+        content: 'Watching.',
+        createdAt: DateTime.utc(2026, 10, 12, 9),
+        status: MessageStatus.complete,
+        isActiveVariant: true,
+        threadOrder: 1,
+      ),
+      Message(
+        id: 'n-paused',
+        conversationId: 'task-c1',
+        role: MessageRole.user,
+        content: 'Background task paused by user at 09:55',
+        createdAt: DateTime.utc(2026, 10, 12, 9, 55),
+        status: MessageStatus.complete,
+        isActiveVariant: true,
+        threadOrder: 2,
+      ),
+      Message(
+        id: 'n-resumed',
+        conversationId: 'task-c1',
+        role: MessageRole.user,
+        content: bgResumeNoticeContent,
+        createdAt: DateTime.utc(2026, 10, 12, 9, 58),
+        status: MessageStatus.complete,
+        isActiveVariant: true,
+        threadOrder: 3,
+      ),
+    ]);
+
+    engine.requestRun('t-1');
+    await engine.waitForIdle();
+
+    final wire = harness.chatServices.single.requests.single;
+    expect(wire, hasLength(5), reason: 'system + 3 task rows + run prompt');
+    expect(
+      wire.map((row) => row.content).toList(),
+      [
+        bgRunnerSystemPrompt,
+        'Watching.',
+        'Background task paused by user at 09:55',
+        bgResumeNoticeContent,
+        'watch the mail', // the run prompt row, ALWAYS last.
+      ],
+    );
   });
 
   test('finish appends the owner row, stores ids, posts the notification',
@@ -400,12 +509,24 @@ class _EngineHarness {
   /// Lifecycle pause: forces every inspectRow hit to report this state.
   BackgroundTaskState? forcedRowState;
 
+  /// The authoritative row's loop shape (mutable mid-test: the pause-abort
+  /// test parks a LOOPING live row, then resumes a single-run fresh leg).
+  int rowLoopMinutes = 0;
+
+  /// Every [ChatService] the engine built for a run (wire capture seams).
+  final List<_ScriptedChatService> chatServices = [];
+
+  /// With [buildEngine]'s `hangingChatService`, runs consume this budget;
+  /// null (default) means every run hangs. The pause/resume test spends the
+  /// budget on run 1 so the resumed leg completes its scripted run.
+  int? hangingRuns;
+
   BackgroundTask buildEngineRow(String taskId) => BackgroundTask(
         id: taskId,
         ownerConversationId: 'owner-1',
         taskConversationId: 'task-c1',
         prompt: 'watch the mail',
-        loopMinutes: 0,
+        loopMinutes: rowLoopMinutes,
         maxRuns: 10,
         state: forcedRowState ?? BackgroundTaskState.running,
         createdAt: DateTime.utc(2026, 10, 9, 12),
@@ -481,9 +602,15 @@ class _EngineHarness {
       persistRow: (row) async => persistedRows.add(row),
       executeTool: (name, args) async =>
           const ToolExecutionResult.failure('no executor in this test'),
-      chatServiceFor: (server) => hangingChatService
-          ? _HangingChatService()
-          : _ScriptedChatService(),
+      chatServiceFor: (server) {
+        if (hangingChatService && hangingRuns != 0) {
+          hangingRuns = hangingRuns! - 1;
+          return _HangingChatService();
+        }
+        final service = _ScriptedChatService();
+        chatServices.add(service);
+        return service;
+      },
       notifyResult: (ownerTitle, task, content) async {
         notified.add((
           ownerTitle: ownerTitle,
@@ -524,6 +651,9 @@ class _HangingChatService implements ChatService {
 }
 
 class _ScriptedChatService implements ChatService {
+  /// Per-request wire capture (the resumed-run history pin reads these).
+  final requests = <List<Message>>[];
+
   @override
   Stream<ChatResponse> sendMessage({
     required Server server,
@@ -534,6 +664,7 @@ class _ScriptedChatService implements ChatService {
     List<ToolDefinition>? tools,
     bool continueGeneration = false,
   }) async* {
+    requests.add(messages);
     yield const ChatResponse(type: ChatResponseType.message);
     yield const ChatResponse(
       type: ChatResponseType.message,

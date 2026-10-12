@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 
@@ -622,13 +623,62 @@ Future<void> onBackgroundServiceKeepAlive(ServiceInstance service) async {
 }
 
 /// Bridges a spawn relay into the engine; saturation is a logged refusal
-/// (createTask already enforces the DB-level cap).
-Future<void> _ensureTaskRunning(Ref ref, String taskId) async {
+/// (createTask already enforces the DB-level cap). The RESUME path passes
+/// [resumed] to engage the bounded enqueue retry (Task-1 review #1).
+Future<void> _ensureTaskRunning(
+  Ref ref,
+  String taskId, {
+  bool resumed = false,
+}) async {
+  final engine = ref.read(backgroundEngineProvider);
   try {
-    ref.read(backgroundEngineProvider).requestRun(taskId);
+    if (!resumed) {
+      engine.requestRun(taskId);
+      return;
+    }
+    final landed = await enqueueBackgroundResumeRun(
+      taskId: taskId,
+      tryEnqueue: engine.requestRun,
+      readRow: ref.read(backgroundTasksServiceProvider).taskById,
+    );
+    if (!landed) {
+      Log.error(
+        'Background resume for $taskId: the parked loop never settled '
+        'within the retry window — no fresh run was enqueued.',
+      );
+    }
   } on StateError catch (error) {
     Log.error('Background engine refuses task $taskId: $error');
   }
+}
+
+/// Bounded resume-enqueue retry (Task-1 review #1, host-testable closure
+/// form): the parked loop lingers in the engine registry until its abort
+/// future settles, and a plain [BackgroundRunEngine.requestRun] silently
+/// no-ops in that window ([tryEnqueue] mirroring refutes this shape).
+///
+/// Schedule: waits [delays] (150/300/600ms) BEFORE each attempt, re-reading
+/// the AUTHORITATIVE row first — a row that left `running` meanwhile
+/// (re-paused, cancelled, deleted, finished elsewhere) stops the retrying
+/// without enqueueing. Returns whether the enqueue landed.
+@visibleForTesting
+Future<bool> enqueueBackgroundResumeRun({
+  required String taskId,
+  required bool Function(String taskId) tryEnqueue,
+  required Future<BackgroundTask?> Function(String taskId) readRow,
+  List<Duration> delays = const [
+    Duration(milliseconds: 150),
+    Duration(milliseconds: 300),
+    Duration(milliseconds: 600),
+  ],
+}) async {
+  for (final delay in delays) {
+    await Future<void>.delayed(delay);
+    final row = await readRow(taskId);
+    if (row == null || row.state != BackgroundTaskState.running) return false;
+    if (tryEnqueue(taskId)) return true;
+  }
+  return false;
 }
 
 /// Pause bridge (bg lifecycle upgrade): the service seam does relay →
@@ -643,7 +693,7 @@ Future<bool> resumeBackgroundTask(Ref ref, String taskId) async {
   final resumed = await ref.read(backgroundTasksServiceProvider)
       .resumeTask(taskId);
   if (resumed) {
-    await _ensureTaskRunning(ref, taskId);
+    await _ensureTaskRunning(ref, taskId, resumed: true);
   }
   return resumed;
 }
