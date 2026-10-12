@@ -8,7 +8,7 @@ import 'package:localmind/features/chat/data/models/background_task.dart';
 import 'package:localmind/features/chat/data/models/chat_parameters.dart';
 import 'package:localmind/features/chat/data/models/mcp_integration.dart';
 import 'package:localmind/features/chat/data/models/message.dart' hide
-    show ToolCallData;
+    ToolCallData;
 import 'package:localmind/features/chat/data/tools/tool_definition.dart';
 import 'package:localmind/features/servers/data/models/server.dart';
 
