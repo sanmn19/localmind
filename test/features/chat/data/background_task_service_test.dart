@@ -342,6 +342,64 @@ void main() {
       expect(hits.single.conversationId, 'c-normal');
     });
   });
+
+  group('BackgroundTasksService engine lifecycle (Task 4 additive seam)', () {
+    test('taskById resolves a row by its task id and misses unknown ids',
+        () async {
+      final db = _FakeTasksDb([_entity(id: 't-1', taskConversation: 'c-t1')]);
+      final service = BackgroundTasksService(db);
+
+      final found = await service.taskById('t-1');
+      expect(found, isNotNull);
+      expect(found!.taskConversationId, 'c-t1');
+      expect(await service.taskById('nope'), isNull);
+    });
+
+    test('recordRun bumps runCount + lastRunAt only on running rows',
+        () async {
+      final first = _entity(id: 't-run', taskConversation: 'c-run');
+      final db = _FakeTasksDb([first, _entity(id: 't-done', taskConversation: 'c-d')]);
+      final service = BackgroundTasksService(db);
+      await service.markFinished('t-done');
+
+      expect(await service.recordRun('t-run'), isTrue);
+      final runRow = await service.taskById('t-run');
+      expect(runRow!.runCount, 1);
+      expect(runRow.lastRunAt, isNotNull);
+
+      // Finished/failed/cancelled rows are terminal: no run-count movement.
+      expect(await service.recordRun('t-done'), isFalse);
+      final doneRow = await service.taskById('t-done');
+      expect(doneRow!.runCount, 0);
+      expect(doneRow.lastRunAt, isNull);
+    });
+
+    test('markFailed moves running→failed once and refuses other states',
+        () async {
+      final db = _FakeTasksDb([
+        _entity(id: 't-fail', taskConversation: 'c-f'),
+        _entity(id: 't-canc', taskConversation: 'c-x'),
+      ]);
+      final service = BackgroundTasksService(db);
+      await service.cancelTask('t-canc');
+
+      expect(await service.markFailed('t-fail'), isTrue);
+      expect((await service.taskById('t-fail'))!.state, BackgroundTaskState.failed);
+      expect(await service.markFailed('t-fail'), isFalse);
+      expect(await service.markFailed('t-canc'), isFalse);
+      expect(await service.markFailed('unknown'), isFalse);
+    });
+
+    test('cancelRunsFor relays the late-attached engine requester', () {
+      final relayed = <String>[];
+      final service = BackgroundTasksService();
+      // v1: requester is absent — nothing explodes.
+      service.cancelRunsFor('t-1');
+      service.attachCancelRequester(relayed.add);
+      service.cancelRunsFor('t-2');
+      expect(relayed, ['t-2']);
+    });
+  });
 }
 
 BackgroundTaskEntity _entity({

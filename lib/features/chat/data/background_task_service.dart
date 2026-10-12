@@ -48,7 +48,16 @@ class BackgroundTasksService {
       : _cancelRequester = cancelRequester;
 
   final ObjectBoxStore? _db;
-  final void Function(String taskId)? _cancelRequester;
+
+  /// Late-bound so the running engine can attach itself after the service
+  /// provider was built (Task 4 engine wires [attachCancelRequester]).
+  CancelRequester? _cancelRequester;
+
+  /// Engine seam wiring (Task 4): replaces the ctor-time requester with the
+  /// live engine hook. Safe to call repeatedly — the newest requester wins.
+  void attachCancelRequester(CancelRequester requester) {
+    _cancelRequester = requester;
+  }
 
   ObjectBoxStore get _database {
     final db = _db;
@@ -160,6 +169,41 @@ class BackgroundTasksService {
       _cancelRequester?.call(id);
     }
     return removedIds.isNotEmpty;
+  }
+
+  /// Resolves one task row by its unique task id (authoritative state
+  /// inspection seam for the engine's per-step polls).
+  Future<BackgroundTask?> taskById(String taskId) async {
+    final db = _database;
+    return db.store.runInTransactionAsync(
+      TxMode.read,
+      _taskByIdInBackground,
+      taskId,
+    );
+  }
+
+  /// Records one engine run for [taskId]: bumps [BackgroundTask.runCount]
+  /// and stamps `lastRunAt`. Only rows in the running state accept a run
+  /// record (terminal rows are committed); returns whether the run counted.
+  Future<bool> recordRun(String taskId) async {
+    final db = _database;
+    return db.store.runInTransactionAsync(
+      TxMode.write,
+      _recordRunInBackground,
+      taskId,
+    );
+  }
+
+  /// Marks [taskId] failed on an unhandled engine error. Only a running row
+  /// moves to failed (terminal states stay committed); unknown ids return
+  /// false.
+  Future<bool> markFailed(String taskId) async {
+    final db = _database;
+    return db.store.runInTransactionAsync(
+      TxMode.write,
+      _markFailedInBackground,
+      taskId,
+    );
   }
 
   /// Relays a live-run cancel request for [taskId] to the engine
@@ -301,6 +345,52 @@ class BackgroundTasksService {
       case BackgroundTaskState.failed:
         return false;
     }
+  }
+
+  static BackgroundTask? _taskByIdInBackground(Store store, String taskId) {
+    final box = store.box<BackgroundTaskEntity>();
+    final query = box.query(BackgroundTaskEntity_.id.equals(taskId)).build();
+    final fetched = query.find();
+    query.close();
+    final matches = fetched.where((row) => row.id == taskId).toList();
+    return matches.isEmpty ? null : matches.first.toDomain();
+  }
+
+  static bool _recordRunInBackground(Store store, String taskId) {
+    final entity = _runningEntityIfExists(store, taskId);
+    if (entity == null) return false;
+    entity.runCount += 1;
+    entity.lastRunAt = DateTime.now();
+    store.box<BackgroundTaskEntity>().put(entity);
+    return true;
+  }
+
+  static bool _markFailedInBackground(Store store, String taskId) {
+    final entity = _runningEntityIfExists(store, taskId);
+    if (entity == null) return false;
+    entity.state = BackgroundTaskState.failed.name;
+    store.box<BackgroundTaskEntity>().put(entity);
+    return true;
+  }
+
+  /// Id-matched, running-state-checked entity load (Dart-side filters keep
+  /// the condition-agnostic fakes authoritative — see task-2-report.md).
+  static BackgroundTaskEntity? _runningEntityIfExists(
+    Store store,
+    String taskId,
+  ) {
+    final box = store.box<BackgroundTaskEntity>();
+    final query = box.query(BackgroundTaskEntity_.id.equals(taskId)).build();
+    final fetched = query.find();
+    query.close();
+    final matches =
+        fetched.where((row) => row.id == taskId).toList();
+    if (matches.isEmpty) return null;
+    final entity = matches.first;
+    if (_stateFromName(entity.state) != BackgroundTaskState.running) {
+      return null;
+    }
+    return entity;
   }
 
   static List<String> _deleteTasksOwnedInBackground(
