@@ -16,6 +16,7 @@ import '../core/models/enums.dart';
 import '../features/personas/providers/personas_providers.dart';
 import '../features/servers/data/models/server.dart';
 import '../features/servers/providers/server_providers.dart';
+import '../features/chat/providers/tooling_providers.dart';
 import '../features/skills/data/skills_provider.dart';
 import '../features/cloud_sync/views/cloud_sync_lifecycle_host.dart';
 import '../core/logger/app_logger.dart';
@@ -133,6 +134,10 @@ class _BootstrapHostState extends State<BootstrapHost> {
           Log.error('$s');
         }),
       );
+
+      // Background sub-agent loops resume without blocking startup (only
+      // affects persisted running rows; backgroundTasksEnabled off → no-op).
+      container.read(backgroundResumeProvider);
 
       _container = container;
       _updateStage(BootstrapStage.done, 'Ready');

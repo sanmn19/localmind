@@ -95,6 +95,12 @@
                 android:resource="@xml/localmind_appwidget_info" />
         </receiver>
 
+        <!-- flutter_background_service: background sub-agent task engine host -->
+        <service
+            android:name="id.flutter.flutter_background_service.BackgroundService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false" />
+
         <service
             android:name=".ChatForegroundService"
             android:enabled="true"

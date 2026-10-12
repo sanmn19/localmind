@@ -1,6 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
+
+import '../../../core/logger/app_logger.dart';
 import '../../../core/providers/app_providers.dart';
+import '../../../core/providers/storage_providers.dart';
 import '../../../core/services/device_tools_service.dart';
+import '../../../core/storage/entities.dart';
+import '../../../core/storage/objectbox_store.dart';
+import '../../../objectbox.g.dart';
+import '../data/chat_service.dart';
+import '../data/background_engine.dart';
+import '../data/background_runner.dart';
 import '../data/tools/tool_registry.dart';
 import '../data/tools/builtin_tool_provider.dart';
 import '../data/tools/mcp_tool_provider.dart';
@@ -8,6 +20,7 @@ import '../data/tools/tool_definition.dart';
 import '../data/mcp_server_manager.dart';
 import '../data/background_task_service.dart';
 import '../data/models/background_task.dart';
+import '../data/models/message.dart';
 import 'package:localmind/features/mail/data/google_auth_client.dart';
 import 'package:localmind/features/mail/data/gmail_repository.dart';
 import 'package:localmind/features/mail/data/imap_repository.dart';
@@ -29,6 +42,8 @@ import '../../skills/data/skills_mcp_server.dart';
 import '../../skills/data/skills_provider.dart';
 import '../../skills/data/skills_store.dart';
 import 'package:localmind/features/conversations/providers/conversation_providers.dart';
+import 'chat_params_providers.dart';
+import 'model_selection_providers.dart';
 
 /// Per-turn web-tool budgets, owning state in the notifier's tool path.
 /// One instance per app session: consecutive tool rounds of a reply SHARE
@@ -272,7 +287,15 @@ final webServerRegistrationProvider = Provider<void>((ref) {
         cancelTask: (taskId) => ref
             .read(backgroundTasksServiceProvider)
             .cancelTask(taskId),
-        runRequester: (taskId) {},
+        runRequester: (taskId) {
+          // Bridge to the live engine (cap enforced DB-side by createTask;
+          // the engine's own guard covers direct relays).
+          try {
+            unawaited(_ensureTaskRunning(ref, taskId));
+          } catch (error) {
+            Log.error('Background run request failed: $error');
+          }
+        },
       ),
     );
   } else if (manager.hasBackgroundServer()) {
@@ -435,3 +458,195 @@ final backgroundTaskRowsProvider = FutureProvider<List<BackgroundTaskRow>>((
   }
   return rows;
 });
+
+/// The LIVE [BackgroundRunEngine] for chat-owned background sub-agent tasks.
+///
+/// Runs turns IN the main isolate; the Android foreground service's job is to
+/// keep the process alive while minimized so the driver's sleep/wake keeps
+/// ticking. Engine deps resolve against the CURRENT provider state at call
+/// time (fresh target/tool snapshot per run); the engine instance is
+/// keep-alive for the session.
+final backgroundEngineProvider = Provider<BackgroundRunEngine>((ref) {
+  final service = ref.read(backgroundTasksServiceProvider);
+
+  final engine = BackgroundRunEngine(
+    taskById: service.taskById,
+    runningTasks: service.runningTasks,
+    recordRun: service.recordRun,
+    markFinished: (taskId, {resultMessageId, ownerMessageId}) =>
+        service.markFinished(
+          taskId,
+          resultMessageId: resultMessageId,
+          ownerMessageId: ownerMessageId,
+        ),
+    markFailed: service.markFailed,
+    conversationExists: (conversationId) => _conversationExists(
+      ref.read(databaseProvider),
+      conversationId,
+    ),
+    conversationTitle: (conversationId) => _conversationTitle(
+      ref.read(databaseProvider),
+      conversationId,
+    ),
+    buildRunSnapshot: () => _backgroundRunSnapshot(ref),
+    loadRows: (conversationId) =>
+        _backgroundRows(ref.read(databaseProvider), conversationId),
+    persistRow: (row) =>
+        _persistBackgroundRow(ref.read(databaseProvider), row),
+    executeTool: (name, args) =>
+        ref.read(toolRegistryProvider).execute(name, args),
+    chatServiceFor: (server) => ChatService.forServer(server.type, Dio()),
+    notifyResult: (ownerTitle, task, content) =>
+        BackgroundResultNotifier().post(
+      ownerTitle: ownerTitle,
+      task: task,
+      content: content,
+    ),
+    onEngineTouched: () {
+      if (ref.mounted) ref.invalidate(backgroundTaskRowsProvider);
+    },
+  );
+
+  service.attachCancelRequester((taskId) {
+    engine.cancelRunsFor(taskId);
+  });
+  ref.onDispose(() {
+    service.attachCancelRequester((taskId) {});
+    engine.dispose();
+  });
+
+  return engine;
+});
+
+/// Runs the still-running background task loops after an app restart.
+final backgroundResumeProvider = Provider<void>((ref) {
+  final service = ref.read(backgroundTasksServiceProvider);
+  Future<void> resume() async {
+    if (!ref.read(settingsProvider).backgroundTasksEnabled) return;
+    if (await service.runningCount() == 0) return;
+    try {
+      await startBackgroundKeepAliveService();
+    } catch (error) {
+      Log.error('Background keep-alive service start failed: $error');
+    }
+    // The engine runs in this isolate; resume loops directly.
+    unawaited(ref.read(backgroundEngineProvider).resumePending());
+  }
+
+  // Bookkeeping after the first frame so conversation state exists.
+  unawaited(Future<void>.delayed(const Duration(seconds: 2), resume));
+});
+
+/// Starts the Android foreground-service keep-alive (flutter_background_);
+/// throw-suppressed for host tests / unsupported platforms.
+Future<void> startBackgroundKeepAliveService() async {
+  final service = FlutterBackgroundService();
+  await service.configure(
+    androidConfiguration: AndroidConfiguration(
+      onStart: onBackgroundServiceKeepAlive,
+      isForegroundMode: true,
+      autoStart: false,
+      notificationChannelId: localmindFgServiceChannelId,
+      initialNotificationTitle: 'LocalMind',
+      initialNotificationContent: 'Background tasks running',
+      foregroundServiceNotificationId: 0xb6c0ffee,
+      autoStartOnBoot: false,
+    ),
+    iosConfiguration: IosConfiguration(),
+  );
+  await service.startService();
+}
+
+/// Restarts the Android keep-alive notification (host tests / unsupported
+/// platforms swallow the plugin-channel failure).
+@pragma('vm:entry-point')
+Future<void> onBackgroundServiceKeepAlive(ServiceInstance service) async {
+  // The engine keeps running in the MAIN isolate; this service isolate only
+  // holds the foreground notification (process-alive), so it stays inert.
+}
+
+/// Bridges a spawn relay into the engine; saturation is a logged refusal
+/// (createTask already enforces the DB-level cap).
+Future<void> _ensureTaskRunning(Ref ref, String taskId) async {
+  try {
+    ref.read(backgroundEngineProvider).requestRun(taskId);
+  } on StateError catch (error) {
+    Log.error('Background engine refuses task $taskId: $error');
+  }
+}
+
+Future<bool> _conversationExists(ObjectBoxStore db, String conversationId) {
+  final query = db.conversationBox
+      .query(ConversationEntity_.id.equals(conversationId))
+      .build();
+  final count = query.count();
+  query.close();
+  return Future.value(count > 0);
+}
+
+Future<String?> _conversationTitle(ObjectBoxStore db, String conversationId) {
+  final query = db.conversationBox
+      .query(ConversationEntity_.id.equals(conversationId))
+      .build();
+  final rows = query.find();
+  query.close();
+  return Future.value(rows.isEmpty ? null : rows.first.title);
+}
+
+/// The auto-approvable toolset a background snapshot exposes: evaluated per
+/// tool with the CURRENT flags, then structurally minus bg.*/notifications.*
+/// (children never spawn further tasks or harvest notifications).
+Future<BackgroundRunSnapshot> _backgroundRunSnapshot(Ref ref) async {
+  final target = ref.read(activeChatTargetProvider);
+  final server = target.server;
+  final modelId = target.effectiveModelId;
+  if (server == null || modelId == null) {
+    throw StateError('No ready model target for background sub-agent runs.');
+  }
+  final settings = ref.read(settingsProvider);
+  final registry = ref.read(toolRegistryProvider);
+  final whitelist = settings.toolWhitelist.isEmpty
+      ? null
+      : TerminalWhitelist(settings.toolWhitelist);
+  final defs = <ToolDefinition>[];
+  for (final def in await registry.listTools()) {
+    if (bgNeverAvailableToolPrefixes.any(def.name.startsWith)) continue;
+    final approved = await shouldAutoApproveTool(
+      def.name,
+      webToolsEnabled: settings.webToolsEnabled,
+      terminalToolsEnabled: settings.terminalToolsEnabled,
+      deviceToolsEnabled: settings.deviceToolsEnabled,
+      mailAccountsConnected: settings.mailConnectorAccounts.isNotEmpty,
+      skillsEnabled: settings.skillsEnabled,
+      registry: registry,
+      whitelist: whitelist,
+    );
+    if (approved) defs.add(def);
+  }
+  return BackgroundRunSnapshot(
+    server: server,
+    modelId: modelId,
+    params: ref.read(chatParamsProvider),
+    toolDefs: defs,
+  );
+}
+
+Future<List<Message>> _backgroundRows(ObjectBoxStore db, String convId) {
+  final rows = db.messageBox
+      .query(MessageEntity_.conversationUid.equals(convId))
+      .build()
+      .find()
+      .map((entity) => entity.toDomain())
+      .toList()
+    ..sort((a, b) {
+      final order = a.threadOrder.compareTo(b.threadOrder);
+      if (order != 0) return order;
+      return a.createdAt.compareTo(b.createdAt);
+    });
+  return Future.value(rows);
+}
+
+Future<void> _persistBackgroundRow(ObjectBoxStore db, Message row) {
+  db.messageBox.put(MessageEntity.fromDomain(row));
+  return Future.value();
+}

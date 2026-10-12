@@ -122,6 +122,20 @@ class BackgroundTasksService {
     );
   }
 
+  /// Every row in the running state, newest spawn first (engine-resume path
+  /// across all owners).
+  Future<List<BackgroundTask>> runningTasks() async {
+    final db = _database;
+    final rows = await db.store.runInTransactionAsync(
+      TxMode.read,
+      _runningTasksInBackground,
+      null,
+    );
+    return rows
+        .where((task) => task.state == BackgroundTaskState.running)
+        .toList();
+  }
+
   /// Marks [taskId] cancelled. Idempotent: cancelling an already-cancelled
   /// task returns true without re-writing; finished/failed rows are
   /// terminal and refuse the regression (false); unknown ids return false.
@@ -283,8 +297,7 @@ class BackgroundTasksService {
     return tasks;
   }
 
-  static int _runningCountInBackground(Store store, void _) {
-    final box = store.box<BackgroundTaskEntity>();
+  static int _runningCountInBackground(Store store, void _) {    final box = store.box<BackgroundTaskEntity>();
     final query = box
         .query(
           BackgroundTaskEntity_.state.equals(BackgroundTaskState.running.name),
@@ -295,6 +308,22 @@ class BackgroundTasksService {
     return rows
         .where((row) => row.state == BackgroundTaskState.running.name)
         .length;
+  }
+
+  static List<BackgroundTask> _runningTasksInBackground(Store store, void _) {
+    final box = store.box<BackgroundTaskEntity>();
+    final query = box
+        .query(
+          BackgroundTaskEntity_.state.equals(BackgroundTaskState.running.name),
+        )
+        .build();
+    final rows = query.find();
+    query.close();
+    return [
+      for (final row in rows)
+        if (_stateFromName(row.state) == BackgroundTaskState.running)
+          row.toDomain(),
+    ];
   }
 
   static bool _cancelTaskInBackground(Store store, String taskId) {

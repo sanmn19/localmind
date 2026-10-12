@@ -30,13 +30,28 @@ class ObjectBoxStore {
   /// Create an instance of ObjectBox storage.
   static Future<ObjectBoxStore> create() async {
     final docsDir = await getApplicationDocumentsDirectory();
-    final storeDir = Directory(p.join(docsDir.path, "localmind_objectbox"));
+    final store = await openStore(directory: _storeDirectory(docsDir).path);
+    return ObjectBoxStore.fromStore(store);
+  }
 
+  static Directory _storeDirectory(Directory docsDir) {
+    return Directory(p.join(docsDir.path, objectBoxStoreDirectoryName));
+  }
+
+  /// Re-attach the app store from a SECOND isolate (foreground-service
+  /// engine). ObjectBox multi-isolate contract: [Store.attach] must be used
+  /// on the same directory opened by [create]; every isolate ends up with
+  /// its own Store instance over the same underlying native store.
+  static Future<ObjectBoxStore> attachAsSecondaryIsolate() async {
+    final docsDir = await getApplicationDocumentsDirectory();
+    final storeDir = _storeDirectory(docsDir);
     if (!await storeDir.exists()) {
       await storeDir.create(recursive: true);
     }
-
-    final store = await openStore(directory: storeDir.path);
+    final store = Store.attach(getObjectBoxModel(), storeDir.path);
     return ObjectBoxStore.fromStore(store);
   }
 }
+
+/// Directory name under the app documents dir holding the ObjectBox store.
+const objectBoxStoreDirectoryName = 'localmind_objectbox';
