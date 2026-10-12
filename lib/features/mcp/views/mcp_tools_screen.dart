@@ -1501,11 +1501,40 @@ final notificationsListenerGrantProvider = FutureProvider<bool>((ref) {
 /// row with a live granted read and a settings deep-link button. Rows
 /// themselves live session-scoped on the Kotlin ring; nothing renders them
 /// here.
-class _NotificationsCard extends ConsumerWidget {
+class _NotificationsCard extends ConsumerStatefulWidget {
   const _NotificationsCard();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_NotificationsCard> createState() => _NotificationsCardState();
+}
+
+class _NotificationsCardState extends ConsumerState<_NotificationsCard>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Returning to the app re-probes Notification access: the user grants
+    // (or revokes) in the system settings while the app is away, and the
+    // Kotlin answered while the row was stale — so the grant row must
+    // catch up on resume, not on the next button press.
+    if (state == AppLifecycleState.resumed) {
+      ref.invalidate(notificationsListenerGrantProvider);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final settings = ref.watch(settingsProvider);
@@ -1546,48 +1575,63 @@ class _NotificationsCard extends ConsumerWidget {
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
             ),
-            error: (_, _) => Text(
-              l10n.notifications_access_missing,
-              style: theme.textTheme.bodyMedium,
-            ),
-            data: (granted) => Row(
-              key: Key(
-                granted ? 'notifications_grant_row_on' : 'notifications_grant_row_off',
-              ),
-              children: [
-                HugeIcon(
-                  icon: granted
-                      ? HugeIcons.strokeRoundedCheckmarkCircle01
-                      : HugeIcons.strokeRoundedAlertCircle,
-                  size: 18,
-                  color: granted
-                      ? const Color(0xFF22C55E)
-                      : theme.colorScheme.outline,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    granted
-                        ? l10n.notifications_access_granted
-                        : l10n.notifications_access_missing,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-                ShadButton.outline(
-                  key: const Key('notifications_grant_access'),
-                  size: ShadButtonSize.sm,
-                  onPressed: () async {
-                    await const NotificationListenerChannel()
-                        .requestGrantOpenSettings();
-                    ref.invalidate(notificationsListenerGrantProvider);
-                  },
-                  child: Text(l10n.notifications_grant_action),
-                ),
-              ],
+            // A failed capability probe reads like "off" but keeps the
+            // grant button visible so recovery stays one tap away.
+            error: (_, _) => const _GrantAccessRow(granted: false),
+            data: (granted) => _GrantAccessRow(granted: granted),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The grant row itself: state icon + label and the never-hidden settings
+/// deep-link button, shared by the granted/off/probe-error renders so all
+/// three keep the same recovery tap target.
+class _GrantAccessRow extends ConsumerWidget {
+  const _GrantAccessRow({required this.granted});
+
+  final bool granted;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    return Row(
+      key: Key(
+        granted ? 'notifications_grant_row_on' : 'notifications_grant_row_off',
+      ),
+      children: [
+        HugeIcon(
+          icon: granted
+              ? HugeIcons.strokeRoundedCheckmarkCircle01
+              : HugeIcons.strokeRoundedAlertCircle,
+          size: 18,
+          color: granted
+              ? const Color(0xFF22C55E)
+              : theme.colorScheme.outline,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            granted
+                ? l10n.notifications_access_granted
+                : l10n.notifications_access_missing,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
+        ),
+        ShadButton.outline(
+          key: const Key('notifications_grant_access'),
+          size: ShadButtonSize.sm,
+          onPressed: () async {
+            await const NotificationListenerChannel()
+                .requestGrantOpenSettings();
+            ref.invalidate(notificationsListenerGrantProvider);
+          },
+          child: Text(l10n.notifications_grant_action),
         ),
       ],
     );

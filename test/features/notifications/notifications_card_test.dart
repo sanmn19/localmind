@@ -34,6 +34,7 @@ void main() {
     WidgetTester tester, {
     bool notificationToolsEnabled = false,
     _GrantMock? mock,
+    bool forceGrantError = false,
   }) async {
     tester.view.physicalSize = const Size(700, 3000);
     tester.view.devicePixelRatio = 1;
@@ -72,6 +73,10 @@ void main() {
         backgroundTasksServiceProvider.overrideWith(
           (ref) => _EmptyBgService(),
         ),
+        if (forceGrantError)
+          notificationsListenerGrantProvider.overrideWithValue(
+            AsyncError(StateError('grant probe failed'), StackTrace.empty),
+          ),
       ],
     );
     addTearDown(container.dispose);
@@ -161,6 +166,51 @@ void main() {
     expect(mock.settingsOpens, 1);
     expect(find.text('Notification access granted'), findsOneWidget);
   });
+
+  testWidgets('a resume lifecycle event re-checks the grant without a tap',
+      (tester) async {
+    final mock = _GrantMock();
+    await pumpCardHarness(tester, mock: mock);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('notifications_grant_row_off')), findsOneWidget);
+    final probesBefore = mock.isListenerEnabledCalls;
+
+    // The user grants Notification access in the system settings while the
+    // app is away; the Kotlin side already answered, so returning to the
+    // app must re-probe without waiting for the next button press.
+    mock.granted = true;
+    tester.binding
+        .handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
+    tester.binding
+        .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    expect(
+      mock.isListenerEnabledCalls,
+      greaterThan(probesBefore),
+      reason: 'resume must invalidate and re-run the grant probe',
+    );
+    expect(
+      find.byKey(const Key('notifications_grant_row_on')),
+      findsOneWidget,
+    );
+    expect(find.text('Notification access granted'), findsOneWidget);
+    expect(mock.settingsOpens, 0, reason: 'no button tap involved');
+  });
+
+  testWidgets('an errored capability probe still offers the grant button',
+      (tester) async {
+    await pumpCardHarness(tester, forceGrantError: true);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Notification access is off'), findsOneWidget);
+    expect(
+      find.byKey(const Key('notifications_grant_access')),
+      findsOneWidget,
+      reason: 'a hidden button blocks recovery; the error row keeps it',
+    );
+  });
 }
 
 /// Channel mock: isListenerEnabled answers [granted];
@@ -168,10 +218,12 @@ void main() {
 class _GrantMock {
   bool granted = false;
   int settingsOpens = 0;
+  int isListenerEnabledCalls = 0;
 
   Future<Object?> call(MethodCall call) async {
     switch (call.method) {
       case 'isListenerEnabled':
+        isListenerEnabledCalls++;
         return granted;
       case 'openNotificationAccessSettings':
         settingsOpens++;
