@@ -6549,6 +6549,12 @@ abstract class AppLocalizations {
   /// **'Failed'**
   String get backgroundStateFailed;
 
+  /// Chip label for a paused background task
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get backgroundStatePaused;
+
   /// Static note stating the background task concurrency cap and loop floor
   ///
   /// In en, this message translates to:

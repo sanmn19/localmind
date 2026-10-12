@@ -480,6 +480,25 @@ void main() {
       expect(harness.markedFailed, isEmpty);
     });
 
+    test('a paused row parks the loop without finalizing (lifecycle pause)',
+        () async {
+      final harness = _LoopHarness(loopMinutes: 10, maxRuns: 10);
+      harness.turnScript = (runNumber) =>
+          _TurnResult(content: 'observation $runNumber', doneRequested: false);
+      // The pause relay wakes the run and writes the DB state after the
+      // first turn; the loop's authoritative poll sees `paused` and parks
+      // WITHOUT finalize (a resume starts a FRESH loop instead).
+      harness.pauseAfterTurns = 1;
+
+      await driveBackgroundTaskLoop(harness.taskId, seams: harness.seams());
+
+      expect(harness.turnCalls, 1);
+      expect(harness.recordedRuns, hasLength(1));
+      expect(harness.finalized, isEmpty);
+      expect(harness.markedFailed, isEmpty);
+      expect(harness.task.state, BackgroundTaskState.paused);
+    });
+
     test('run-exception marks the task failed once', () async {
       final harness = _LoopHarness(loopMinutes: 0, maxRuns: 10);
       harness.turnError = BackgroundRunException('model failed');
@@ -690,6 +709,9 @@ class _LoopHarness {
   /// the driver's crash-class catch must distinguish resumable crashes.
   Object? turnCrash;
   int? cancelAfterTurns;
+  /// Lifecycle pause: when set, the relay-merged DB state reads `paused`
+  /// after this many completed turns (the loop must park without finalize).
+  int? pauseAfterTurns;
   bool conversationMissing = false;
 
   final recordedRuns = <String>[];
@@ -703,6 +725,10 @@ class _LoopHarness {
         if (cancelAfterTurns != null && turnCalls >= cancelAfterTurns!) {
           // The relay wrote the authoritative DB state between runs.
           task = _task(state: BackgroundTaskState.cancelled);
+        }
+        if (pauseAfterTurns != null && turnCalls >= pauseAfterTurns!) {
+          // The pause relay wrote the authoritative DB state between runs.
+          task = _task(state: BackgroundTaskState.paused);
         }
         return task;
       },

@@ -4,11 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 
 import '../../../core/logger/app_logger.dart';
+import '../../../core/models/enums.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/storage_providers.dart';
 import '../../../core/services/device_tools_service.dart';
 import '../../../core/storage/entities.dart';
 import '../../../core/storage/objectbox_store.dart';
+import '../../../core/utils/uuid.dart';
 import '../../../objectbox.g.dart';
 import '../data/chat_service.dart';
 import '../data/background_engine.dart';
@@ -549,6 +551,21 @@ final backgroundEngineProvider = Provider<BackgroundRunEngine>((ref) {
   service.attachCancelRequester((taskId) {
     engine.cancelRunsFor(taskId);
   });
+  // Agent-awareness seam (bg lifecycle upgrade): pause/resume notice rows
+  // persist as USER-role rows in the TASK conversation on the same
+  // MessageEntity path the result rows use (system role is FORBIDDEN for
+  // injected rows — the LM-Studio service folds the first system row into
+  // its prompt).
+  service.setNoticeSink((taskId, content) async {
+    final task = await service.taskById(taskId);
+    final taskConversationId = task?.taskConversationId;
+    if (taskConversationId == null) return;
+    await persistBackgroundNoticeRow(
+      ref.read(databaseProvider),
+      taskConversationId,
+      content,
+    );
+  });
   ref.onDispose(() {
     service.attachCancelRequester((taskId) {});
     engine.dispose();
@@ -612,6 +629,55 @@ Future<void> _ensureTaskRunning(Ref ref, String taskId) async {
   } on StateError catch (error) {
     Log.error('Background engine refuses task $taskId: $error');
   }
+}
+
+/// Pause bridge (bg lifecycle upgrade): the service seam does relay →
+/// flip → notice-row injection; callers invalidate their task-row providers
+/// on a true result, mirroring the cancel path.
+Future<bool> pauseBackgroundTask(Ref ref, String taskId) =>
+    ref.read(backgroundTasksServiceProvider).pauseTask(taskId);
+
+/// Resume bridge: flip + resume notice ride the service seam, then THIS
+/// side enqueues the fresh engine run (`_ensureTaskRunning` → requestRun).
+Future<bool> resumeBackgroundTask(Ref ref, String taskId) async {
+  final resumed = await ref.read(backgroundTasksServiceProvider)
+      .resumeTask(taskId);
+  if (resumed) {
+    await _ensureTaskRunning(ref, taskId);
+  }
+  return resumed;
+}
+
+/// Writes one agent-awareness notice row (`Background task paused by user
+/// at <HH:MM>` / `Background task resumed — continue from where this task
+/// left off.`) into the hidden TASK conversation: user-role row at the next
+/// free thread order (max + 1 across all rows, 0 when empty) on the shared
+/// MessageEntity path ([_persistBackgroundRow]). Exposed for tests.
+Future<void> persistBackgroundNoticeRow(
+  ObjectBoxStore db,
+  String taskConversationId,
+  String content,
+) async {
+  final rows = await _backgroundRows(db, taskConversationId);
+  final nextThreadOrder = rows.isEmpty
+      ? 0
+      : rows.map((row) => row.threadOrder).reduce(
+            (a, b) => a > b ? a : b,
+          ) +
+          1;
+  await _persistBackgroundRow(
+    db,
+    Message(
+      id: generateUuidV4(),
+      conversationId: taskConversationId,
+      role: MessageRole.user,
+      content: content,
+      createdAt: DateTime.now(),
+      status: MessageStatus.complete,
+      isActiveVariant: true,
+      threadOrder: nextThreadOrder,
+    ),
+  );
 }
 
 Future<bool> _conversationExists(ObjectBoxStore db, String conversationId) {

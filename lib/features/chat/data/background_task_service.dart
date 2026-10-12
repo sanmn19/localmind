@@ -26,6 +26,25 @@ const int bgMaxConcurrentTasks = 3;
 /// whether it is a genuine engine relay or a no-op.
 typedef CancelRequester = void Function(String taskId);
 
+/// Notice-row seam (bg lifecycle upgrade): persists agent-awareness rows
+/// (`Background task paused by user at <HH:MM>` / `Background task resumed
+/// — continue from where this task left off.`) into the TASK conversation.
+/// The engine provider wires it to the same MessageEntity path the result
+/// rows use; absent sink → transitions skip injection (unit tests / v1).
+typedef NoticeSink = Future<void> Function(String taskId, String content);
+
+/// Verbatim resume notice (the pause template composes live via
+/// [backgroundPauseNoticeContent]).
+const String bgResumeNoticeContent =
+    'Background task resumed — continue from where this task left off.';
+
+/// Verbatim pause notice template at [at]'s local `<HH:MM>` clock time.
+String backgroundPauseNoticeContent(DateTime at) {
+  final hh = at.hour.toString().padLeft(2, '0');
+  final mm = at.minute.toString().padLeft(2, '0');
+  return 'Background task paused by user at $hh:$mm';
+}
+
 /// CRUD + normalization for background-agent task rows living in the
 /// `BackgroundTaskEntity` box (docs/specs/2026-10-09-background-subagents.md).
 ///
@@ -57,6 +76,14 @@ class BackgroundTasksService {
   /// live engine hook. Safe to call repeatedly — the newest requester wins.
   void attachCancelRequester(CancelRequester requester) {
     _cancelRequester = requester;
+  }
+
+  /// Late-bound notice-row writer (bg lifecycle upgrade): wired by the
+  /// engine provider construction. Safe to call repeatedly — newest wins.
+  NoticeSink? _noticeSink;
+
+  void setNoticeSink(NoticeSink sink) {
+    _noticeSink = sink;
   }
 
   ObjectBoxStore get _database {
@@ -151,6 +178,62 @@ class BackgroundTasksService {
       _cancelTaskInBackground,
       taskId,
     );
+  }
+
+  /// Marks [taskId] paused (bg lifecycle upgrade). Relay-before-write
+  /// mirrors [cancelTask]'s documented I1 order: the cancel relay fires
+  /// FIRST so a live generation wakes even if the write below fails — the
+  /// driver's authoritative poll then sees `paused` and parks the loop
+  /// WITHOUT finalize.
+  ///
+  /// Returns true when the row is paused afterwards: a fresh running→paused
+  /// flip (which injects the `Background task paused by user at <HH:MM>`
+  /// row through the sink) or an idempotent re-pause (which does NOT stack
+  /// a duplicate notice). Terminal/unknown rows refuse (false).
+  Future<bool> pauseTask(String taskId) async {
+    _cancelRequester?.call(taskId);
+    final db = _database;
+    final result = await db.store.runInTransactionAsync(
+      TxMode.write,
+      _pauseTaskInBackground,
+      taskId,
+    );
+    switch (result) {
+      case _StateWrite.refused:
+        return false;
+      case _StateWrite.idempotent:
+        return true;
+      case _StateWrite.flipped:
+        await _noticeSink?.call(
+          taskId,
+          backgroundPauseNoticeContent(DateTime.now()),
+        );
+        return true;
+    }
+  }
+
+  /// Marks [taskId] running again (bg lifecycle upgrade). Injects
+  /// `Background task resumed — continue from where this task left off.`
+  /// through the sink; does NOT enqueue an engine run — the CALLER (bridge)
+  /// enqueues via [BackgroundRunEngine.requestRun] so riverpod stays out of
+  /// the service. Same idempotency shape as [pauseTask]: an already-running
+  /// row returns true without a duplicate notice; terminal/unknown refuse.
+  Future<bool> resumeTask(String taskId) async {
+    final db = _database;
+    final result = await db.store.runInTransactionAsync(
+      TxMode.write,
+      _resumeTaskInBackground,
+      taskId,
+    );
+    switch (result) {
+      case _StateWrite.refused:
+        return false;
+      case _StateWrite.idempotent:
+        return true;
+      case _StateWrite.flipped:
+        await _noticeSink?.call(taskId, bgResumeNoticeContent);
+        return true;
+    }
   }
 
   /// Marks [taskId] finished. Idempotent: the first recorded
@@ -365,12 +448,67 @@ class BackgroundTasksService {
       case BackgroundTaskState.cancelled:
         return true; // idempotent re-cancel
       case BackgroundTaskState.running:
+      case BackgroundTaskState.paused:
         entity.state = BackgroundTaskState.cancelled.name;
         box.put(entity);
         return true;
       case BackgroundTaskState.finished:
       case BackgroundTaskState.failed:
         return false; // terminal states refuse the regression
+    }
+  }
+
+  /// running→paused write step (relay already fired in [pauseTask]);
+  /// tri-state lets the caller inject the notice ONLY on a genuine flip.
+  static _StateWrite _pauseTaskInBackground(Store store, String taskId) {
+    final box = store.box<BackgroundTaskEntity>();
+    final query = box.query(BackgroundTaskEntity_.id.equals(taskId)).build();
+    final fetched = query.find();
+    query.close();
+    // Dart-side id filter keeps the condition-agnostic persistence fakes
+    // authoritative (mirrors findFirst usage).
+    final matches = fetched.where((row) => row.id == taskId).toList();
+    if (matches.isEmpty) return _StateWrite.refused;
+    final entity = matches.first;
+
+    final current = _stateFromName(entity.state);
+    switch (current) {
+      case BackgroundTaskState.running:
+        entity.state = BackgroundTaskState.paused.name;
+        box.put(entity);
+        return _StateWrite.flipped;
+      case BackgroundTaskState.paused:
+        return _StateWrite.idempotent; // no duplicate notice row
+      case BackgroundTaskState.cancelled:
+      case BackgroundTaskState.finished:
+      case BackgroundTaskState.failed:
+        return _StateWrite.refused;
+    }
+  }
+
+  /// paused→running write step; the notice rides the flip, the caller owns
+  /// the enqueue.
+  static _StateWrite _resumeTaskInBackground(Store store, String taskId) {
+    final box = store.box<BackgroundTaskEntity>();
+    final query = box.query(BackgroundTaskEntity_.id.equals(taskId)).build();
+    final fetched = query.find();
+    query.close();
+    final matches = fetched.where((row) => row.id == taskId).toList();
+    if (matches.isEmpty) return _StateWrite.refused;
+    final entity = matches.first;
+
+    final current = _stateFromName(entity.state);
+    switch (current) {
+      case BackgroundTaskState.paused:
+        entity.state = BackgroundTaskState.running.name;
+        box.put(entity);
+        return _StateWrite.flipped;
+      case BackgroundTaskState.running:
+        return _StateWrite.idempotent; // no duplicate notice row
+      case BackgroundTaskState.cancelled:
+      case BackgroundTaskState.finished:
+      case BackgroundTaskState.failed:
+        return _StateWrite.refused;
     }
   }
 
@@ -395,6 +533,9 @@ class BackgroundTasksService {
         return true;
       case BackgroundTaskState.cancelled:
       case BackgroundTaskState.failed:
+      case BackgroundTaskState.paused:
+        // Paused rows are parked by design, not finished: result-row
+        // semantics stay exclusive to genuinely completed runs.
         return false;
     }
   }
@@ -496,6 +637,11 @@ class BackgroundTasksService {
 final backgroundTasksServiceProvider = Provider<BackgroundTasksService>((ref) {
   return BackgroundTasksService(ref.watch(databaseProvider));
 });
+
+/// Transaction write outcome for the pause/resume flips: the public
+/// translate plus whether an agent-awareness notice row must be injected
+/// (idempotent re-calls never inject).
+enum _StateWrite { flipped, idempotent, refused }
 
 class _CreateTaskInput {
   _CreateTaskInput({

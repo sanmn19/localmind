@@ -692,6 +692,14 @@ class BackgroundRunCanceller {
 
   bool isRequested(String taskId) => _flagged.contains(taskId);
 
+  /// Drops a stale flag so a fresh loop for [taskId] starts clean: a
+  /// lifecycle PAUSE flags the task to wake its live run, and the RESUMED
+  /// run (a new requestRun) must not inherit that flag — otherwise its
+  /// first `isCancelled` probe aborts instantly.
+  void clear(String taskId) {
+    _flagged.remove(taskId);
+  }
+
   /// Resolves once a cancel request for [taskId] arrives (never if none
   /// comes). Raced against stream events inside the run.
   Future<void> watch(String taskId) {

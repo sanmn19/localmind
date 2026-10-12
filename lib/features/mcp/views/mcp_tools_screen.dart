@@ -1470,6 +1470,10 @@ class _BackgroundStateChip extends StatelessWidget {
         l10n.backgroundStateFailed,
         const Color(0xFFEF4444),
       ),
+      BackgroundTaskState.paused => (
+        l10n.backgroundStatePaused,
+        const Color(0xFF3B82F6),
+      ),
     };
 
     return Container(

@@ -142,6 +142,10 @@ class BackgroundRunEngine {
         'running); cancel one first.',
       );
     }
+    // Lifecycle pause: the pause relay flags the canceller to wake the live
+    // run; a RESUMED fresh loop must start with a clean cancel state or its
+    // first turn would abort instantly on the stale flag.
+    _canceller.clear(taskId);
     final future = driveBackgroundTaskLoop(taskId, seams: _seams())
         .whenComplete(() {
       _activeLoops.remove(taskId);

@@ -3689,6 +3689,8 @@
   "@backgroundStateCancelled": {"description": "Chip label for a cancelled background task"},
   "backgroundStateFailed": "Failed",
   "@backgroundStateFailed": {"description": "Chip label for a failed background task"},
+  "backgroundStatePaused": "Paused",
+  "@backgroundStatePaused": {"description": "Chip label for a paused background task"},
   "backgroundCapNote": "At most 3 tasks run at once; recurring tasks repeat every 10 minutes or more.",
   "@backgroundCapNote": {"description": "Static note stating the background task concurrency cap and loop floor"},
   "notifications_card_title": "Notifications",

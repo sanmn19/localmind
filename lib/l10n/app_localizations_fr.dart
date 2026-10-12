@@ -3567,6 +3567,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get backgroundStateFailed => 'Failed';
 
   @override
+  String get backgroundStatePaused => 'Paused';
+
+  @override
   String get backgroundCapNote =>
       'At most 3 tasks run at once; recurring tasks repeat every 10 minutes or more.';
 

@@ -65,6 +65,40 @@ void main() {
     expect(harness.notified, isEmpty);
   });
 
+  test('a paused row parks the loop without finalize; a resumed requestRun '
+      'starts clean past the stale pause-relay flag', () async {
+    final harness = _EngineHarness();
+    final engine = harness.buildEngine();
+    addTearDown(engine.dispose);
+
+    harness.forcedRowState = BackgroundTaskState.paused;
+    engine.requestRun('t-1');
+    await engine.waitForIdle();
+
+    // The driver's authoritative poll sees paused and parks WITHOUT any
+    // finalize/failure: no owner row, no notification, no run movement.
+    expect(harness.turnedTasks, isEmpty);
+    expect(harness.recordedRuns, isEmpty);
+    expect(harness.markedFailedIds, isEmpty);
+    expect(harness.markedFinishedIds, isEmpty);
+    expect(harness.ownerRows, isEmpty);
+    expect(harness.notified, isEmpty);
+
+    // RESUME: the service flipped the row back to running; the bridge
+    // enqueues engine.requestRun. The pause relay FLAGGED the canceller
+    // earlier in the pause path — the fresh loop must start with a clean
+    // cancel state, or it would abort before its first turn.
+    engine.cancelRunsFor('t-1'); // stale pause-relay flag
+    harness.forcedRowState = BackgroundTaskState.running;
+    engine.requestRun('t-1');
+    await engine.waitForIdle();
+
+    expect(harness.turnedTasks, hasLength(1));
+    expect(harness.turnedTasks.single.state, BackgroundTaskState.running);
+    expect(harness.markedFinishedIds, ['t-1']);
+    expect(harness.ownerRows, hasLength(1));
+  });
+
   test('finish appends the owner row, stores ids, posts the notification',
       () async {
     final harness = _EngineHarness();
@@ -363,6 +397,9 @@ class _EngineHarness {
   /// the no-ready-model case).
   Object? snapshotError;
 
+  /// Lifecycle pause: forces every inspectRow hit to report this state.
+  BackgroundTaskState? forcedRowState;
+
   BackgroundTask buildEngineRow(String taskId) => BackgroundTask(
         id: taskId,
         ownerConversationId: 'owner-1',
@@ -370,7 +407,7 @@ class _EngineHarness {
         prompt: 'watch the mail',
         loopMinutes: 0,
         maxRuns: 10,
-        state: BackgroundTaskState.running,
+        state: forcedRowState ?? BackgroundTaskState.running,
         createdAt: DateTime.utc(2026, 10, 9, 12),
       );
 
