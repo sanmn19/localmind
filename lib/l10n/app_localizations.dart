@@ -4359,6 +4359,90 @@ abstract class AppLocalizations {
   /// **'Enable example server'**
   String get enable_example_server;
 
+  /// Title of the skills management screen and settings entry
+  ///
+  /// In en, this message translates to:
+  /// **'Skills'**
+  String get skills_name;
+
+  /// Master switch that turns skill injection on or off
+  ///
+  /// In en, this message translates to:
+  /// **'Enable skills'**
+  String get skills_toggle;
+
+  /// Floating action button opening the skill editor for a new skill
+  ///
+  /// In en, this message translates to:
+  /// **'Add skill'**
+  String get skills_add;
+
+  /// Title of the skill editor when editing an existing skill
+  ///
+  /// In en, this message translates to:
+  /// **'Edit skill'**
+  String get skills_edit_title;
+
+  /// Title of the skill editor when creating a skill
+  ///
+  /// In en, this message translates to:
+  /// **'New skill'**
+  String get skills_new_title;
+
+  /// Confirmation title before deleting a skill
+  ///
+  /// In en, this message translates to:
+  /// **'Delete skill \"{name}\"?'**
+  String skills_delete_confirm(String name);
+
+  /// Confirm button deleting a skill
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get skills_delete;
+
+  /// Empty state on the skills screen
+  ///
+  /// In en, this message translates to:
+  /// **'No skills yet. Ask the AI in a chat, or add one here.'**
+  String get skills_empty;
+
+  /// Label of the skill name field in the editor
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get skill_name_label;
+
+  /// Label of the skill description field in the editor
+  ///
+  /// In en, this message translates to:
+  /// **'Short description'**
+  String get skill_description_label;
+
+  /// Label of the skill body field in the editor
+  ///
+  /// In en, this message translates to:
+  /// **'Skill content (markdown)'**
+  String get skill_body_label;
+
+  /// Save button of the skill editor
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get skills_save;
+
+  /// Inline error shown when a skill name is invalid
+  ///
+  /// In en, this message translates to:
+  /// **'Lowercase letters, digits and underscores only'**
+  String get name_invalid_hint;
+
+  /// Inline error shown when a skill name clashes with an existing skill
+  ///
+  /// In en, this message translates to:
+  /// **'A skill with this name already exists'**
+  String get duplicate_name_hint;
+
   /// No description provided for @built_in_label.
   ///
   /// In en, this message translates to:
@@ -6368,6 +6452,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enter an e-mail and an app password to connect.'**
   String get imap_fields_required;
+
+  /// Context menu action to start a selection-anchored fork chat from selected assistant text
+  ///
+  /// In en, this message translates to:
+  /// **'Fork from this selection'**
+  String get forkFromSelection;
+
+  /// Fallback chip label for a fork anchor that cannot render as an inline highlight band
+  ///
+  /// In en, this message translates to:
+  /// **'Forked · {text}'**
+  String forkChipLabel(String text);
+
+  /// Tooltip for the fork panel's close button
+  ///
+  /// In en, this message translates to:
+  /// **'Close fork chat'**
+  String get forkPanelCloseTooltip;
+
+  /// Tooltip for the fork panel's delete-fork button
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this fork and its messages'**
+  String get forkPanelDeleteTooltip;
+
+  /// Placeholder shown in the fork panel before the first exchange
+  ///
+  /// In en, this message translates to:
+  /// **'Ask a follow-up about this selection.'**
+  String get forkPanelEmptyBody;
+
+  /// Hint text of the fork panel's question input
+  ///
+  /// In en, this message translates to:
+  /// **'Ask about this selection…'**
+  String get forkPanelInputHint;
+
+  /// Prefix for a failed fork turn rendered in the fork panel transcript
+  ///
+  /// In en, this message translates to:
+  /// **'An error occurred: {message}'**
+  String forkTurnErrorLabel(String message);
 }
 
 class _AppLocalizationsDelegate

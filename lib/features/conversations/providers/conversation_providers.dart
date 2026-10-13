@@ -685,7 +685,11 @@ final filteredConversationsProvider = Provider<AsyncValue<List<Conversation>>>((
   final sortOption = ref.watch(historySortOptionProvider);
 
   return conversationsAsync.whenData((conversations) {
-    var filtered = conversations.where((c) => !c.isTemporary).toList();
+    // Hidden fork conversations (selection-fork feature) never surface in
+    // history; their turns live only in the fork panel.
+    var filtered = conversations
+        .where((c) => !c.isTemporary && !c.isFork)
+        .toList();
 
     switch (listFilter) {
       case HistoryListFilter.archived:
@@ -978,5 +982,13 @@ final messageSearchResultsProvider = Provider<List<MessageSearchHit>>((ref) {
   }
 
   final db = ref.watch(databaseProvider);
-  return _messageSearchService.searchMessages(db, query: query);
+  // Hidden fork conversations (selection-fork feature) are excluded at
+  // search time — the box query, not the cached conversation list, is the
+  // authoritative freshness point because fork rows are written directly.
+  final exclude = _messageSearchService.forkConversationIds(db);
+  return _messageSearchService.searchMessages(
+    db,
+    query: query,
+    excludedConversationIds: exclude,
+  );
 });

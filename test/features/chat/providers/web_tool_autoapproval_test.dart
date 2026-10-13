@@ -95,6 +95,7 @@ void main() {
       toolName,
       webToolsEnabled: web,
       terminalToolsEnabled: false,
+      skillsEnabled: false,
       registry: registry,
       whitelist: null,
     );
@@ -103,8 +104,14 @@ void main() {
       'auto-approves local://web tools while web tools are enabled',
       () async {
         final registry = await localWebRegistry();
-        expect(await approve('web.search', web: true, registry: registry), isTrue);
-        expect(await approve('web.fetch', web: true, registry: registry), isTrue);
+        expect(
+          await approve('web.search', web: true, registry: registry),
+          isTrue,
+        );
+        expect(
+          await approve('web.fetch', web: true, registry: registry),
+          isTrue,
+        );
       },
     );
 
@@ -122,7 +129,10 @@ void main() {
 
     test('a remote-only shadowed web.fetch still requires approval', () async {
       final registry = ToolRegistry(providers: [_RemoteToolProvider()]);
-      expect(await approve('web.fetch', web: true, registry: registry), isFalse);
+      expect(
+        await approve('web.fetch', web: true, registry: registry),
+        isFalse,
+      );
     });
 
     test('non-web tools do not leak into web auto-approval', () async {

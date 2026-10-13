@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,6 +13,7 @@ import 'package:localmind/core/providers/storage_providers.dart';
 import 'package:localmind/core/services/app_haptics.dart';
 import 'package:localmind/core/services/message_save_service.dart';
 import 'package:localmind/core/storage/entities.dart';
+import 'package:localmind/core/utils/uuid.dart';
 import 'package:localmind/features/conversations/data/models/conversation.dart';
 import 'package:localmind/features/conversations/providers/conversation_providers.dart'
     as conv;
@@ -21,6 +21,9 @@ import 'package:localmind/features/models/data/models/model_info.dart';
 import 'package:localmind/features/on_device/providers/on_device_providers.dart';
 import 'package:localmind/features/personas/providers/personas_providers.dart';
 import 'package:localmind/features/personas/utils/persona_prompt_utils.dart';
+import 'package:localmind/features/skills/data/skills_provider.dart';
+import 'package:localmind/features/skills/data/skills_store.dart'
+    show buildSkillsSystemSection;
 import 'package:localmind/features/servers/data/models/server.dart';
 import 'package:localmind/features/servers/providers/server_providers.dart';
 import 'package:localmind/objectbox.g.dart';
@@ -73,15 +76,6 @@ class CollectedToolCallsOutcome {
 
   final Message finalMessage;
   final bool followUpStarted;
-}
-
-bool shouldIncludeMessageInChatContext(Message message) {
-  if (message.role == MessageRole.assistant &&
-      message.status == MessageStatus.error &&
-      message.content.trim().isEmpty) {
-    return false;
-  }
-  return true;
 }
 
 class ChatState {
@@ -724,22 +718,6 @@ class ChatNotifier extends Notifier<ChatState> {
     state = state.copyWith(isTemporary: enabled);
   }
 
-  String generateUuid() {
-    final random = Random.secure();
-    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    return [
-          bytes.sublist(0, 4),
-          bytes.sublist(4, 6),
-          bytes.sublist(6, 8),
-          bytes.sublist(8, 10),
-          bytes.sublist(10, 16),
-        ]
-        .map((b) => b.map((e) => e.toRadixString(16).padLeft(2, '0')).join())
-        .join('-');
-  }
-
   /// Writes the latest snapshot of every persisted running reply to disk, so
   /// nothing is lost if the app is killed while it is in the background.
   Future<void> checkpointStreamingMessage({bool flush = false}) async {
@@ -777,7 +755,7 @@ class ChatNotifier extends Notifier<ChatState> {
 
     final isTemp = state.isTemporary || _pendingTemporaryChat;
     if (isTemp) {
-      _ephemeralConversationId = generateUuid();
+      _ephemeralConversationId = generateUuidV4();
       _pendingTemporaryChat = false;
       state = state.copyWith(isTemporary: true);
       return;
@@ -907,15 +885,15 @@ class ChatNotifier extends Notifier<ChatState> {
     }
 
     final userThreadOrder = MessageVariants.nextThreadOrder(state.messages);
-    final userGroupId = generateUuid();
+    final userGroupId = generateUuidV4();
     final assistantThreadOrder = userThreadOrder + 1;
-    final assistantGroupId = generateUuid();
+    final assistantGroupId = generateUuidV4();
     final lastInTimeline = state.messages.isNotEmpty
         ? state.messages.last
         : null;
 
     final userMessage = Message(
-      id: generateUuid(),
+      id: generateUuidV4(),
       conversationId: convId,
       role: MessageRole.user,
       content: trimmedContent,
@@ -929,7 +907,7 @@ class ChatNotifier extends Notifier<ChatState> {
       parentMessageId: lastInTimeline?.id,
     );
 
-    final assistantMessageId = generateUuid();
+    final assistantMessageId = generateUuidV4();
     var assistantMessage = Message(
       id: assistantMessageId,
       conversationId: convId,
@@ -1381,13 +1359,13 @@ class ChatNotifier extends Notifier<ChatState> {
     }
 
     final threadOrder = MessageVariants.nextThreadOrder(state.messages);
-    final groupId = generateUuid();
+    final groupId = generateUuidV4();
     final lastInTimeline = state.messages.isNotEmpty
         ? state.messages.last
         : null;
 
     final message = Message(
-      id: generateUuid(),
+      id: generateUuidV4(),
       conversationId: convId,
       role: role,
       content: trimmedContent,
@@ -1433,7 +1411,18 @@ class ChatNotifier extends Notifier<ChatState> {
     }
   }
 
-  List<Message> _buildMessagesForApi(ModelInfo? selectedModel) {
+  List<Message> _buildMessagesForApi(ModelInfo? selectedModel) =>
+      _assembleApiMessages(selectedModel, state.messages);
+
+  /// Shared request-assembly path for the open chat's sends and the
+  /// fork-context slice: composes the system message (persona + skills
+  /// section + /no_think), filters [mainTimeline], splices tool-chain rows
+  /// back in from `allMessages` and truncates to the context window. One
+  /// path so fork contexts can never drift from what the main thread sends.
+  List<Message> _assembleApiMessages(
+    ModelInfo? selectedModel,
+    List<Message> mainTimeline,
+  ) {
     final settings = ref.read(settingsProvider);
     final messages = <Message>[];
 
@@ -1460,6 +1449,21 @@ class ChatNotifier extends Notifier<ChatState> {
           : '$systemContent\n$conciseInstruction';
     }
 
+    // Claude-style skills: append the maintained-skills section when the
+    // kill switch is on and the mirror has entries. Every request path
+    // (send + continue) flows through this single system-message
+    // composition point, so the section is never duplicated. Placed before
+    // the /no_think handling so that literal stays the terminal line.
+    final skills = ref.read(skillsProvider);
+    if (skills.enabled) {
+      final skillsSection = buildSkillsSystemSection(skills.entries);
+      if (skillsSection.isNotEmpty) {
+        systemContent = (systemContent == null || systemContent.trim().isEmpty)
+            ? skillsSection
+            : '$systemContent\n\n$skillsSection';
+      }
+    }
+
     if (shouldDisableThinking) {
       // Hybrid reasoning models (Qwen3 and similar) key off this literal
       // token in the prompt to skip their <think> block — send it whenever
@@ -1483,7 +1487,7 @@ class ChatNotifier extends Notifier<ChatState> {
       );
     }
 
-    for (final message in state.messages) {
+    for (final message in mainTimeline) {
       if (!shouldIncludeMessageInChatContext(message)) {
         continue;
       }
@@ -1649,6 +1653,11 @@ class ChatNotifier extends Notifier<ChatState> {
     List<Message> messages,
     int contextLength,
   ) {
+    // Selection-fork note (final-review fix 9): newest-first eviction means
+    // heavy window pressure can evict rows from the FRONT — including a
+    // fork's anchor row. mainTimelineUpTo re-pins the anchor to the slice
+    // tail after this truncation, so callers needing the anchor present for
+    // the fork wire must not call this helper bare.
     if (messages.isEmpty) return messages;
 
     int estimatedTokens = 0;
@@ -1665,7 +1674,44 @@ class ChatNotifier extends Notifier<ChatState> {
       result.insert(0, message);
     }
 
-    return result;
+      return result;
+    }
+
+  /// Fork-context slice (selection-fork feature): the composed API history
+  /// for the OPEN conversation truncated at [anchorMessageId] inclusive —
+  /// system (+skills) + resolved main timeline up to the anchor. Returns
+  /// null when the anchor is not on the current resolved timeline.
+  List<Message>? mainTimelineUpTo(String anchorMessageId) {
+    final anchorIndex = state.messages.indexWhere(
+      (message) => message.id == anchorMessageId,
+    );
+    if (anchorIndex < 0) return null;
+    final anchor = state.messages[anchorIndex];
+    final selectedModel = ref.read(activeChatTargetProvider).selectedModel;
+    final composed = _assembleApiMessages(
+      selectedModel,
+      state.messages.sublist(0, anchorIndex + 1),
+    );
+    if (composed.any((message) => message.id == anchor.id)) {
+      return composed;
+    }
+    // Cheap keep-anchor guard (final-review): context-window pressure
+    // evicts the FRONT of the timeline first, which can silently drop the
+    // fork's own anchor row while keeping post-anchor rows — the fork wire
+    // is anchored ON this row, so re-pin it to the tail (the slice semantics
+    // "main timeline up to AND INCLUDING the anchor" still hold).
+    return [...composed, anchor];
+  }
+
+  /// Fork-context lookup: the row [id] inside [conversationId] when that
+  /// conversation is open. The notifier only caches the open chat's rows;
+  /// [state.allMessages] holds every row including inactive variants.
+  Message? messageById(String id, String conversationId) {
+    if (conversationId != _currentConversationId) return null;
+    for (final message in state.allMessages) {
+      if (message.id == id) return message;
+    }
+    return null;
   }
 
   /// Waits for any in-flight AI title generation on [conversationId] to complete.
@@ -2123,7 +2169,7 @@ class ChatNotifier extends Notifier<ChatState> {
     if (!ref.mounted) return;
 
     final assistantMessage = Message(
-      id: generateUuid(),
+      id: generateUuidV4(),
       conversationId: _activeConversationId!,
       role: MessageRole.assistant,
       content: '',
@@ -2306,7 +2352,7 @@ class ChatNotifier extends Notifier<ChatState> {
       state.allMessages,
     );
     final continuationMessage = Message(
-      id: generateUuid(),
+      id: generateUuidV4(),
       conversationId: previousAssistant.conversationId,
       role: MessageRole.assistant,
       content: '',
@@ -2479,6 +2525,7 @@ class ChatNotifier extends Notifier<ChatState> {
               terminalToolsEnabled: settings.terminalToolsEnabled,
               deviceToolsEnabled: settings.deviceToolsEnabled,
               mailAccountsConnected: settings.mailConnectorAccounts.isNotEmpty,
+              skillsEnabled: settings.skillsEnabled,
               registry: registry,
               whitelist: TerminalWhitelist(settings.toolWhitelist),
             )) {
@@ -2676,14 +2723,14 @@ class ChatNotifier extends Notifier<ChatState> {
 
     final threadOrder = MessageVariants.nextThreadOrder(state.messages);
     final message = Message(
-      id: generateUuid(),
+      id: generateUuidV4(),
       conversationId: previousAssistant.conversationId,
       role: MessageRole.user,
       content: content,
       createdAt: DateTime.now(),
       status: MessageStatus.complete,
       attachmentPaths: [savedPath],
-      variantGroupId: generateUuid(),
+      variantGroupId: generateUuidV4(),
       variantIndex: 0,
       threadOrder: threadOrder,
       isActiveVariant: true,
@@ -3099,7 +3146,7 @@ class ChatNotifier extends Notifier<ChatState> {
 
     for (final msg in messagesToCopy) {
       final copied = msg.copyWith(
-        id: generateUuid(),
+        id: generateUuidV4(),
         conversationId: newConversation.id,
       );
       await _saveMessage(copied);
@@ -3180,7 +3227,7 @@ class ChatNotifier extends Notifier<ChatState> {
       final userMessage = messages.last;
       await _regenerateAssistant(
         userMessage,
-        variantGroupId: generateUuid(),
+        variantGroupId: generateUuidV4(),
         threadOrder: userMessage.threadOrder + 1,
         variantIndex: 0,
       );
@@ -3293,7 +3340,7 @@ class ChatNotifier extends Notifier<ChatState> {
     state = state.copyWith(allMessages: deactivated);
 
     final newUser = message.copyWith(
-      id: generateUuid(),
+      id: generateUuidV4(),
       content: newContent,
       createdAt: DateTime.now(),
       variantIndex: _nextVariantIndex(groupId),
@@ -3306,7 +3353,7 @@ class ChatNotifier extends Notifier<ChatState> {
 
     await _regenerateAssistant(
       newUser,
-      variantGroupId: generateUuid(),
+      variantGroupId: generateUuidV4(),
       threadOrder: message.threadOrder + 1,
       variantIndex: 0,
     );

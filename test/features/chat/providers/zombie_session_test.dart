@@ -133,7 +133,9 @@ Future<bool> _grantNextApproval(
   bool expectApproval = true,
 }) async {
   final deadline = DateTime.now().add(
-    expectApproval ? const Duration(seconds: 10) : const Duration(milliseconds: 400),
+    expectApproval
+        ? const Duration(seconds: 10)
+        : const Duration(milliseconds: 400),
   );
   while (DateTime.now().isBefore(deadline)) {
     final pending = container.read(chatProvider).pendingToolApproval;

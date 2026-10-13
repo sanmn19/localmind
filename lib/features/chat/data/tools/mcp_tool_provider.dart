@@ -1,6 +1,7 @@
 import 'package:localmind/features/chat/data/mcp_server_manager.dart';
 import 'package:localmind/features/mcp/data/device_mcp_server.dart';
 import 'package:localmind/features/mcp/data/terminal_mcp_server.dart';
+import 'package:localmind/features/skills/data/skills_mcp_server.dart';
 
 import 'tool_definition.dart';
 import 'tool_registry.dart';
@@ -71,5 +72,6 @@ class McpToolProvider implements ToolProvider {
 const localServerManagerUrls = {
   webMcpServerUrl,
   terminalMcpServerUrl,
+  skillsMcpServerUrl,
   deviceMcpServerUrl,
 };

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -15,6 +16,7 @@ import '../core/models/enums.dart';
 import '../features/personas/providers/personas_providers.dart';
 import '../features/servers/data/models/server.dart';
 import '../features/servers/providers/server_providers.dart';
+import '../features/skills/data/skills_provider.dart';
 import '../features/cloud_sync/views/cloud_sync_lifecycle_host.dart';
 import '../core/logger/app_logger.dart';
 import '../core/utils/locale_utils.dart';
@@ -118,6 +120,19 @@ class _BootstrapHostState extends State<BootstrapHost> {
       container.read(activeServerProvider);
       container.read(connectionStatusProvider);
       container.read(onDeviceEngineProvider);
+
+      // Skills load from the documents skills/ dir without blocking
+      // startup; until the refresh resolves, request assembly just reads
+      // the (empty) in-memory mirror. Failures are logged, not fatal.
+      unawaited(
+        container.read(skillsProvider.notifier).refresh().catchError((
+          Object e,
+          StackTrace s,
+        ) {
+          Log.error('Failed to load skills: $e');
+          Log.error('$s');
+        }),
+      );
 
       _container = container;
       _updateStage(BootstrapStage.done, 'Ready');

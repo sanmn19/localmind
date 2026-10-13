@@ -84,6 +84,7 @@ Future<bool> _autoApprove(
     toolName,
     webToolsEnabled: enabled,
     terminalToolsEnabled: false,
+    skillsEnabled: false,
     registry: registry,
     whitelist: null,
   );

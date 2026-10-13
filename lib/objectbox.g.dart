@@ -22,7 +22,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(1, 6060443518060866028),
     name: 'ConversationEntity',
-    lastPropertyId: const obx_int.IdUid(24, 2324488738774851555),
+    lastPropertyId: const obx_int.IdUid(27, 5205524731612525260),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -168,6 +168,24 @@ final _entities = <obx_int.ModelEntity>[
         id: const obx_int.IdUid(24, 2324488738774851555),
         name: 'totalTokenCount',
         type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(25, 587693285257817302),
+        name: 'forkOfMessageId',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(26, 6295946776019084010),
+        name: 'forkSpan',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(27, 5205524731612525260),
+        name: 'isFork',
+        type: 1,
         flags: 0,
       ),
     ],
@@ -708,6 +726,62 @@ final _entities = <obx_int.ModelEntity>[
     relations: <obx_int.ModelRelation>[],
     backlinks: <obx_int.ModelBacklink>[],
   ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(8, 7895365751563937927),
+    name: 'ForkAnchorEntity',
+    lastPropertyId: const obx_int.IdUid(7, 7373507485623998526),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 7132218893247571166),
+        name: 'internalId',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 7219532410895169266),
+        name: 'id',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(12, 8691070347134042097),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 6419925018061405343),
+        name: 'mainConversationId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(13, 8885298831567115071),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 6165095474518001508),
+        name: 'anchorMessageId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(14, 3277257828143291386),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 324397342874350634),
+        name: 'selectedText',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 570210534330261134),
+        name: 'forkConversationId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(15, 7170761428673485654),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(7, 7373507485623998526),
+        name: 'createdAt',
+        type: 10,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
 ];
 
 /// Shortcut for [obx.Store.new] that passes [getObjectBoxModel] and for Flutter
@@ -753,8 +827,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
     // Typically, this is done with `dart run build_runner build`.
     generatorVersion: obx_int.GeneratorVersion.v2025_12_16,
     entities: _entities,
-    lastEntityId: const obx_int.IdUid(7, 3071607342535269584),
-    lastIndexId: const obx_int.IdUid(11, 4226689279810093888),
+    lastEntityId: const obx_int.IdUid(8, 7895365751563937927),
+    lastIndexId: const obx_int.IdUid(15, 7170761428673485654),
     lastRelationId: const obx_int.IdUid(0, 0),
     lastSequenceId: const obx_int.IdUid(0, 0),
     retiredEntityUids: const [],
@@ -809,7 +883,13 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final folderIdOffset = object.folderId == null
             ? null
             : fbb.writeString(object.folderId!);
-        fbb.startTable(25);
+        final forkOfMessageIdOffset = object.forkOfMessageId == null
+            ? null
+            : fbb.writeString(object.forkOfMessageId!);
+        final forkSpanOffset = object.forkSpan == null
+            ? null
+            : fbb.writeString(object.forkSpan!);
+        fbb.startTable(28);
         fbb.addInt64(0, object.internalId);
         fbb.addOffset(1, idOffset);
         fbb.addOffset(2, titleOffset);
@@ -834,6 +914,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addBool(21, object.isArchived);
         fbb.addInt64(22, object.characterCount);
         fbb.addInt64(23, object.totalTokenCount);
+        fbb.addOffset(24, forkOfMessageIdOffset);
+        fbb.addOffset(25, forkSpanOffset);
+        fbb.addBool(26, object.isFork);
         fbb.finish(fbb.endTable());
         return object.internalId;
       },
@@ -942,6 +1025,18 @@ obx_int.ModelDefinition getObjectBoxModel() {
           rootOffset,
           50,
         );
+        final forkOfMessageIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 52);
+        final forkSpanParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 54);
+        final isForkParam = const fb.BoolReader().vTableGet(
+          buffer,
+          rootOffset,
+          56,
+          false,
+        );
         final object = ConversationEntity(
           internalId: internalIdParam,
           id: idParam,
@@ -967,6 +1062,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
           isArchived: isArchivedParam,
           characterCount: characterCountParam,
           totalTokenCount: totalTokenCountParam,
+          forkOfMessageId: forkOfMessageIdParam,
+          forkSpan: forkSpanParam,
+          isFork: isForkParam,
         );
         obx_int.InternalToManyAccess.setRelInfo<ConversationEntity>(
           object.messages,
@@ -1653,6 +1751,75 @@ obx_int.ModelDefinition getObjectBoxModel() {
             return object;
           },
         ),
+    ForkAnchorEntity: obx_int.EntityDefinition<ForkAnchorEntity>(
+      model: _entities[7],
+      toOneRelations: (ForkAnchorEntity object) => [],
+      toManyRelations: (ForkAnchorEntity object) => {},
+      getId: (ForkAnchorEntity object) => object.internalId,
+      setId: (ForkAnchorEntity object, int id) {
+        object.internalId = id;
+      },
+      objectToFB: (ForkAnchorEntity object, fb.Builder fbb) {
+        final idOffset = fbb.writeString(object.id);
+        final mainConversationIdOffset = fbb.writeString(
+          object.mainConversationId,
+        );
+        final anchorMessageIdOffset = fbb.writeString(object.anchorMessageId);
+        final selectedTextOffset = fbb.writeString(object.selectedText);
+        final forkConversationIdOffset = fbb.writeString(
+          object.forkConversationId,
+        );
+        fbb.startTable(8);
+        fbb.addInt64(0, object.internalId);
+        fbb.addOffset(1, idOffset);
+        fbb.addOffset(2, mainConversationIdOffset);
+        fbb.addOffset(3, anchorMessageIdOffset);
+        fbb.addOffset(4, selectedTextOffset);
+        fbb.addOffset(5, forkConversationIdOffset);
+        fbb.addInt64(6, object.createdAt.millisecondsSinceEpoch);
+        fbb.finish(fbb.endTable());
+        return object.internalId;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final internalIdParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final idParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 6, '');
+        final mainConversationIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 8, '');
+        final anchorMessageIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 10, '');
+        final selectedTextParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 12, '');
+        final forkConversationIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 14, '');
+        final createdAtParam = DateTime.fromMillisecondsSinceEpoch(
+          const fb.Int64Reader().vTableGet(buffer, rootOffset, 16, 0),
+        );
+        final object = ForkAnchorEntity(
+          internalId: internalIdParam,
+          id: idParam,
+          mainConversationId: mainConversationIdParam,
+          anchorMessageId: anchorMessageIdParam,
+          selectedText: selectedTextParam,
+          forkConversationId: forkConversationIdParam,
+          createdAt: createdAtParam,
+        );
+
+        return object;
+      },
+    ),
   };
 
   return obx_int.ModelDefinition(model, bindings);
@@ -1777,6 +1944,21 @@ class ConversationEntity_ {
   /// See [ConversationEntity.totalTokenCount].
   static final totalTokenCount = obx.QueryIntegerProperty<ConversationEntity>(
     _entities[0].properties[23],
+  );
+
+  /// See [ConversationEntity.forkOfMessageId].
+  static final forkOfMessageId = obx.QueryStringProperty<ConversationEntity>(
+    _entities[0].properties[24],
+  );
+
+  /// See [ConversationEntity.forkSpan].
+  static final forkSpan = obx.QueryStringProperty<ConversationEntity>(
+    _entities[0].properties[25],
+  );
+
+  /// See [ConversationEntity.isFork].
+  static final isFork = obx.QueryBooleanProperty<ConversationEntity>(
+    _entities[0].properties[26],
   );
 
   /// see [ConversationEntity.messages]
@@ -2182,5 +2364,43 @@ class SavedMessageFolderEntity_ {
   /// See [SavedMessageFolderEntity.createdAt].
   static final createdAt = obx.QueryDateProperty<SavedMessageFolderEntity>(
     _entities[6].properties[4],
+  );
+}
+
+/// [ForkAnchorEntity] entity fields to define ObjectBox queries.
+class ForkAnchorEntity_ {
+  /// See [ForkAnchorEntity.internalId].
+  static final internalId = obx.QueryIntegerProperty<ForkAnchorEntity>(
+    _entities[7].properties[0],
+  );
+
+  /// See [ForkAnchorEntity.id].
+  static final id = obx.QueryStringProperty<ForkAnchorEntity>(
+    _entities[7].properties[1],
+  );
+
+  /// See [ForkAnchorEntity.mainConversationId].
+  static final mainConversationId = obx.QueryStringProperty<ForkAnchorEntity>(
+    _entities[7].properties[2],
+  );
+
+  /// See [ForkAnchorEntity.anchorMessageId].
+  static final anchorMessageId = obx.QueryStringProperty<ForkAnchorEntity>(
+    _entities[7].properties[3],
+  );
+
+  /// See [ForkAnchorEntity.selectedText].
+  static final selectedText = obx.QueryStringProperty<ForkAnchorEntity>(
+    _entities[7].properties[4],
+  );
+
+  /// See [ForkAnchorEntity.forkConversationId].
+  static final forkConversationId = obx.QueryStringProperty<ForkAnchorEntity>(
+    _entities[7].properties[5],
+  );
+
+  /// See [ForkAnchorEntity.createdAt].
+  static final createdAt = obx.QueryDateProperty<ForkAnchorEntity>(
+    _entities[7].properties[6],
   );
 }

@@ -51,30 +51,40 @@ void main() {
     expect(container.read(sttProvider).isAvailable, isTrue);
   });
 
-  test('skips recognizer initialization while mic permission is denied', () async {
-    micPermission
-      ..granted = false
-      ..grantedOnRequest = false;
-    await container.read(sttProvider.notifier).startListening(onResult: (_) {});
+  test(
+    'skips recognizer initialization while mic permission is denied',
+    () async {
+      micPermission
+        ..granted = false
+        ..grantedOnRequest = false;
+      await container
+          .read(sttProvider.notifier)
+          .startListening(onResult: (_) {});
 
-    expect(micPermission.requestCallCount, 1);
-    expect(platform.initializeCallCount, 0);
-    expect(container.read(sttProvider).isAvailable, isFalse);
-    expect(container.read(sttProvider).error, micPermissionDeniedCode);
-  });
+      expect(micPermission.requestCallCount, 1);
+      expect(platform.initializeCallCount, 0);
+      expect(container.read(sttProvider).isAvailable, isFalse);
+      expect(container.read(sttProvider).error, micPermissionDeniedCode);
+    },
+  );
 
-  test('permanently denied mic reports the permanent code and no prompt', () async {
-    micPermission.grantedOnRequest = false;
-    micPermission.permanentlyDeniedOnRequest = true;
-    await container.read(sttProvider.notifier).startListening(onResult: (_) {});
+  test(
+    'permanently denied mic reports the permanent code and no prompt',
+    () async {
+      micPermission.grantedOnRequest = false;
+      micPermission.permanentlyDeniedOnRequest = true;
+      await container
+          .read(sttProvider.notifier)
+          .startListening(onResult: (_) {});
 
-    expect(micPermission.requestCallCount, 1);
-    expect(platform.initializeCallCount, 0);
-    expect(
-      container.read(sttProvider).error,
-      micPermissionPermanentlyDeniedCode,
-    );
-  });
+      expect(micPermission.requestCallCount, 1);
+      expect(platform.initializeCallCount, 0);
+      expect(
+        container.read(sttProvider).error,
+        micPermissionPermanentlyDeniedCode,
+      );
+    },
+  );
 
   test('already-granted mic does not prompt again', () async {
     micPermission.granted = true;
@@ -84,46 +94,61 @@ void main() {
     expect(platform.initializeCallCount, 1);
   });
 
-  test('error_permission retries once with the other recognizer when mic is actually granted', () async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    await container.read(sttProvider.notifier).startListening(onResult: (_) {});
-    expect(platform.onDeviceFlags, [false]);
+  test(
+    'error_permission retries once with the other recognizer when mic is actually granted',
+    () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      await container
+          .read(sttProvider.notifier)
+          .startListening(onResult: (_) {});
+      expect(platform.onDeviceFlags, [false]);
 
-    platform.emitError('error_permission');
-    await Future<void>.delayed(
-      SttNotifier.clientErrorRetryDelay + const Duration(milliseconds: 50),
-    );
+      platform.emitError('error_permission');
+      await Future<void>.delayed(
+        SttNotifier.clientErrorRetryDelay + const Duration(milliseconds: 50),
+      );
 
-    expect(platform.onDeviceFlags, [false, true]);
-    expect(container.read(sttProvider).error, isNull);
-  });
+      expect(platform.onDeviceFlags, [false, true]);
+      expect(container.read(sttProvider).error, isNull);
+    },
+  );
 
-  test('error_permission with mic granted reports recognizer-unavailable, not permission denied', () async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    await container.read(sttProvider.notifier).startListening(onResult: (_) {});
-    platform.emitError('error_permission');
-    await Future<void>.delayed(
-      SttNotifier.clientErrorRetryDelay + const Duration(milliseconds: 50),
-    );
-    platform.emitError('error_permission');
-    await Future<void>.delayed(Duration.zero);
+  test(
+    'error_permission with mic granted reports recognizer-unavailable, not permission denied',
+    () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      await container
+          .read(sttProvider.notifier)
+          .startListening(onResult: (_) {});
+      platform.emitError('error_permission');
+      await Future<void>.delayed(
+        SttNotifier.clientErrorRetryDelay + const Duration(milliseconds: 50),
+      );
+      platform.emitError('error_permission');
+      await Future<void>.delayed(Duration.zero);
 
-    expect(platform.onDeviceFlags, [false, true]);
-    expect(container.read(sttProvider).error, sttUnavailableCode);
-  });
+      expect(platform.onDeviceFlags, [false, true]);
+      expect(container.read(sttProvider).error, sttUnavailableCode);
+    },
+  );
 
-  test('error_permission keeps the raw code when the mic is really missing', () async {
-    await container.read(sttProvider.notifier).startListening(onResult: (_) {});
-    micPermission.granted = false;
+  test(
+    'error_permission keeps the raw code when the mic is really missing',
+    () async {
+      await container
+          .read(sttProvider.notifier)
+          .startListening(onResult: (_) {});
+      micPermission.granted = false;
 
-    platform.emitError('error_permission');
-    await Future<void>.delayed(
-      SttNotifier.clientErrorRetryDelay + const Duration(milliseconds: 50),
-    );
+      platform.emitError('error_permission');
+      await Future<void>.delayed(
+        SttNotifier.clientErrorRetryDelay + const Duration(milliseconds: 50),
+      );
 
-    expect(platform.onDeviceFlags, hasLength(1));
-    expect(container.read(sttProvider).error, 'error_permission');
-  });
+      expect(platform.onDeviceFlags, hasLength(1));
+      expect(container.read(sttProvider).error, 'error_permission');
+    },
+  );
 }
 
 class _FakeMicPermission extends MicPermissionClient {

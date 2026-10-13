@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "1:6060443518060866028",
-      "lastPropertyId": "24:2324488738774851555",
+      "lastPropertyId": "27:5205524731612525260",
       "name": "ConversationEntity",
       "properties": [
         {
@@ -130,6 +130,21 @@
           "id": "24:2324488738774851555",
           "name": "totalTokenCount",
           "type": 6
+        },
+        {
+          "id": "25:587693285257817302",
+          "name": "forkOfMessageId",
+          "type": 9
+        },
+        {
+          "id": "26:6295946776019084010",
+          "name": "forkSpan",
+          "type": 9
+        },
+        {
+          "id": "27:5205524731612525260",
+          "name": "isFork",
+          "type": 1
         }
       ],
       "relations": []
@@ -588,10 +603,62 @@
         }
       ],
       "relations": []
+    },
+    {
+      "id": "8:7895365751563937927",
+      "lastPropertyId": "7:7373507485623998526",
+      "name": "ForkAnchorEntity",
+      "properties": [
+        {
+          "id": "1:7132218893247571166",
+          "name": "internalId",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:7219532410895169266",
+          "name": "id",
+          "indexId": "12:8691070347134042097",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "3:6419925018061405343",
+          "name": "mainConversationId",
+          "indexId": "13:8885298831567115071",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:6165095474518001508",
+          "name": "anchorMessageId",
+          "indexId": "14:3277257828143291386",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "5:324397342874350634",
+          "name": "selectedText",
+          "type": 9
+        },
+        {
+          "id": "6:570210534330261134",
+          "name": "forkConversationId",
+          "indexId": "15:7170761428673485654",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "7:7373507485623998526",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
     }
   ],
-  "lastEntityId": "7:3071607342535269584",
-  "lastIndexId": "11:4226689279810093888",
+  "lastEntityId": "8:7895365751563937927",
+  "lastIndexId": "15:7170761428673485654",
   "lastRelationId": "0:0",
   "lastSequenceId": "0:0",
   "modelVersion": 5,

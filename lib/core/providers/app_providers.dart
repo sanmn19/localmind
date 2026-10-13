@@ -155,6 +155,8 @@ class SettingsNotifier extends Notifier<AppSettings> {
       _update(state.copyWith(deviceToolsEnabled: value));
   void setToolWhitelist(List<String> value) =>
       _update(state.copyWith(toolWhitelist: value));
+  void setSkillsEnabled(bool value) =>
+      _update(state.copyWith(skillsEnabled: value));
   void setMailConnectorAccounts(List<Map<String, dynamic>> value) =>
       _update(state.copyWith(mailConnectorAccounts: value));
   void setShareTargetEnabled(bool value) =>

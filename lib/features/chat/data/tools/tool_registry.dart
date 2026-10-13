@@ -1,6 +1,7 @@
 import '../mcp_server_manager.dart';
 import '../../../mcp/data/device_mcp_server.dart';
 import '../../../mcp/data/terminal_mcp_server.dart';
+import '../../../skills/data/skills_mcp_server.dart';
 import 'tool_definition.dart';
 
 abstract class ToolProvider {
@@ -74,5 +75,6 @@ class ToolRegistry {
   static bool _isLocalUrl(String? providerRef) =>
       providerRef == webMcpServerUrl ||
       providerRef == terminalMcpServerUrl ||
+      providerRef == skillsMcpServerUrl ||
       providerRef == deviceMcpServerUrl;
 }
