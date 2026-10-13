@@ -4,11 +4,21 @@ import 'package:flutter/material.dart';
 import 'package:localmind/core/theme/colors.dart';
 import 'package:localmind/features/chat/data/tools/tool_event.dart';
 import 'package:localmind/features/chat/data/models/grouped_tool_call.dart';
+import '../../background_task_pill.dart';
 import 'tool_row.dart';
 
 class ToolTimeline extends StatelessWidget {
-  const ToolTimeline({super.key, required this.events});
+  const ToolTimeline({
+    super.key,
+    required this.events,
+    this.ownerConversationId,
+  });
   final List<ToolEvent> events;
+
+  /// The conversation this timeline renders into — the Task 4 pill seam
+  /// needs it so a bg.spawn pill only appears for Task rows owned by THIS
+  /// chat (forked copies of the history stay pill-free).
+  final String? ownerConversationId;
 
   List<GroupedToolCall> _groupEvents(List<ToolEvent> events) {
     final Map<String, GroupedToolCall> groups = {};
@@ -55,6 +65,18 @@ class ToolTimeline extends StatelessWidget {
     }
 
     return orderedBaseIds.map((id) => groups[id]!).toList();
+  }
+
+  /// Only `bg.spawn` results mint a pill: the spawn output contract is
+  /// `task_id ... (cadence, max runs)` (bgSpawnRender). bg.status rows also
+  /// cite task ids — the toolName filter keeps those pill-free.
+  String? _spawnTaskId(GroupedToolCall call) {
+    if (call.toolName != 'bg.spawn') return null;
+    final result = call.result;
+    if (result == null || result.isEmpty) return null;
+    return RegExp(r'task_id:\s*([A-Za-z0-9_-]+)')
+        .firstMatch(result)
+        ?.group(1);
   }
 
   String _formatArgs(Map<String, dynamic> args) {
@@ -167,11 +189,27 @@ class ToolTimeline extends StatelessWidget {
                       : const Color(0xFFE0E5F5).withValues(alpha: 0.5),
                 ),
               ),
-              itemBuilder: (context, index) => ToolRowWidget(
-                call: groupedCalls[index],
-                isDark: isDark,
-                formatArgs: _formatArgs,
-              ),
+              itemBuilder: (context, index) {
+                final call = groupedCalls[index];
+                final spawnTaskId = _spawnTaskId(call);
+                return Column(
+                  children: [
+                    // Task 4 inline pill: rendered ABOVE the spawning
+                    // bg.tool row; itself silent unless a task row with
+                    // this id (owned by this conversation) is still live.
+                    if (spawnTaskId != null)
+                      BackgroundTaskPill(
+                        taskId: spawnTaskId,
+                        owner: ownerConversationId ?? '',
+                      ),
+                    ToolRowWidget(
+                      call: call,
+                      isDark: isDark,
+                      formatArgs: _formatArgs,
+                    ),
+                  ],
+                );
+              },
             ),
           ),
           const SizedBox(height: 4),

@@ -3634,4 +3634,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get background_resume_task => 'Resume task';
+
+  @override
+  String get background_pill_title => 'Background task';
 }

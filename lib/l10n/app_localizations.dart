@@ -6656,6 +6656,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Resume task'**
   String get background_resume_task;
+
+  /// Inline chat pill prefix next to a background task's state chip
+  ///
+  /// In en, this message translates to:
+  /// **'Background task'**
+  String get background_pill_title;
 }
 
 class _AppLocalizationsDelegate

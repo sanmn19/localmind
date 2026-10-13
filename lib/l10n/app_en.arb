@@ -3724,5 +3724,7 @@
   "background_pause_task": "Pause task",
   "@background_pause_task": {"description": "Tooltip of a background task's pause button"},
   "background_resume_task": "Resume task",
-  "@background_resume_task": {"description": "Tooltip of a background task's resume button"}
+  "@background_resume_task": {"description": "Tooltip of a background task's resume button"},
+  "background_pill_title": "Background task",
+  "@background_pill_title": {"description": "Inline chat pill prefix next to a background task's state chip"}
 }

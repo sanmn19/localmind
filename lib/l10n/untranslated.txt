@@ -101,7 +101,8 @@
     "background_last_run_minutes",
     "background_last_run_hours",
     "background_pause_task",
-    "background_resume_task"
+    "background_resume_task",
+    "background_pill_title"
   ],
 
   "bn": [
@@ -210,7 +211,8 @@
     "background_last_run_minutes",
     "background_last_run_hours",
     "background_pause_task",
-    "background_resume_task"
+    "background_resume_task",
+    "background_pill_title"
   ],
 
   "de": [
@@ -319,7 +321,8 @@
     "background_last_run_minutes",
     "background_last_run_hours",
     "background_pause_task",
-    "background_resume_task"
+    "background_resume_task",
+    "background_pill_title"
   ],
 
   "es": [
@@ -428,7 +431,8 @@
     "background_last_run_minutes",
     "background_last_run_hours",
     "background_pause_task",
-    "background_resume_task"
+    "background_resume_task",
+    "background_pill_title"
   ],
 
   "fr": [
@@ -537,7 +541,8 @@
     "background_last_run_minutes",
     "background_last_run_hours",
     "background_pause_task",
-    "background_resume_task"
+    "background_resume_task",
+    "background_pill_title"
   ],
 
   "hi": [
@@ -646,7 +651,8 @@
     "background_last_run_minutes",
     "background_last_run_hours",
     "background_pause_task",
-    "background_resume_task"
+    "background_resume_task",
+    "background_pill_title"
   ],
 
   "it": [
@@ -755,7 +761,8 @@
     "background_last_run_minutes",
     "background_last_run_hours",
     "background_pause_task",
-    "background_resume_task"
+    "background_resume_task",
+    "background_pill_title"
   ],
 
   "ja": [
@@ -864,7 +871,8 @@
     "background_last_run_minutes",
     "background_last_run_hours",
     "background_pause_task",
-    "background_resume_task"
+    "background_resume_task",
+    "background_pill_title"
   ],
 
   "ko": [
@@ -959,7 +967,8 @@
     "background_last_run_minutes",
     "background_last_run_hours",
     "background_pause_task",
-    "background_resume_task"
+    "background_resume_task",
+    "background_pill_title"
   ],
 
   "pt": [
@@ -1054,7 +1063,8 @@
     "background_last_run_minutes",
     "background_last_run_hours",
     "background_pause_task",
-    "background_resume_task"
+    "background_resume_task",
+    "background_pill_title"
   ],
 
   "ru": [
@@ -1163,7 +1173,8 @@
     "background_last_run_minutes",
     "background_last_run_hours",
     "background_pause_task",
-    "background_resume_task"
+    "background_resume_task",
+    "background_pill_title"
   ],
 
   "tr": [
@@ -1272,7 +1283,8 @@
     "background_last_run_minutes",
     "background_last_run_hours",
     "background_pause_task",
-    "background_resume_task"
+    "background_resume_task",
+    "background_pill_title"
   ],
 
   "zh": [
@@ -1381,7 +1393,8 @@
     "background_last_run_minutes",
     "background_last_run_hours",
     "background_pause_task",
-    "background_resume_task"
+    "background_resume_task",
+    "background_pill_title"
   ],
 
   "zh_TW": [
@@ -1490,6 +1503,7 @@
     "background_last_run_minutes",
     "background_last_run_hours",
     "background_pause_task",
-    "background_resume_task"
+    "background_resume_task",
+    "background_pill_title"
   ]
 }

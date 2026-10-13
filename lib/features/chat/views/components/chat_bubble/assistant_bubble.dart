@@ -136,7 +136,10 @@ class AssistantBubble extends StatelessWidget {
           if (message.toolEvents != null && message.toolEvents!.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: ToolTimeline(events: message.toolEvents!),
+              child: ToolTimeline(
+                events: message.toolEvents!,
+                ownerConversationId: message.conversationId,
+              ),
             ),
           if (isStreaming && message.content.isNotEmpty)
             const Padding(
