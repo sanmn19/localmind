@@ -164,6 +164,28 @@ class BackgroundTasksService {
         .toList();
   }
 
+  /// Every task row (oldest spawn first) — the page groups per owner from
+  /// this, including rows whose owner conversation no longer exists.
+  Future<List<BackgroundTask>> allTasks() async {
+    final db = _database;
+    final tasks = await db.store.runInTransactionAsync(
+      TxMode.read,
+      _allTasksInBackground,
+      null,
+    );
+    return tasks;
+  }
+
+  static List<BackgroundTask> _allTasksInBackground(Store store, void _) {
+    final box = store.box<BackgroundTaskEntity>();
+    final query = box.query().build();
+    final rows = query.find();
+    query.close();
+    return [
+      for (final row in rows) row.toDomain(),
+    ]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+  }
+
   /// Marks [taskId] cancelled. Idempotent: cancelling an already-cancelled
   /// task returns true without re-writing; finished/failed rows are
   /// terminal and refuse the regression (false); unknown ids return false.

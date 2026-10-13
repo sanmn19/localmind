@@ -91,7 +91,17 @@
     "notifications_toggle_label",
     "notifications_access_granted",
     "notifications_access_missing",
-    "notifications_grant_action"
+    "notifications_grant_action",
+    "background_tasks_title",
+    "background_tasks_menu",
+    "background_deleted_chat",
+    "background_single_run",
+    "background_never_ran",
+    "background_last_run_now",
+    "background_last_run_minutes",
+    "background_last_run_hours",
+    "background_pause_task",
+    "background_resume_task"
   ],
 
   "bn": [
@@ -190,7 +200,17 @@
     "notifications_toggle_label",
     "notifications_access_granted",
     "notifications_access_missing",
-    "notifications_grant_action"
+    "notifications_grant_action",
+    "background_tasks_title",
+    "background_tasks_menu",
+    "background_deleted_chat",
+    "background_single_run",
+    "background_never_ran",
+    "background_last_run_now",
+    "background_last_run_minutes",
+    "background_last_run_hours",
+    "background_pause_task",
+    "background_resume_task"
   ],
 
   "de": [
@@ -289,7 +309,17 @@
     "notifications_toggle_label",
     "notifications_access_granted",
     "notifications_access_missing",
-    "notifications_grant_action"
+    "notifications_grant_action",
+    "background_tasks_title",
+    "background_tasks_menu",
+    "background_deleted_chat",
+    "background_single_run",
+    "background_never_ran",
+    "background_last_run_now",
+    "background_last_run_minutes",
+    "background_last_run_hours",
+    "background_pause_task",
+    "background_resume_task"
   ],
 
   "es": [
@@ -388,7 +418,17 @@
     "notifications_toggle_label",
     "notifications_access_granted",
     "notifications_access_missing",
-    "notifications_grant_action"
+    "notifications_grant_action",
+    "background_tasks_title",
+    "background_tasks_menu",
+    "background_deleted_chat",
+    "background_single_run",
+    "background_never_ran",
+    "background_last_run_now",
+    "background_last_run_minutes",
+    "background_last_run_hours",
+    "background_pause_task",
+    "background_resume_task"
   ],
 
   "fr": [
@@ -487,7 +527,17 @@
     "notifications_toggle_label",
     "notifications_access_granted",
     "notifications_access_missing",
-    "notifications_grant_action"
+    "notifications_grant_action",
+    "background_tasks_title",
+    "background_tasks_menu",
+    "background_deleted_chat",
+    "background_single_run",
+    "background_never_ran",
+    "background_last_run_now",
+    "background_last_run_minutes",
+    "background_last_run_hours",
+    "background_pause_task",
+    "background_resume_task"
   ],
 
   "hi": [
@@ -586,7 +636,17 @@
     "notifications_toggle_label",
     "notifications_access_granted",
     "notifications_access_missing",
-    "notifications_grant_action"
+    "notifications_grant_action",
+    "background_tasks_title",
+    "background_tasks_menu",
+    "background_deleted_chat",
+    "background_single_run",
+    "background_never_ran",
+    "background_last_run_now",
+    "background_last_run_minutes",
+    "background_last_run_hours",
+    "background_pause_task",
+    "background_resume_task"
   ],
 
   "it": [
@@ -685,7 +745,17 @@
     "notifications_toggle_label",
     "notifications_access_granted",
     "notifications_access_missing",
-    "notifications_grant_action"
+    "notifications_grant_action",
+    "background_tasks_title",
+    "background_tasks_menu",
+    "background_deleted_chat",
+    "background_single_run",
+    "background_never_ran",
+    "background_last_run_now",
+    "background_last_run_minutes",
+    "background_last_run_hours",
+    "background_pause_task",
+    "background_resume_task"
   ],
 
   "ja": [
@@ -784,7 +854,17 @@
     "notifications_toggle_label",
     "notifications_access_granted",
     "notifications_access_missing",
-    "notifications_grant_action"
+    "notifications_grant_action",
+    "background_tasks_title",
+    "background_tasks_menu",
+    "background_deleted_chat",
+    "background_single_run",
+    "background_never_ran",
+    "background_last_run_now",
+    "background_last_run_minutes",
+    "background_last_run_hours",
+    "background_pause_task",
+    "background_resume_task"
   ],
 
   "ko": [
@@ -869,7 +949,17 @@
     "notifications_toggle_label",
     "notifications_access_granted",
     "notifications_access_missing",
-    "notifications_grant_action"
+    "notifications_grant_action",
+    "background_tasks_title",
+    "background_tasks_menu",
+    "background_deleted_chat",
+    "background_single_run",
+    "background_never_ran",
+    "background_last_run_now",
+    "background_last_run_minutes",
+    "background_last_run_hours",
+    "background_pause_task",
+    "background_resume_task"
   ],
 
   "pt": [
@@ -954,7 +1044,17 @@
     "notifications_toggle_label",
     "notifications_access_granted",
     "notifications_access_missing",
-    "notifications_grant_action"
+    "notifications_grant_action",
+    "background_tasks_title",
+    "background_tasks_menu",
+    "background_deleted_chat",
+    "background_single_run",
+    "background_never_ran",
+    "background_last_run_now",
+    "background_last_run_minutes",
+    "background_last_run_hours",
+    "background_pause_task",
+    "background_resume_task"
   ],
 
   "ru": [
@@ -1053,7 +1153,17 @@
     "notifications_toggle_label",
     "notifications_access_granted",
     "notifications_access_missing",
-    "notifications_grant_action"
+    "notifications_grant_action",
+    "background_tasks_title",
+    "background_tasks_menu",
+    "background_deleted_chat",
+    "background_single_run",
+    "background_never_ran",
+    "background_last_run_now",
+    "background_last_run_minutes",
+    "background_last_run_hours",
+    "background_pause_task",
+    "background_resume_task"
   ],
 
   "tr": [
@@ -1152,7 +1262,17 @@
     "notifications_toggle_label",
     "notifications_access_granted",
     "notifications_access_missing",
-    "notifications_grant_action"
+    "notifications_grant_action",
+    "background_tasks_title",
+    "background_tasks_menu",
+    "background_deleted_chat",
+    "background_single_run",
+    "background_never_ran",
+    "background_last_run_now",
+    "background_last_run_minutes",
+    "background_last_run_hours",
+    "background_pause_task",
+    "background_resume_task"
   ],
 
   "zh": [
@@ -1251,7 +1371,17 @@
     "notifications_toggle_label",
     "notifications_access_granted",
     "notifications_access_missing",
-    "notifications_grant_action"
+    "notifications_grant_action",
+    "background_tasks_title",
+    "background_tasks_menu",
+    "background_deleted_chat",
+    "background_single_run",
+    "background_never_ran",
+    "background_last_run_now",
+    "background_last_run_minutes",
+    "background_last_run_hours",
+    "background_pause_task",
+    "background_resume_task"
   ],
 
   "zh_TW": [
@@ -1350,6 +1480,16 @@
     "notifications_toggle_label",
     "notifications_access_granted",
     "notifications_access_missing",
-    "notifications_grant_action"
+    "notifications_grant_action",
+    "background_tasks_title",
+    "background_tasks_menu",
+    "background_deleted_chat",
+    "background_single_run",
+    "background_never_ran",
+    "background_last_run_now",
+    "background_last_run_minutes",
+    "background_last_run_hours",
+    "background_pause_task",
+    "background_resume_task"
   ]
 }

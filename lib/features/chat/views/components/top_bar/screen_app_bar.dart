@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:hugeicons/hugeicons.dart';
+import 'package:localmind/core/routes/app_routes.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:auto_size_text_plus/auto_size_text_plus.dart';
 import 'package:localmind/core/models/enums.dart';
@@ -163,6 +165,11 @@ class ScreenAppBar extends ConsumerWidget {
             : HugeIcons.strokeRoundedRobot01,
         label: hasPersonas ? l10n.change_persona : l10n.set_persona,
       ),
+      AnchoredMenuEntry(
+        value: 'background_tasks',
+        icon: HugeIcons.strokeRoundedFlow,
+        label: l10n.background_tasks_menu,
+      ),
       if (isSavedChat) ...[
         const AnchoredMenuEntry.divider(),
         AnchoredMenuEntry(
@@ -200,6 +207,15 @@ class ScreenAppBar extends ConsumerWidget {
     if (action == null || !context.mounted) return;
     if (action == 'chat_settings') {
       showChatSettingsSheet(context, initialTab: 'parameters');
+      return;
+    }
+    if (action == 'background_tasks') {
+      final conversationId = activeConversation?.id;
+      GoRouter.of(context).push(
+        conversationId == null
+            ? AppRoutes.background
+            : '${AppRoutes.background}?focus=$conversationId',
+      );
       return;
     }
     onMenuAction(action);

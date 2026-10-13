@@ -594,6 +594,52 @@ final backgroundResumeProvider = Provider<void>((ref) {
   unawaited(Future<void>.delayed(const Duration(seconds: 2), resume));
 });
 
+/// All task rows (oldest spawn first) — the page's grouping source.
+final backgroundPageTasksProvider = FutureProvider<List<BackgroundTask>>(
+  (ref) => ref.read(backgroundTasksServiceProvider).allTasks(),
+);
+
+/// Shared pause/resume/stop closures for EVERY surface (page rows, the chat
+/// pill, the MCP card) — each commits via the service then refreshes rows.
+class BackgroundTaskActions {
+  const BackgroundTaskActions({
+    required this.pause,
+    required this.resume,
+    required this.stop,
+  });
+
+  final Future<bool> Function(String taskId) pause;
+  final Future<bool> Function(String taskId) resume;
+  final Future<bool> Function(String taskId) stop;
+}
+
+final backgroundTaskActionsProvider = Provider<BackgroundTaskActions>((ref) {
+  final service = ref.read(backgroundTasksServiceProvider);
+  Future<bool> finish(bool ok) {
+    if (ref.mounted) {
+      ref.invalidate(backgroundTaskRowsProvider);
+      ref.invalidate(backgroundPageTasksProvider);
+    }
+    return Future.value(ok);
+  }
+
+  return BackgroundTaskActions(
+    pause: (taskId) async {
+      final ok = await service.pauseTask(taskId);
+      return finish(ok);
+    },
+    resume: (taskId) async {
+      final ok = await service.resumeTask(taskId);
+      if (ok) unawaited(_ensureTaskRunning(ref, taskId));
+      return finish(ok);
+    },
+    stop: (taskId) async {
+      final ok = await service.cancelTask(taskId);
+      return finish(ok);
+    },
+  );
+});
+
 /// Starts the Android foreground-service keep-alive (flutter_background_);
 /// throw-suppressed for host tests / unsupported platforms.
 Future<void> startBackgroundKeepAliveService() async {

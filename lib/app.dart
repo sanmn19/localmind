@@ -36,6 +36,7 @@ import 'features/tts/views/tts_model_manager_screen.dart';
 import 'features/saved_messages/views/saved_messages_screen.dart';
 import 'features/settings/views/settings_screen.dart';
 import 'features/skills/data/skills_store.dart';
+import 'features/background/views/background_tasks_page.dart';
 import 'features/skills/views/skill_editor_screen.dart';
 import 'features/skills/views/skills_screen.dart';
 import 'features/cloud_sync/views/cloud_sync_screen.dart';
@@ -194,6 +195,17 @@ final routerProvider = Provider<GoRouter>((ref) {
               return MaterialPage(
                 child: ShellBackScope(
                   child: SkillEditorScreen(existing: skill),
+                ),
+              );
+            },
+          ),
+          GoRoute(
+            path: AppRoutes.background,
+            pageBuilder: (context, state) {
+              final focus = state.uri.queryParameters['focus'];
+              return NoTransitionPage(
+                child: ShellBackScope(
+                  child: BackgroundTasksPage(focusOwnerId: focus),
                 ),
               );
             },

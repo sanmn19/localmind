@@ -3587,4 +3587,38 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get notifications_grant_action => 'Grant in settings';
+
+  @override
+  String get background_tasks_title => 'Background tasks';
+
+  @override
+  String get background_tasks_menu => 'Background tasks';
+
+  @override
+  String get background_deleted_chat => 'Deleted chat';
+
+  @override
+  String get background_single_run => 'single run';
+
+  @override
+  String get background_never_ran => 'not run yet';
+
+  @override
+  String get background_last_run_now => 'just now';
+
+  @override
+  String background_last_run_minutes(int minutes) {
+    return '${minutes}m ago';
+  }
+
+  @override
+  String background_last_run_hours(int hours) {
+    return '${hours}h ago';
+  }
+
+  @override
+  String get background_pause_task => 'Pause task';
+
+  @override
+  String get background_resume_task => 'Resume task';
 }
