@@ -149,6 +149,9 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
   /// awaits it so downstream mutations (ForkService.deleteFork) cannot race
   /// the finalize into a deleted fork conversation.
   Completer<void>? _exchangeSettle;
+  // Forensic context for the empty-reply failure branch: if THIS exchange
+  // ever parked a fork approval chip, and the submit-start clock.
+  bool exchangeHadApproval = false;
 
   @override
   ForkChatState build() {
@@ -258,6 +261,7 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
         completer: completer,
       );
       _pendingApproval = approval;
+      exchangeHadApproval = true;
       state = state.copyWith(pendingApproval: approval);
       final approved = await completer.future;
       if (identical(_pendingApproval, approval)) {
@@ -320,6 +324,10 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
     _cancelled = false;
     // Per-exchange panel-detachment probe reset (see [notePanelDetached]).
     _panelDetached = false;
+    // Forensics: fresh approval flag + per-exchange clock for the empty
+    // reply log bundle.
+    exchangeHadApproval = false;
+    final exchangeClock = Stopwatch()..start();
     // Every terminal path completes this; see cancelAndSettle.
     final finished = Completer<void>();
     _exchangeSettle = finished;
@@ -518,6 +526,15 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
             ),
           );
         } else if (!hasContent) {
+          // Forensics for the no-token close (device round: GLM spends 60s+
+          // pre-first-token — the wire/tool/approval context distinguishes a
+          // dead uplink from a refused prompt). User-facing copy unchanged.
+          Log.error(
+            'Fork empty reply {fork: $forkConversationId, round: $roundIndex, '
+            'wireRoles: ${wire.length}, toolsSent: ${forkTools?.length ?? 0}, '
+            'hadApproval: $exchangeHadApproval, '
+            'elapsedMs: ${exchangeClock.elapsedMilliseconds}}',
+          );
           await _finalize(
             streamingRow.copyWith(
               status: MessageStatus.error,

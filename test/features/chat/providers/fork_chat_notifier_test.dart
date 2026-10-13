@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:localmind/core/logger/app_logger.dart';
 import 'package:localmind/core/models/enums.dart';
 import 'package:localmind/core/providers/app_providers.dart';
 import 'package:localmind/core/providers/chat_background_service_provider.dart';
@@ -28,6 +29,7 @@ import 'package:localmind/features/on_device/providers/on_device_providers.dart'
 import 'package:localmind/features/servers/data/models/server.dart';
 import 'package:localmind/features/settings/data/models/app_settings.dart';
 import 'package:localmind/features/voice_mode/providers/voice_mode_provider.dart';
+import 'package:logger/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Task 3 of the selection-fork-chats feature: ForkChatNotifier streams the
@@ -401,6 +403,52 @@ void main() {
       );
     },
   );
+
+  test(
+    'the empty-reply failure branch emits the forensic Log bundle',
+    () async {
+    final chatService = _StreamingChatService(const []);
+    final saved = <Message>[];
+    final capture = _CapturingLogOutput();
+    Log.attachOutput(capture);
+    addTearDown(() => Log.attachOutput(_DiscardingLogOutput()));
+    final container = await _forkTestContainer(
+      chatService: chatService,
+      onPersist: saved.add,
+    );
+    addTearDown(container.dispose);
+
+    await container
+        .read(chatProvider.notifier)
+        .loadConversation(_mainConversation);
+    final notifier = container.read(
+      forkChatNotifierProvider('forkC1').notifier,
+    );
+
+    await notifier.submit(
+      'forkC1',
+      'who wrote it?',
+      selectedText: 'Ada Lovelace wrote it',
+      anchorMessageId: 'a-1',
+    );
+
+    // User-facing copy unchanged — the forensic trail is log-only.
+    final state = container.read(forkChatNotifierProvider('forkC1'));
+    expect(
+      state.failure,
+      'The model returned an empty reply for this fork.',
+    );
+    expect(state.transcript.last.status, MessageStatus.error);
+
+    final bundle = capture.text();
+    expect(bundle, contains('Fork empty reply'));
+    expect(bundle, contains('fork: forkC1'));
+    expect(bundle, contains('round: 0'));
+    expect(bundle, contains('wireRoles: 4'));
+    expect(bundle, contains('toolsSent: 0'));
+    expect(bundle, contains('hadApproval: false'));
+    expect(bundle, contains('elapsedMs:'));
+  });
 
   test(
     'empty reply surfaces the failure and persists the error turn',
@@ -1355,6 +1403,29 @@ List<Message> _defaultMainTimeline() {
     parentMessageId: 'u-1',
   );
   return [u1, a1];
+}
+
+/// Log capture for the forensic-bundle test: [Log.attachOutput] is the
+/// AppLogger's test hook — the printer's rendered lines flow through
+/// [output]; bundles are matched by their marker tokens.
+class _CapturingLogOutput extends LogOutput {
+  final List<String> captured = [];
+
+  @override
+  void output(OutputEvent event) {
+    captured.addAll(event.lines);
+  }
+
+  /// Whole-test capture as one string: marker tokens survive printer
+  /// wrapping (word-boundary breaks).
+  String text() => captured.join('\n');
+}
+
+/// Post-test teardown replacement so the capturing output never leaks into
+/// sibling tests.
+class _DiscardingLogOutput extends LogOutput {
+  @override
+  void output(OutputEvent event) {}
 }
 
 Future<ProviderContainer> _forkTestContainer({

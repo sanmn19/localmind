@@ -144,6 +144,37 @@ class _HangingChatService implements ChatService {
   }
 }
 
+/// Test-scripted fork stream: the wire emits nothing until the test pushes
+/// events through [emit] — holds the exchange in the silent pre-token phase
+/// or mid-reasoning exactly as the real GLM-style streams behave.
+class _ScriptedForkChatService implements ChatService {
+  _ScriptedForkChatService();
+
+  StreamController<ChatResponse>? _controller;
+
+  @override
+  Stream<ChatResponse> sendMessage({
+    required Server server,
+    required String modelId,
+    required List<Message> messages,
+    required ChatParameters params,
+    List<McpIntegration>? integrations,
+    List<ToolDefinition>? tools,
+    bool continueGeneration = false,
+  }) {
+    _controller = StreamController<ChatResponse>();
+    return _controller!.stream;
+  }
+
+  void emit(ChatResponse response) => _controller!.add(response);
+  Future<void> end() => _controller!.close();
+
+  @override
+  void cancelStream() {
+    unawaited(_controller?.close());
+  }
+}
+
 Message _assistantMessage(String content) {
   return Message(
     id: 'msg-done',
@@ -837,6 +868,183 @@ void main() {
           .where((m) => m.role == MessageRole.assistant && m.toolCalls != null)
           .single;
       expect(roundRow.stopReason, 'cancelled');
+    },
+  );
+  testWidgets(
+    'a silent pre-token fork stream shows the heartbeat row; it hands off at the first token',
+    (tester) async {
+      final service = _FakeForkService([_seedAnchor()]);
+      final chatService = _ScriptedForkChatService();
+
+      await tester.pumpWidget(
+        _buildHarness(
+          prefs: await _prefs(),
+          service: service,
+          chatService: chatService,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('fork_band_anchor-seed')),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('fork_panel_input')),
+        'who wrote it?',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('fork_panel_send')));
+      // GLM-style silence: no events yet — the panel must show the house
+      // heartbeat + Thinking label instead of a dead transcript.
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(find.byKey(const ValueKey('fork_panel_heartbeat')),
+          findsOneWidget);
+
+      chatService.emit(
+        const ChatResponse(type: ChatResponseType.message, content: 'Hi'),
+      );
+      await tester.pump(const Duration(milliseconds: 40));
+      // Content landed: the heartbeat ends.
+      expect(find.byKey(const ValueKey('fork_panel_heartbeat')), findsNothing);
+      expect(find.textContaining('Hi'), findsOneWidget);
+
+      chatService.emit(const ChatResponse(type: ChatResponseType.done));
+      await chatService.end();
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(kForkPanelContainerKey)),
+      );
+      expect(
+        container.read(forkChatNotifierProvider('fork-seed')).isStreaming,
+        isFalse,
+      );
+    },
+  );
+
+  testWidgets(
+    'reasoning deltas stream a live Thinking row inside the fork panel',
+    (tester) async {
+      final service = _FakeForkService([_seedAnchor()]);
+      final chatService = _ScriptedForkChatService();
+
+      await tester.pumpWidget(
+        _buildHarness(
+          prefs: await _prefs(),
+          service: service,
+          chatService: chatService,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('fork_band_anchor-seed')),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('fork_panel_input')),
+        'who wrote it?',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('fork_panel_send')));
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(find.byKey(const ValueKey('fork_panel_heartbeat')),
+          findsOneWidget);
+
+      chatService.emit(
+        const ChatResponse(
+          type: ChatResponseType.reasoning,
+          reasoningContent: 'Pondering forks',
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 40));
+      // Reasoning arrived: the thinking row takes over from the heartbeat.
+      expect(find.byKey(const ValueKey('fork_panel_heartbeat')), findsNothing);
+      expect(find.text('Thinking'), findsOneWidget);
+      expect(find.textContaining('Pondering forks'), findsOneWidget);
+
+      chatService.emit(
+        const ChatResponse(
+          type: ChatResponseType.reasoning,
+          reasoningContent: ' and their anchors',
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 40));
+      // The reasoning CONTENT streams live — the row is not frozen.
+      expect(find.textContaining('and their anchors'), findsOneWidget);
+
+      chatService.emit(
+        const ChatResponse(type: ChatResponseType.message, content: 'It was Ada.'),
+      );
+      chatService.emit(const ChatResponse(type: ChatResponseType.done));
+      await chatService.end();
+      await tester.pumpAndSettle();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(kForkPanelContainerKey)),
+      );
+      final state = container.read(forkChatNotifierProvider('fork-seed'));
+      expect(state.isStreaming, isFalse);
+      expect(state.failure, isNull);
+      // The finalized turn keeps its reasoning next to the answer.
+      expect(state.transcript.last.reasoningContent,
+          'Pondering forks and their anchors');
+      expect(find.text('Thinking'), findsOneWidget);
+      expect(find.textContaining('It was Ada.'), findsOneWidget);
+      expect(find.byKey(const ValueKey('fork_panel_heartbeat')), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'a tool round renders the tool-activity row and the result line in the transcript',
+    (tester) async {
+      final service = _FakeForkService([_seedAnchor()]);
+      final chatService = _ForkToolPanelChatService();
+
+      await tester.pumpWidget(
+        _buildHarness(
+          prefs: await _prefs(),
+          service: service,
+          chatService: chatService,
+          forkToolset: const [
+            ToolDefinition(
+              name: 'mail.send',
+              description: 'send',
+              inputSchema: {},
+              providerType: ToolProviderType.mcp,
+            ),
+          ],
+          toolRegistry: ToolRegistry(providers: [
+            _FakeToolProviderPanel(onExecute: (_, _) async {
+              return const ToolExecutionResult.success('ran-ok');
+            }),
+          ]),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('fork_band_anchor-seed')),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('fork_panel_input')),
+        'please run it',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('fork_panel_send')));
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      await tester.tap(find.byKey(const ValueKey('fork_approval_approve')));
+      await _pumpStreaming(tester);
+      await tester.pumpAndSettle();
+
+      // Tool-activity row: tool name + verdict; result line: clipped
+      // verdict text (styling language of the main chat's tool rows).
+      expect(find.textContaining('called mail.send'), findsOneWidget);
+      expect(find.textContaining('· done'), findsOneWidget);
+      expect(find.textContaining('result ran-ok'), findsOneWidget);
     },
   );
 }

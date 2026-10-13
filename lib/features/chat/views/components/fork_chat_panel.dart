@@ -10,7 +10,8 @@ import '../../data/models/fork_anchor.dart';
 import '../../data/models/message.dart';
 import '../../providers/fork_chat_notifier.dart';
 import 'chat_bubble/markdown/themed_gpt_markdown.dart';
-import 'typing_indicator.dart';
+import 'heartbeat_dot.dart';
+import 'reasoning_widget.dart';
 
 /// The floating chat surface for one selection-anchored fork chat
 /// (selection-fork-chats spec, UX items 4-7). Pure overlay content: no
@@ -416,20 +417,20 @@ class _ForkTurnRow extends StatelessWidget {
     }
 
     // Tool feedback rows (MessageRole.tool) render as a muted one-liner —
-    // the model-facing protocol row stays visible without dominating the
-    // transcript.
+    // `result <first-80-chars ellipsis>` of the model-facing verdict text,
+    // mirroring the main chat's tool protocol without its heavy widget.
     if (message.role == MessageRole.tool) {
-      final muted =
-          theme.colorScheme.onSurface.withValues(alpha: 0.45);
+      final muted = theme.colorScheme.onSurface.withValues(alpha: 0.45);
       return Padding(
         padding: const EdgeInsets.only(bottom: 6, left: 6),
         child: Row(
+          key: ValueKey('fork_tool_feedback_${message.id}'),
           children: [
             Icon(Icons.subdirectory_arrow_right_rounded, size: 12, color: muted),
             const SizedBox(width: 4),
             Expanded(
               child: Text(
-                message.content,
+                'result ${_clipResult(message.content)}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(fontSize: 11, color: muted),
@@ -440,34 +441,128 @@ class _ForkTurnRow extends StatelessWidget {
       );
     }
 
+    // Assistant rows: live/stored reasoning (collapsed Thinking row, aligned
+    // with the main bubble's ReasoningWidget), compact tool-activity rows for
+    // a tool round, and the house heartbeat while the model has not produced
+    // anything yet (GLM-style 60s+ pre-token silence).
+    final content = message.content;
+    final reasoning = message.reasoningContent ?? '';
+    final hasReasoning = reasoning.trim().isNotEmpty;
+    final toolCalls = message.toolCalls;
     final isError = message.status == MessageStatus.error;
-    final showDots = isStreamingRow &&
-        message.content.isEmpty &&
-        (message.reasoningContent == null ||
-            message.reasoningContent!.isEmpty);
+    final isLiveRow =
+        isStreamingRow && message.status == MessageStatus.streaming;
+    final showHeartbeat = isStreamingRow &&
+        !isError &&
+        content.trim().isEmpty &&
+        !hasReasoning;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (showDots)
-            const TypingIndicator()
-          else if (isError)
+          if (hasReasoning)
+            ReasoningWidget(
+              reasoningContent: reasoning,
+              isStreaming: isLiveRow,
+              hasMainContent: content.trim().isNotEmpty,
+            ),
+          if (toolCalls != null && toolCalls.isNotEmpty)
+            ..._toolActivityRows(toolCalls, theme),
+          if (isError)
             Text(
               AppLocalizations.of(context)!.forkTurnErrorLabel(
                 message.errorMessage ?? message.content,
               ),
               style: TextStyle(fontSize: 13, color: theme.colorScheme.error),
             )
-          else
+          else if (showHeartbeat)
+            Row(
+              key: const ValueKey('fork_panel_heartbeat'),
+              children: [
+                const HeartbeatDot(size: 7),
+                const SizedBox(width: 8),
+                Text(
+                  '${AppLocalizations.of(context)!.thinking}…',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color:
+                        theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
+              ],
+            )
+          else if (content.trim().isNotEmpty)
             MarkdownBodyContent(
-              content: message.content,
+              content: content,
               isDark: isDark,
               selectable: false,
             ),
         ],
       ),
     );
+  }
+
+  /// Compact tool-activity rows for a tool round's assistant(tool_calls)
+  /// transcript row: `called <tool> · <verdict>` — the fork-sized echo of
+  /// the main chat's ToolRowWidget (small local builders, no protocol
+  /// widget import).
+  List<Widget> _toolActivityRows(
+    List<ToolCallData> calls,
+    ThemeData theme,
+  ) {
+    final muted = theme.colorScheme.onSurface.withValues(alpha: 0.55);
+    return [
+      for (final call in calls)
+        Row(
+          key: ValueKey('fork_tool_activity_${call.id}'),
+          children: [
+            Icon(
+              _forkToolFailed(call.result)
+                  ? Icons.close_rounded
+                  : Icons.check_circle_outline_rounded,
+              size: 13,
+              color: _forkToolFailed(call.result)
+                  ? const Color(0xFFEF4444)
+                  : const Color(0xFF22C55E),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                'called ${call.toolName} · ${_verdictLabel(call.result)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: muted,
+                ),
+              ),
+            ),
+          ],
+        ),
+    ];
+  }
+
+  /// Verdict word for the activity row: denied / failed / done.
+  static String _verdictLabel(String? result) {
+    if (result == null || result.isEmpty) return 'done';
+    if (result.contains('denied by the user')) return 'denied';
+    if (result.startsWith('ERROR:')) return 'failed';
+    return 'done';
+  }
+
+  static bool _forkToolFailed(String? result) {
+    if (result == null || result.isEmpty) return false;
+    return result.startsWith('ERROR:') ||
+        result.contains('denied by the user');
+  }
+
+  /// Model-facing feedback text clipped for the one-line result row.
+  static String _clipResult(String content) {
+    final text = content.trim();
+    if (text.length <= 80) return text;
+    return '${text.substring(0, 80)}…';
   }
 }
