@@ -15,7 +15,9 @@ import 'package:localmind/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeForkService extends ForkService {
-  _FakeForkService(this.seed) : super();
+  // Mutable copy: tests pass const (immutable) seed lists while
+  // createFork appends the freshly minted anchor for the re-read.
+  _FakeForkService(List<ForkAnchor> seed) : seed = List.of(seed);
 
   final List<ForkAnchor> seed;
   int createCalls = 0;
@@ -31,7 +33,7 @@ class _FakeForkService extends ForkService {
     createCalls++;
     lastSelection = selectedText;
     lastAnchorMessageId = anchorMessageId;
-    return ForkAnchor(
+    final anchor = ForkAnchor(
       id: 'anchor-new-$createCalls',
       mainConversationId: mainConversationId,
       anchorMessageId: anchorMessageId,
@@ -39,6 +41,11 @@ class _FakeForkService extends ForkService {
       forkConversationId: 'fork-new-$createCalls',
       createdAt: DateTime(2026, 10, 8, 12),
     );
+    // The invalidated anchors provider re-reads anchorsFor — a fresh
+    // creation must surface its band/chip row the next frame so the
+    // post-frame open captures its CURRENT box (fix round 1).
+    seed.add(anchor);
+    return anchor;
   }
 
   @override
@@ -525,4 +532,49 @@ void main() {
     // would not be findable as the composed character.
     expect(find.textContaining('😀'), findsOneWidget);
   });
+
+  testWidgets(
+    'fresh-selection open anchors to the CURRENT band box (fix round 1: '
+    'endOfFrame capture)',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final service = _FakeForkService(const []);
+      await tester.pumpWidget(
+        _buildHarness(
+          prefs: prefs,
+          message: _assistantMessage('Ada Lovelace wrote it'),
+          service: service,
+        ),
+      );
+      await tester.pump();
+
+      await tester.longPress(find.text('Ada Lovelace wrote it'));
+      await tester.pumpAndSettle();
+      tester
+          .state<SelectableRegionState>(find.byType(SelectableRegion))
+          .selectAll(SelectionChangedCause.toolbar);
+      await tester.pumpAndSettle();
+
+      // Fresh selection → fork: invalidate + open run in ONE synchronous
+      // tick, so the old code measured BEFORE the new band row rebuilt —
+      // the captured rect had to come out stale (or null → fallback pose).
+      await tester.tap(find.text('Fork from this selection'));
+      await tester.pumpAndSettle();
+
+      expect(service.createCalls, 1);
+      expect(find.byKey(kForkPanelContainerKey), findsOneWidget);
+      final container = _containerOf(tester);
+      final state = container.read(forkPanelOverlayProvider);
+      expect(state.isOpen, isTrue);
+
+      // The captured rect equals the CURRENT band box at open time.
+      const bandKey = ValueKey<String>('fork_band_anchor-new-1');
+      expect(find.byKey(bandKey), findsOneWidget);
+      expect(
+        state.bandRect,
+        tester.getRect(find.byKey(bandKey)),
+      );
+    },
+  );
 }

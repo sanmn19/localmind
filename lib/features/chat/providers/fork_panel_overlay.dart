@@ -208,9 +208,13 @@ class ForkPanelOverlayController extends Notifier<ForkPanelOverlayState> {
   void _settlePendingApproval(ForkAnchor? anchor) {
     if (anchor == null) return;
     try {
-      ref
-          .read(forkChatNotifierProvider(anchor.forkConversationId).notifier)
-          .settlePendingApproval();
+      final notifier = ref
+          .read(forkChatNotifierProvider(anchor.forkConversationId).notifier);
+      // Fix round 1: EVERY panel close/swap/teardown detaches the fork's
+      // exchange from its owner surface — the notifier must not fire the
+      // next tool-round generation behind a dead panel.
+      notifier.notePanelDetached();
+      notifier.settlePendingApproval();
     } catch (_) {}
   }
 }

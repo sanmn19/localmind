@@ -828,6 +828,15 @@ void main() {
             ),
         contains(contains('denied by the user')),
       );
+      // Fix round 1: the closed panel ENDS the loop — no second generation
+      // request may fire behind the dead panel and no fresh chip re-raise.
+      expect(chatService.requests, hasLength(1));
+      // The current exchange content finalizes once: the round row carries
+      // its tool call and stops as 'cancelled'.
+      final roundRow = state.transcript
+          .where((m) => m.role == MessageRole.assistant && m.toolCalls != null)
+          .single;
+      expect(roundRow.stopReason, 'cancelled');
     },
   );
 }
@@ -836,6 +845,7 @@ void main() {
 /// toolCall for a dialog-worthy tool, the second yields the final answer.
 class _ForkToolPanelChatService implements ChatService {
   final List<List<ToolDefinition>?> toolsSent = [];
+  final List<List<Message>> requests = [];
   int _calls = 0;
 
   @override
@@ -849,6 +859,7 @@ class _ForkToolPanelChatService implements ChatService {
     bool continueGeneration = false,
   }) async* {
     toolsSent.add(tools);
+    requests.add(messages);
     final round = _calls++;
     if (round == 0) {
       yield const ChatResponse(

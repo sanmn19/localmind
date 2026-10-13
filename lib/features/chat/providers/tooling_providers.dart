@@ -49,6 +49,7 @@ import '../../notifications/notifications_listener_channel.dart';
 import '../../notifications/notifications_mcp_server.dart';
 import 'package:localmind/features/conversations/providers/conversation_providers.dart';
 import 'chat_params_providers.dart';
+import 'chat_mcp_providers.dart';
 import 'model_selection_providers.dart';
 
 /// Per-turn web-tool budgets, owning state in the notifier's tool path.
@@ -185,10 +186,15 @@ List<ToolDefinition> forkChatToolset(List<ToolDefinition> allDefs) {
 
 /// Resolves the fork chat's live toolset from the CURRENT registry — the
 /// registration layer already encodes the tool toggles (web/terminal/
-/// skills servers register only when enabled).
+/// skills servers register only when enabled). The MCP master switch gates
+/// EXACTLY like the main chat (`chat_notifier`'s send path): a disabled
+/// master switch yields an EMPTY toolset even with per-family toggles on.
 final forkChatToolsetProvider = FutureProvider<List<ToolDefinition>>((
   ref,
 ) async {
+  if (!ref.watch(chatMcpConfigProvider).enabled) {
+    return const <ToolDefinition>[];
+  }
   final registry = ref.watch(toolRegistryProvider);
   return forkChatToolset(await registry.listTools());
 });

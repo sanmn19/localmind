@@ -1003,6 +1003,7 @@ void main() {
         );
     final container = ProviderContainer(
       overrides: [
+        chatMcpConfigProvider.overrideWith(_EnabledMcpNotifier.new),
         toolRegistryProvider.overrideWith(
           (ref) => ToolRegistry(providers: [
             _FakeToolProvider(defs: [
@@ -1018,6 +1019,264 @@ void main() {
     final defs = await container.read(forkChatToolsetProvider.future);
     expect(defs.map((d) => d.name), ['mail.send']);
   });
+
+  test(
+    'forkChatToolsetProvider honors the MCP master switch exactly like the '
+    'main chat (fix round 1)',
+    () async {
+      ToolDefinition def(String name) => ToolDefinition(
+            name: name,
+            description: 'test $name',
+            inputSchema: const {},
+            providerType: ToolProviderType.mcp,
+          );
+      final familyDefs = [
+        def('web.search'),
+        def('terminal.run'),
+        def('mail.send'),
+      ];
+      ToolRegistry fakeRegistry() => ToolRegistry(providers: [
+            _FakeToolProvider(defs: familyDefs),
+          ]);
+
+      // Master OFF: EMPTY toolset even with every per-family toggle on —
+      // parity with the main send path (`mcpConfig.enabled ? list : const []`).
+      final masterOff = ProviderContainer(
+        overrides: [
+          chatMcpConfigProvider.overrideWith(_DisabledMcpNotifier.new),
+          settingsProvider.overrideWith(_ToggleAllOnSettingsNotifier.new),
+          toolRegistryProvider.overrideWith((ref) => fakeRegistry()),
+        ],
+      );
+      addTearDown(masterOff.dispose);
+      expect(await masterOff.read(forkChatToolsetProvider.future), isEmpty);
+
+      // Master ON: the filtered live registry list flows through.
+      final masterOn = ProviderContainer(
+        overrides: [
+          chatMcpConfigProvider.overrideWith(_EnabledMcpNotifier.new),
+          settingsProvider.overrideWith(_ToggleAllOnSettingsNotifier.new),
+          toolRegistryProvider.overrideWith((ref) => fakeRegistry()),
+        ],
+      );
+      addTearDown(masterOn.dispose);
+      final defs = await masterOn.read(forkChatToolsetProvider.future);
+      expect(
+        defs.map((d) => d.name),
+        unorderedEquals(['web.search', 'terminal.run', 'mail.send']),
+      );
+    },
+  );
+
+  test(
+    'cancel while a chip is pending ends the tool loop: no second '
+    'generation fires and no chip re-raises (fix round 1)',
+    () async {
+      final chatService = _ForkToolChatService([
+        [
+          const ChatResponse(
+              type: ChatResponseType.message, content: 'Sending…'),
+          ChatResponse(
+            type: ChatResponseType.toolCall,
+            toolCall: cs.ToolCallData(
+              tool: 'mail.send',
+              arguments: {'to': 'x@example.com'},
+            ),
+          ),
+        ],
+        // The pre-fix bug fired this generation behind the cancelled
+        // exchange; with the guard the service must NEVER receive it.
+        [
+          const ChatResponse(
+              type: ChatResponseType.message, content: 'should not stream'),
+        ],
+      ]);
+      final saved = <Message>[];
+      var executed = 0;
+      final container = await _forkTestContainer(
+        chatService: chatService,
+        onPersist: saved.add,
+        forkToolset: const [
+          ToolDefinition(
+            name: 'mail.send',
+            description: 'send',
+            inputSchema: {},
+            providerType: ToolProviderType.mcp,
+          ),
+        ],
+        toolRegistry: ToolRegistry(providers: [
+          _FakeToolProvider(defs: const [
+            ToolDefinition(
+              name: 'mail.send',
+              description: 'send',
+              inputSchema: {},
+              providerType: ToolProviderType.mcp,
+            ),
+          ], onExecute: (_, _) async {
+            executed++;
+            return const ToolExecutionResult.success('ran');
+          }),
+        ]),
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(chatProvider.notifier)
+          .loadConversation(_mainConversation);
+      final notifier = container.read(
+        forkChatNotifierProvider('forkC1').notifier,
+      );
+
+      final submitting = notifier.submit(
+        'forkC1',
+        'please run it',
+        selectedText: 'Ada Lovelace wrote it',
+        anchorMessageId: 'a-1',
+      );
+      await _drain();
+      expect(
+        container.read(forkChatNotifierProvider('forkC1')).pendingApproval,
+        isNotNull,
+      );
+
+      // Cancel mid-chip: the chip settles as a denial, the round completes
+      // with its feedback row — and the EXCHANGE finalizes there.
+      notifier.cancel();
+      await submitting;
+
+      // The key pin: the fake service recorded NO second generation.
+      expect(chatService.requests, hasLength(1));
+      expect(executed, 0, reason: 'a cancelled round never executes');
+      final state = container.read(forkChatNotifierProvider('forkC1'));
+      expect(state.isStreaming, isFalse);
+      expect(state.pendingApproval, isNull, reason: 'no chip leak');
+      expect(state.failure, isNull);
+      // The current exchange content finalizes once: the round row keeps
+      // its tool call and stops as 'cancelled' (no phantom final answer).
+      final roundRow = state.transcript
+          .where((m) => m.role == MessageRole.assistant && m.toolCalls != null)
+          .single;
+      expect(roundRow.stopReason, 'cancelled');
+      expect(roundRow.toolCalls!.single.toolName, 'mail.send');
+      expect(
+        state.transcript
+            .where((m) => m.role == MessageRole.tool)
+            .map((m) => m.content),
+        contains(contains('denied by the user')),
+      );
+      expect(
+        state.transcript.map((m) => m.content),
+        isNot(contains('should not stream')),
+      );
+      // Persisted: user + ONE round row + tool feedback (no final answer
+      // row). The orphaned finalize re-upserts the round row's own id —
+      // idempotent, one finalized row per turn.
+      expect(
+        saved
+            .where((m) => m.role == MessageRole.assistant)
+            .map((m) => m.id)
+            .toSet(),
+        hasLength(1),
+      );
+    },
+  );
+
+  test(
+    'a THROWING stream finalizes once as an error turn and settles — '
+    'submit returns (fix round 1)',
+    () async {
+      final chatService = _ThrowingChatService();
+      final saved = <Message>[];
+      final container = await _forkTestContainer(
+        chatService: chatService,
+        onPersist: saved.add,
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(chatProvider.notifier)
+          .loadConversation(_mainConversation);
+      final notifier = container.read(
+        forkChatNotifierProvider('forkC1').notifier,
+      );
+
+      final submitting = notifier.submit(
+        'forkC1',
+        'who wrote it?',
+        selectedText: 'Ada Lovelace wrote it',
+        anchorMessageId: 'a-1',
+      );
+      await _drain();
+      // Partial content is already on the row when the transport dies.
+      expect(
+        container.read(forkChatNotifierProvider('forkC1')).transcript.last
+            .content,
+        'Hel',
+      );
+      chatService.failStream(Exception('transport died'));
+
+      // MUST return: pre-fix the throw escaped runRound with the settle
+      // never completing (submit never finished; cancelAndSettle would
+      // deadlock forever).
+      await submitting;
+
+      final state = container.read(forkChatNotifierProvider('forkC1'));
+      expect(state.isStreaming, isFalse);
+      expect(state.failure, contains('transport died'));
+      expect(state.transcript, hasLength(2));
+      expect(state.transcript.last.role, MessageRole.assistant);
+      expect(state.transcript.last.status, MessageStatus.error);
+      expect(state.transcript.last.errorMessage, contains('transport died'));
+      // Partial content preserved through the error finalize.
+      expect(state.transcript.last.content, 'Hel');
+      // Exactly ONE assistant persist (upsert) — no done re-finalization.
+      expect(
+        saved.where((m) => m.role == MessageRole.assistant),
+        hasLength(1),
+      );
+      expect(saved.last.status, MessageStatus.error);
+      expect(chatService.requests, hasLength(1));
+    },
+  );
+
+  test(
+    'cancelAndSettle does not deadlock when the stream throws instead of '
+    'yielding an error event (fix round 1)',
+    () async {
+      final chatService = _ThrowingChatService();
+      final saved = <Message>[];
+      final container = await _forkTestContainer(
+        chatService: chatService,
+        onPersist: saved.add,
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(chatProvider.notifier)
+          .loadConversation(_mainConversation);
+      final notifier = container.read(
+        forkChatNotifierProvider('forkC1').notifier,
+      );
+
+      final submitting = notifier.submit(
+        'forkC1',
+        'who wrote it?',
+        selectedText: 'Ada Lovelace wrote it',
+        anchorMessageId: 'a-1',
+      );
+      await _drain();
+      chatService.failStream(Exception('io exploded mid-exchange'));
+      // The settle completer the throw bypassed must complete — awaiting
+      // it here would hang the suite on the pre-fix code.
+      await notifier.cancelAndSettle();
+      await submitting;
+
+      final state = container.read(forkChatNotifierProvider('forkC1'));
+      expect(state.isStreaming, isFalse);
+      expect(state.failure, contains('io exploded'));
+      expect(state.transcript.last.status, MessageStatus.error);
+    },
+  );
 }
 
 List<Message> _seededForkTurns() {
@@ -1216,6 +1475,28 @@ class _DisabledMcpNotifier extends ChatMcpConfigNotifier {
   ChatMcpConfig build() => const ChatMcpConfig(enabled: false);
 }
 
+class _EnabledMcpNotifier extends ChatMcpConfigNotifier {
+  @override
+  ChatMcpConfig build() => const ChatMcpConfig(enabled: true);
+}
+
+/// Every per-family tool toggle ON — the master switch must still gate the
+/// fork toolset (fix round 1 parity with the main chat's master switch).
+class _ToggleAllOnSettingsNotifier extends SettingsNotifier {
+  @override
+  AppSettings build() => AppSettings(
+    resumeLastChat: false,
+    autoGenerateTitle: false,
+    showSystemMessages: true,
+    webToolsEnabled: true,
+    terminalToolsEnabled: true,
+    deviceToolsEnabled: true,
+    skillsEnabled: true,
+    backgroundTasksEnabled: true,
+    notificationToolsEnabled: true,
+  );
+}
+
 class _TestChatBackgroundService extends ChatBackgroundService {
   @override
   Future<void> start() async {}
@@ -1268,6 +1549,45 @@ class _StreamingChatService implements ChatService {
 
   @override
   void cancelStream() {}
+}
+
+/// ChatService whose stream body THROWS (as opposed to yielding an
+/// error-data event): StreamQueue.next rethrows — pre-fix round 1 this
+/// escaped the consumption loop with the settle never completing.
+class _ThrowingChatService implements ChatService {
+  final List<List<Message>> requests = [];
+  StreamController<ChatResponse>? _controller;
+
+  /// Pushes the thrown error through the stream then closes it.
+  void failStream(Object error) {
+    final controller = _controller;
+    controller?.addError(error);
+    unawaited(controller?.close());
+  }
+
+  @override
+  Stream<ChatResponse> sendMessage({
+    required Server server,
+    required String modelId,
+    required List<Message> messages,
+    required ChatParameters params,
+    List<McpIntegration>? integrations,
+    List<ToolDefinition>? tools,
+    bool continueGeneration = false,
+  }) {
+    requests.add(messages);
+    final controller = StreamController<ChatResponse>();
+    _controller = controller;
+    controller.add(
+      const ChatResponse(type: ChatResponseType.message, content: 'Hel'),
+    );
+    return controller.stream;
+  }
+
+  @override
+  void cancelStream() {
+    unawaited(_controller?.close());
+  }
 }
 
 /// Mirrors the real services' mid-stream failure shape: partial message

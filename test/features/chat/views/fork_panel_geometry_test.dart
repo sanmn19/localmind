@@ -123,4 +123,43 @@ void main() {
       expect(exactCap.height, 420);
     });
   });
+
+  group('ForkPanelGeometry (fix round 1): tiny-host floors', () {
+    test('200x200 host with 24 safe padding: extents floor + height min’d', () {
+      const safe = EdgeInsets.symmetric(vertical: 24);
+      final extent = ForkPanelGeometry.panelExtent(
+        hostSize: const Size(200, 200),
+        safePadding: safe,
+      );
+      // Width floor: hostWidth - 24 ⇒ 176 on a 200 host.
+      expect(extent.width, 176);
+      // Height cap: 60% of the safe host height — well under naturalHeight.
+      expect(extent.height, closeTo((200 - 48) * 0.6, 0.0001));
+
+      final solved = ForkPanelGeometry.solve(
+        bandRect: const Rect.fromLTRB(60, 100, 140, 120),
+        hostSize: const Size(200, 200),
+        safePadding: safe,
+        panelSize: Size(extent.width, extent.height),
+      );
+      // Neither side fits on the tiny host: the top SAFE edge floors the
+      // top (24 + 8 = 32).
+      expect(solved.dy, 24 + 8);
+      // Horizontal floor: the 12px house padding survives the tiny host
+      // (centering would clamp there anyway: host-24 == panel width).
+      expect(solved.dx, 12);
+    });
+
+    test('degenerate panel taller than the tiny host pins at the top floor', () {
+      const safe = EdgeInsets.fromLTRB(0, 24, 0, 24);
+      final solved = ForkPanelGeometry.solve(
+        bandRect: const Rect.fromLTRB(60, 100, 140, 120),
+        hostSize: const Size(200, 200),
+        safePadding: safe,
+        panelSize: const Size(176, 200),
+      );
+      expect(solved.dy, 24 + 8, reason: 'the safe top edge still wins');
+      expect(solved.dx, 12, reason: 'side floors honored');
+    });
+  });
 }

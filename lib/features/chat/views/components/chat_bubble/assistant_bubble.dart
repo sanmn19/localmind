@@ -431,6 +431,18 @@ class _ForkAwareAssistantContentState
   }
 
   void _openFork(ForkAnchor anchor) {
+    // Fix round 1 (minor): the fresh-selection path invalidates the anchors
+    // and opens the panel in one synchronous tick — measured band rects can
+    // be one frame stale (or null) against the layout the chip row just
+    // forced. Measure + open at endOfFrame (it schedules the pending frame
+    // itself, unlike a raw post-frame callback registered outside frame
+    // generation) so the panel anchors to the CURRENT band box.
+    unawaited(_openForkAfterFrame(anchor));
+  }
+
+  Future<void> _openForkAfterFrame(ForkAnchor anchor) async {
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
     Rect? bandRect;
     final box = _bandAnchorKeys[anchor.id]?.currentContext?.findRenderObject();
     if (box is RenderBox && box.attached && box.hasSize) {

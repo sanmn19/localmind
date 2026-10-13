@@ -20,6 +20,7 @@ import 'package:localmind/features/chat/data/tools/tool_definition.dart';
 import 'package:localmind/features/chat/providers/chat_notifier.dart';
 import 'package:localmind/features/chat/providers/chat_params_providers.dart';
 import 'package:localmind/features/chat/providers/chat_service_providers.dart';
+import 'package:localmind/features/chat/providers/fork_panel_overlay.dart';
 import 'package:localmind/features/chat/providers/model_selection_providers.dart';
 import 'package:localmind/features/chat/providers/tooling_providers.dart';
 import 'package:localmind/features/mcp/data/terminal_mcp_server.dart';
@@ -133,6 +134,12 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
   ChatService? _chatService;
   StreamSubscription<ChatResponse>? _streamSubscription;
   bool _cancelled = false;
+  /// Fix round 1: set when the overlay controller closes, swaps or tears
+  /// down the panel over this fork while an exchange is live. Between tool
+  /// rounds a detached panel must never fire the next generation — the
+  /// exchange finalizes instead (no approval chip can re-raise behind a
+  /// dead panel).
+  bool _panelDetached = false;
   /// Notifier-held mirror of the current approval: resolves (deny) WITHOUT
   /// `state` usage when the container tears down — riverpod 3 forbids
   /// state access inside dispose life-cycles.
@@ -311,6 +318,8 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
 
     state = state.copyWith(isStreaming: true, clearFailure: true);
     _cancelled = false;
+    // Per-exchange panel-detachment probe reset (see [notePanelDetached]).
+    _panelDetached = false;
     // Every terminal path completes this; see cancelAndSettle.
     final finished = Completer<void>();
     _exchangeSettle = finished;
@@ -413,49 +422,79 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
         ),
       );
 
-      while (await responseQueue.hasNext) {
-        final response = await responseQueue.next;
-        switch (response.type) {
-          case ChatResponseType.message:
-            content += response.content ?? '';
-            streamingRow = streamingRow.copyWith(
-              content: streamingRow.content + (response.content ?? ''),
-              isProcessing: false,
-            );
-            _bumpTranscript(streamingRow);
-          case ChatResponseType.reasoning:
-            reasoningContent += response.reasoningContent ?? '';
-            streamingRow = streamingRow.copyWith(
-              reasoningContent: reasoningContent,
-              isProcessing: false,
-            );
-            _bumpTranscript(streamingRow);
-          case ChatResponseType.processing:
-            streamingRow = streamingRow.copyWith(
-              isProcessing: true,
-            );
-            _bumpTranscript(streamingRow);
-          case ChatResponseType.toolCall:
-            if (response.toolCall != null) roundCalls.add(response.toolCall!);
-          case ChatResponseType.error:
-          case ChatResponseType.timeoutError:
-            errorFinalized = true;
-            streamingRow = streamingRow.copyWith(
-              status: MessageStatus.error,
-              errorMessage:
-                  response.content ?? 'The model failed to respond.',
-              isProcessing: false,
-            );
-            await _finalize(
-              streamingRow,
-              failure: streamingRow.errorMessage,
-            );
-            if (!finished.isCompleted) finished.complete();
-            return;
-          case ChatResponseType.invalidToolCall:
-          case ChatResponseType.done:
-            break;
+      // A stream that THROWS (as opposed to yielding an error-data event)
+      // must still finalize once and settle — an escaping error would
+      // leave _exchangeSettle pending forever and cancelAndSettle
+      // dead-waits.
+      try {
+        while (await responseQueue.hasNext) {
+          final response = await responseQueue.next;
+          switch (response.type) {
+            case ChatResponseType.message:
+              content += response.content ?? '';
+              streamingRow = streamingRow.copyWith(
+                content: streamingRow.content + (response.content ?? ''),
+                isProcessing: false,
+              );
+              _bumpTranscript(streamingRow);
+            case ChatResponseType.reasoning:
+              reasoningContent += response.reasoningContent ?? '';
+              streamingRow = streamingRow.copyWith(
+                reasoningContent: reasoningContent,
+                isProcessing: false,
+              );
+              _bumpTranscript(streamingRow);
+            case ChatResponseType.processing:
+              streamingRow = streamingRow.copyWith(
+                isProcessing: true,
+              );
+              _bumpTranscript(streamingRow);
+            case ChatResponseType.toolCall:
+              if (response.toolCall != null) roundCalls.add(response.toolCall!);
+            case ChatResponseType.error:
+            case ChatResponseType.timeoutError:
+              errorFinalized = true;
+              streamingRow = streamingRow.copyWith(
+                status: MessageStatus.error,
+                errorMessage:
+                    response.content ?? 'The model failed to respond.',
+                isProcessing: false,
+              );
+              await _finalize(
+                streamingRow,
+                failure: streamingRow.errorMessage,
+              );
+              if (!finished.isCompleted) finished.complete();
+              return;
+            case ChatResponseType.invalidToolCall:
+            case ChatResponseType.done:
+              break;
+          }
         }
+      } catch (error) {
+        // Same guard semantics as the error-data branch: finalize ONCE as
+        // an error turn (no done re-finalization), surface the failure and
+        // settle — the settle deliberately cannot fail to complete.
+        errorFinalized = true;
+        try {
+          streamingRow = streamingRow.copyWith(
+            status: MessageStatus.error,
+            errorMessage: error.toString(),
+            isProcessing: false,
+          );
+          await _finalize(streamingRow, failure: error.toString());
+        } catch (finalizeError) {
+          Log.error('Fork stream-throw finalize failed: $finalizeError');
+          if (ref.mounted) {
+            state = state.copyWith(
+              isStreaming: false,
+              failure: error.toString(),
+            );
+          }
+        } finally {
+          if (!finished.isCompleted) finished.complete();
+        }
+        return;
       }
 
       if (errorFinalized) {
@@ -601,6 +640,29 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
         if (!finished.isCompleted) finished.complete();
         return;
       }
+      // Fix round 1: no round EVER follows a cancelled exchange or a panel
+      // that went away mid-round — firing the next generation here would
+      // (worst case) raise a fresh approval chip behind a dead panel that
+      // nobody can settle. Finalize ONCE with the current exchange
+      // content: the round row keeps its toolCalls (same id, upsert).
+      if (_exchangeOrphaned) {
+        final orphanedRow = roundResult.roundRow.copyWith(
+          status: MessageStatus.complete,
+          isProcessing: false,
+          stopReason: 'cancelled',
+        );
+        try {
+          await _finalize(orphanedRow);
+        } catch (finalizeError) {
+          Log.error('Fork orphaned-exchange finalize failed: $finalizeError');
+          if (ref.mounted) {
+            state = state.copyWith(isStreaming: false);
+          }
+        } finally {
+          if (!finished.isCompleted) finished.complete();
+        }
+        return;
+      }
       return runRound(roundIndex + 1);
     }
 
@@ -612,6 +674,29 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
       _exchangeSettle = null;
       _disposeStream();
     }
+  }
+
+  /// Marks the exchange's owning panel as detached. Called by the overlay
+  /// controller whenever the panel over THIS fork closes, swaps to another
+  /// anchor or tears down. Between tool rounds the notifier then finalizes
+  /// instead of firing the next generation behind a dead panel (no chip
+  /// can re-raise somewhere invisible). Reset per [submit].
+  void notePanelDetached() {
+    _panelDetached = true;
+  }
+
+  /// Whether the active exchange lost its owner surface and must not fire
+  /// further generations: it was cancelled, the container is gone, or the
+  /// panel detached from THIS fork and is not (re-)open for it now. A
+  /// panel that is open again for this fork resumes the live exchange —
+  /// the round actor is still producing its answer for that same surface.
+  bool get _exchangeOrphaned {
+    if (_cancelled) return true;
+    if (!ref.mounted) return true;
+    final anchor = ref.read(forkPanelOverlayProvider).anchor;
+    final panelMine =
+        anchor != null && anchor.forkConversationId == forkConversationId;
+    return _panelDetached && !panelMine;
   }
 
   /// Forwards cancellation to the active fork reply's [ChatService] — the
@@ -775,6 +860,7 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
     _streamSubscription = null;
     _chatService = null;
     _cancelled = false;
+    _panelDetached = false;
     // Defense in depth: a torn-down slot must never leave a pending
     // approval completer dangling (settle is idempotent). The mirror is
     // resolved WITHOUT touching `state` — riverpod 3 forbids state use in
