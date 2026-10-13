@@ -241,6 +241,8 @@ class MainActivity : AudioServiceActivity() {
             ASK_LOCAL_CHANNEL
         ).also { channel ->
             NativeAskLocalSink.onRequest = ::pushAskLocalRequest
+            NativeAskLocalSink.mainDartBridge = channel
+            NativeAskLocalSink.captureNowHook = ::askLocalCaptureNow
             deliverPendingAskLocal()
             channel.setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -266,7 +268,9 @@ class MainActivity : AudioServiceActivity() {
                         }
                         val delivered = NativeAskLocalSink.onOpenOverlay?.invoke(
                             call.argument<String?>("capturePath"),
-                            call.argument<String>("selectedText") ?: ""
+                            call.argument<String>("selectedText") ?: "",
+                            call.argument<String?>("requestId"),
+                            call.argument<Map<String, Any?>>("bootstrap")
                         )
                         if (delivered == true) {
                             result.success(true)
@@ -305,8 +309,14 @@ class MainActivity : AudioServiceActivity() {
         // the window goes away without a Dart close (permission revoked,
         // token teardown).
         NativeAskLocalSink.onOpenOverlay =
-            { capturePath, selectedText ->
-                AskLocalOverlayWindow.show(this, capturePath, selectedText)
+            { capturePath, selectedText, requestId, bootstrap ->
+                AskLocalOverlayWindow.show(
+                    this,
+                    capturePath,
+                    selectedText,
+                    requestId,
+                    bootstrap
+                )
             }
         NativeAskLocalSink.onCardClosed = ::notifyAskLocalCardClosed
         EventChannel(
@@ -928,9 +938,16 @@ class MainActivity : AudioServiceActivity() {
 object NativeAskLocalSink {
     @Volatile var onRequest: ((Map<String, Any?>) -> Unit)? = null
 
-    @Volatile var onOpenOverlay: ((capturePath: String?, selectedText: String) -> Boolean)? = null
+    @Volatile var onOpenOverlay: ((capturePath: String?, selectedText: String, requestId: String?, bootstrap: Map<String, Any?>?) -> Boolean)? = null
 
     @Volatile var onCardClosed: (() -> Unit)? = null
+
+    /** The main engine's `localmind/ask_local` channel: the card window's
+     *  execute-tool forward + capture-now hook bridge into the MAIN Dart
+     *  (Task 4 channels). */
+    @Volatile var mainDartBridge: MethodChannel? = null
+
+    @Volatile var captureNowHook: ((MethodChannel.Result) -> Unit)? = null
 
     @Volatile var pending: Map<String, Any?>? = null
 

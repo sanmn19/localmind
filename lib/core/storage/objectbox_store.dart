@@ -51,6 +51,17 @@ class ObjectBoxStore {
     final store = Store.attach(getObjectBoxModel(), storeDir.path);
     return ObjectBoxStore.fromStore(store);
   }
+
+  /// Attach variant for isolates without path-provider channels (the Ask
+  /// Local card engine): the directory is HANDED OVER by the hosting
+  /// engine in its bootstrap payload instead of resolved plugin-side. The
+  /// card's directory never exists check happens in [create]'s process.
+  static Future<ObjectBoxStore> attachAsSecondaryIsolateAt(
+    String storeDirPath,
+  ) async {
+    final store = Store.attach(getObjectBoxModel(), storeDirPath);
+    return ObjectBoxStore.fromStore(store);
+  }
 }
 
 /// Directory name under the app documents dir holding the ObjectBox store.

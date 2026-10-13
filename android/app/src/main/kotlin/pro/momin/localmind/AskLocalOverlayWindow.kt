@@ -58,26 +58,53 @@ object AskLocalOverlayWindow {
     private var maxHeightPx: Int = 0
     private var isShownValue: Boolean = false
 
+    /** The LATEST staged hand-off (Task 4): every show() updates it and the
+     *  card re-reads it via getInitialPayload / a push re-delivery; a
+     *  show() while the window is already up re-pushes this into the live
+     *  card instead of resetting the window. */
+    private var latestPayload: Map<String, Any?>? = null
+
     /** True while the overlay card actually sits on the WindowManager. */
     val isShown: Boolean
         get() = isShownValue
 
     /**
-     * Mounts the card after verifying the overlay permission. Channel
-     * callers are already on main; a stray background caller is parked onto
-     * main and reports not-shown-yet (callers re-probe `isCardShown`).
+     * Mounts the card after verifying the overlay permission. The full
+     * staging envelope (Task 4): staging fields + optional `requestId`
+     * (re-delivery dedupe) + optional `bootstrap` map (the snapshot the
+     * card engine streams with: storeDir/settings/toolset/target).
+     *
+     * When the window is ALREADY up the payload is not lost: it replaces
+     * [latestPayload] and is re-pushed into the live card
+     * (`askLocalPayloadUpdate`) — "newest asks replace the active prompt".
      */
-    fun show(context: Context, capturePath: String?, selectedText: String): Boolean {
+    fun show(
+        context: Context,
+        capturePath: String?,
+        selectedText: String,
+        requestId: String? = null,
+        bootstrap: Map<String, Any?>? = null
+    ): Boolean {
         if (!Settings.canDrawOverlays(context)) {
             Log.w(TAG, "Overlay show skipped: display-over-apps not granted")
             return false
         }
         if (Looper.myLooper() != Looper.getMainLooper()) {
             Log.w(TAG, "Overlay show asked off the main thread; parking on main")
-            mainHandler.post { show(context, capturePath, selectedText) }
+            mainHandler.post { show(context, capturePath, selectedText, requestId, bootstrap) }
             return false
         }
-        if (isShownValue) return true
+        val payload = mutableMapOf<String, Any?>(
+            "capturePath" to capturePath,
+            "selectedText" to selectedText
+        )
+        if (requestId != null) payload["requestId"] = requestId
+        if (bootstrap != null) payload["bootstrap"] = bootstrap
+        latestPayload = payload
+        if (isShownValue) {
+            rePushPayloadToCard()
+            return true
+        }
         val app = context.applicationContext
         val engine = ensureCardEngine(app) ?: return false
         try {
@@ -86,12 +113,38 @@ object AskLocalOverlayWindow {
             Log.w(TAG, "Overlay attach failed: $error")
             return false
         }
-        // The payload itself re-pushes through the `localmind/ask_local`
-        // channel into the live card isolate (Task 4's notifier); the
-        // window host only carries the opening hand-off for T4 to request.
-        registerCardControls(engine, capturePath, selectedText)
+        registerCardControls(engine)
         Log.i(TAG, "Ask Local card shown (entrypoint=$ENTRYPOINT)")
         return true
+    }
+
+    /** Best-effort re-push into the live card isolate (same card channel
+     *  name; the card's handler tolerates a missing registration). */
+    private fun rePushPayloadToCard() {
+        val engine = cardEngine ?: return
+        val payload = latestPayload ?: return
+        try {
+            io.flutter.plugin.common.MethodChannel(
+                engine.dartExecutor.binaryMessenger,
+                CARD_CHANNEL
+            ).invokeMethod("askLocalPayloadUpdate", payload)
+        } catch (error: Exception) {
+            Log.w(TAG, "Payload re-push into the card failed: $error")
+        }
+    }
+
+    /** Best-effort closed-event push into the card isolate (the card
+     *  subscribes EARLY at boot; engine-lived state reaps itself). */
+    private fun notifyCardEngineClosed() {
+        val engine = cardEngine ?: return
+        try {
+            io.flutter.plugin.common.MethodChannel(
+                engine.dartExecutor.binaryMessenger,
+                CARD_CHANNEL
+            ).invokeMethod("askLocalCardClosed", null)
+        } catch (error: Exception) {
+            Log.w(TAG, "Card-closed push into the card failed: $error")
+        }
     }
 
     /** Content-height resize requested by the card view itself; clamped to
@@ -135,6 +188,7 @@ object AskLocalOverlayWindow {
         isShownValue = false
         detachWindow()
         Log.i(TAG, "Ask Local card closed (byRequest=$closedByRequest)")
+        notifyCardEngineClosed()
         if (!closedByRequest) NativeAskLocalSink.onCardClosed?.invoke()
         return true
     }
@@ -185,6 +239,7 @@ object AskLocalOverlayWindow {
                     flutterView?.detachFromFlutterEngine()
                     flutterView = null
                     root = null
+                    notifyCardEngineClosed()
                     NativeAskLocalSink.onCardClosed?.invoke()
                 }
                 super.onDetachedFromWindow()
@@ -230,13 +285,10 @@ object AskLocalOverlayWindow {
     }
 
     /** Card-isolate control channel: resize to the measured content height,
-     *  the card's own close, and the opening hand-off the T4 card asks for
-     *  once its UI is materialised. */
-    private fun registerCardControls(
-        engine: FlutterEngine,
-        capturePath: String?,
-        selectedText: String
-    ) {
+     *  the card's own close, the opening hand-off (the LATEST payload —
+     *  re-delivery tolerant), the in-card re-capture, and the approval-chip
+     *  tool forward into the main engine's registry. */
+    private fun registerCardControls(engine: FlutterEngine) {
         io.flutter.plugin.common.MethodChannel(
             engine.dartExecutor.binaryMessenger,
             CARD_CHANNEL
@@ -247,15 +299,62 @@ object AskLocalOverlayWindow {
                     result.success(resizeByContent(height))
                 }
                 "closeCard" -> result.success(close(closedByRequest = true))
-                "getInitialPayload" -> result.success(
-                    mapOf(
-                        "capturePath" to capturePath,
-                        "selectedText" to selectedText
-                    )
-                )
+                "getInitialPayload" -> result.success(latestPayload)
+                "captureNow" -> {
+                    val hook = NativeAskLocalSink.captureNowHook
+                    if (hook != null) hook(result) else result.success(null)
+                }
+                "askLocalExecuteTool" -> {
+                    val tool = call.argument<String?>("toolName") ?: ""
+                    val arguments = call.argument<Map<String, Any?>>("arguments")
+                    forwardCardToolExecution(tool, arguments ?: emptyMap(), result)
+                }
                 else -> result.notImplemented()
             }
         }
+        // Every re-mount re-pushes the LATEST payload first so a fresh card
+        // view (or a hot-restarted isolate) re-anchors immediately.
+        rePushPayloadToCard()
+    }
+
+    /** Approval chips approved in the card execute through the MAIN
+     *  engine's registry: the result (or the error) is bridged verbatim
+     *  back to the card's awaiting tool round. */
+    private fun forwardCardToolExecution(
+        toolName: String,
+        arguments: Map<String, Any?>,
+        reply: io.flutter.plugin.common.MethodChannel.Result
+    ) {
+        val bridge = NativeAskLocalSink.mainDartBridge
+        if (bridge == null) {
+            reply.error(
+                "ask_local_main_unavailable",
+                "The main engine's Dart is not attached.",
+                null
+            )
+            return
+        }
+        bridge.invokeMethod(
+            "askLocalExecuteTool",
+            mapOf("toolName" to toolName, "arguments" to arguments),
+            object : io.flutter.plugin.common.MethodChannel.Result {
+                override fun success(result: Any?) {
+                    reply.success(result)
+                }
+
+                override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {
+                    reply.error(errorCode, errorMessage, errorDetails)
+                }
+
+                override fun notImplemented() {
+                    reply.error(
+                        "ask_local_execute_unwired",
+                        "The main engine has no askLocalExecuteTool handler yet.",
+                        null
+                    )
+                }
+            }
+        )
     }
 
     private fun displayMetrics(context: Context): DisplayMetrics {

@@ -42,19 +42,23 @@ class AskLocalOverlayAccess {
     }
   }
 
-  /// Shows the floating card with [capturePath] + [selectedText]. Returns
-  /// whether the window is up. [AskLocalOverlayPermissionException] is
-  /// thrown — verbatim from the `overlay_permission_missing` platform error
-  /// — so callers can distinguish a settings trip from a plain miss.
+  /// Shows the floating card with [capturePath] + [selectedText], carrying
+  /// the optional card [bootstrap] envelope (Task 4: the snapshot the card
+  /// engine streams with). Returns whether the window is up.
+  /// [AskLocalOverlayPermissionException] is thrown — verbatim from the
+  /// `overlay_permission_missing` platform error — so callers can
+  /// distinguish a settings trip from a plain miss.
   Future<bool> openOverlayNow({
     String? capturePath,
     required String selectedText,
+    Map<String, Object?> bootstrap = const <String, Object?>{},
   }) async {
     try {
       final opened = await _channel
           .invokeMethod<bool>('openOverlayNow', {
             'capturePath': capturePath,
             'selectedText': selectedText,
+            if (bootstrap.isNotEmpty) 'bootstrap': bootstrap,
           })
           .timeout(_channelTimeout);
       return opened ?? false;
