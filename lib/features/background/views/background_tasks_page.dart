@@ -24,7 +24,6 @@ class _BackgroundTasksPageState extends ConsumerState<BackgroundTasksPage>
     with SingleTickerProviderStateMixin {
   late final ScrollController _scrollController;
   late final AnimationController _highlightController;
-  late final Animation<double> _highlightOpacity;
   final Map<String, GlobalKey> _sectionKeys = {};
 
   bool _focusAttempted = false;
@@ -37,7 +36,6 @@ class _BackgroundTasksPageState extends ConsumerState<BackgroundTasksPage>
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     );
-    _highlightOpacity = _highlightController;
   }
 
   /// Data lands a frame after the first build, so the focus attempt retries

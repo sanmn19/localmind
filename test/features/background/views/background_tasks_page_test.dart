@@ -278,7 +278,7 @@ void main() {
         'triple-dot menu has the Background tasks entry and deep-links the '
         'route with the active conversation id as focus', (tester) async {
       String? capturedFocusValue;
-      String? Function() capturedFocus = () => capturedFocusValue;
+      String? capturedFocusGet() => capturedFocusValue;
       final router = _menuRouter(
         onPage: (focus) => capturedFocusValue = focus,
         child: BackgroundTasksPage,
@@ -290,7 +290,7 @@ void main() {
         createdAt: _fixture,
         updatedAt: _fixture,
       );
-      final (service, captureFocusById) = await _pumpMenuHarness(
+      final (service, _) = await _pumpMenuHarness(
         tester,
         router,
         pageOverrides: _pageOverrides(
@@ -308,7 +308,7 @@ void main() {
       await tester.tap(find.text('Background tasks'));
       await tester.pumpAndSettle();
 
-      expect(capturedFocus(), 'conv-1');
+      expect(capturedFocusGet(), 'conv-1');
       expect(find.text('watch it'), findsOneWidget,
           reason: 'the page mounts with the focus param routed through');
       expect(
@@ -316,14 +316,13 @@ void main() {
         findsOneWidget,
       );
       expect(service.pauseCalls, isEmpty);
-      expect(captureFocusById, isNotNull);
     });
 
     testWidgets(
         'the menu pushes without a focus param when no conversation is open',
         (tester) async {
       String? capturedFocusValue;
-      String? Function() capturedFocus = () => capturedFocusValue;
+      String? capturedFocusGet() => capturedFocusValue;
       final router = _menuRouter(
         onPage: (focus) => capturedFocusValue = focus,
         child: BackgroundTasksPage,
@@ -339,7 +338,7 @@ void main() {
       await tester.tap(find.text('Background tasks'));
       await tester.pumpAndSettle();
 
-      expect(capturedFocus(), isNull);
+      expect(capturedFocusGet(), isNull);
       expect(find.byKey(const Key('background_empty_state')), findsOneWidget,
           reason: 'a plausible page mounts at /background with empty tasks');
     });
@@ -656,7 +655,7 @@ Future<(_PageBgService, String? Function())> _pumpMenuHarness(
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
 
-  final capturedFocus = () => _menuRouterFocusState;
+  String? capturedFocusFn() => _menuRouterFocusState;
   SharedPreferences.setMockInitialValues({});
   final prefs = await SharedPreferences.getInstance();
   await tester.pumpWidget(
@@ -679,5 +678,5 @@ Future<(_PageBgService, String? Function())> _pumpMenuHarness(
     ),
   );
   final service = _lastOverridesService ?? (_PageBgService()..tasks.addAll(const []));
-  return (service, capturedFocus);
+  return (service, capturedFocusFn);
 }
