@@ -22,7 +22,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(1, 6060443518060866028),
     name: 'ConversationEntity',
-    lastPropertyId: const obx_int.IdUid(27, 5205524731612525260),
+    lastPropertyId: const obx_int.IdUid(28, 5491618122077238252),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -185,6 +185,12 @@ final _entities = <obx_int.ModelEntity>[
       obx_int.ModelProperty(
         id: const obx_int.IdUid(27, 5205524731612525260),
         name: 'isFork',
+        type: 1,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(28, 5491618122077238252),
+        name: 'isBackground',
         type: 1,
         flags: 0,
       ),
@@ -782,6 +788,97 @@ final _entities = <obx_int.ModelEntity>[
     relations: <obx_int.ModelRelation>[],
     backlinks: <obx_int.ModelBacklink>[],
   ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(9, 4259778768971352693),
+    name: 'BackgroundTaskEntity',
+    lastPropertyId: const obx_int.IdUid(13, 2424803949206843021),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 8264945170995383641),
+        name: 'internalId',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 2747249318395952904),
+        name: 'id',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(16, 7237672624095062846),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 2980414009138731474),
+        name: 'ownerConversationId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(17, 1836274154634831998),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 726255219052977140),
+        name: 'taskConversationId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(18, 9214790592331218716),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 464471746561374896),
+        name: 'prompt',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 4739030742865769347),
+        name: 'loopMinutes',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(7, 8531011841985498677),
+        name: 'maxRuns',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(8, 6055901789201619104),
+        name: 'runCount',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(9, 1802237654814163315),
+        name: 'state',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(10, 2707522523034969810),
+        name: 'lastRunAt',
+        type: 10,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(11, 1823982757969541244),
+        name: 'createdAt',
+        type: 10,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(12, 8218730214853294328),
+        name: 'resultMessageId',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(13, 2424803949206843021),
+        name: 'ownerMessageId',
+        type: 9,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
 ];
 
 /// Shortcut for [obx.Store.new] that passes [getObjectBoxModel] and for Flutter
@@ -827,8 +924,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
     // Typically, this is done with `dart run build_runner build`.
     generatorVersion: obx_int.GeneratorVersion.v2025_12_16,
     entities: _entities,
-    lastEntityId: const obx_int.IdUid(8, 7895365751563937927),
-    lastIndexId: const obx_int.IdUid(15, 7170761428673485654),
+    lastEntityId: const obx_int.IdUid(9, 4259778768971352693),
+    lastIndexId: const obx_int.IdUid(18, 9214790592331218716),
     lastRelationId: const obx_int.IdUid(0, 0),
     lastSequenceId: const obx_int.IdUid(0, 0),
     retiredEntityUids: const [],
@@ -889,7 +986,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final forkSpanOffset = object.forkSpan == null
             ? null
             : fbb.writeString(object.forkSpan!);
-        fbb.startTable(28);
+        fbb.startTable(29);
         fbb.addInt64(0, object.internalId);
         fbb.addOffset(1, idOffset);
         fbb.addOffset(2, titleOffset);
@@ -917,6 +1014,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addOffset(24, forkOfMessageIdOffset);
         fbb.addOffset(25, forkSpanOffset);
         fbb.addBool(26, object.isFork);
+        fbb.addBool(27, object.isBackground);
         fbb.finish(fbb.endTable());
         return object.internalId;
       },
@@ -1037,6 +1135,12 @@ obx_int.ModelDefinition getObjectBoxModel() {
           56,
           false,
         );
+        final isBackgroundParam = const fb.BoolReader().vTableGet(
+          buffer,
+          rootOffset,
+          58,
+          false,
+        );
         final object = ConversationEntity(
           internalId: internalIdParam,
           id: idParam,
@@ -1065,6 +1169,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           forkOfMessageId: forkOfMessageIdParam,
           forkSpan: forkSpanParam,
           isFork: isForkParam,
+          isBackground: isBackgroundParam,
         );
         obx_int.InternalToManyAccess.setRelInfo<ConversationEntity>(
           object.messages,
@@ -1820,6 +1925,125 @@ obx_int.ModelDefinition getObjectBoxModel() {
         return object;
       },
     ),
+    BackgroundTaskEntity: obx_int.EntityDefinition<BackgroundTaskEntity>(
+      model: _entities[8],
+      toOneRelations: (BackgroundTaskEntity object) => [],
+      toManyRelations: (BackgroundTaskEntity object) => {},
+      getId: (BackgroundTaskEntity object) => object.internalId,
+      setId: (BackgroundTaskEntity object, int id) {
+        object.internalId = id;
+      },
+      objectToFB: (BackgroundTaskEntity object, fb.Builder fbb) {
+        final idOffset = fbb.writeString(object.id);
+        final ownerConversationIdOffset = fbb.writeString(
+          object.ownerConversationId,
+        );
+        final taskConversationIdOffset = fbb.writeString(
+          object.taskConversationId,
+        );
+        final promptOffset = fbb.writeString(object.prompt);
+        final stateOffset = fbb.writeString(object.state);
+        final resultMessageIdOffset = object.resultMessageId == null
+            ? null
+            : fbb.writeString(object.resultMessageId!);
+        final ownerMessageIdOffset = object.ownerMessageId == null
+            ? null
+            : fbb.writeString(object.ownerMessageId!);
+        fbb.startTable(14);
+        fbb.addInt64(0, object.internalId);
+        fbb.addOffset(1, idOffset);
+        fbb.addOffset(2, ownerConversationIdOffset);
+        fbb.addOffset(3, taskConversationIdOffset);
+        fbb.addOffset(4, promptOffset);
+        fbb.addInt64(5, object.loopMinutes);
+        fbb.addInt64(6, object.maxRuns);
+        fbb.addInt64(7, object.runCount);
+        fbb.addOffset(8, stateOffset);
+        fbb.addInt64(9, object.lastRunAt?.millisecondsSinceEpoch);
+        fbb.addInt64(10, object.createdAt.millisecondsSinceEpoch);
+        fbb.addOffset(11, resultMessageIdOffset);
+        fbb.addOffset(12, ownerMessageIdOffset);
+        fbb.finish(fbb.endTable());
+        return object.internalId;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final lastRunAtValue = const fb.Int64Reader().vTableGetNullable(
+          buffer,
+          rootOffset,
+          22,
+        );
+        final internalIdParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final idParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 6, '');
+        final ownerConversationIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 8, '');
+        final taskConversationIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 10, '');
+        final promptParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 12, '');
+        final loopMinutesParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          14,
+          0,
+        );
+        final maxRunsParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          16,
+          0,
+        );
+        final runCountParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          18,
+          0,
+        );
+        final stateParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 20, '');
+        final lastRunAtParam = lastRunAtValue == null
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(lastRunAtValue);
+        final createdAtParam = DateTime.fromMillisecondsSinceEpoch(
+          const fb.Int64Reader().vTableGet(buffer, rootOffset, 24, 0),
+        );
+        final resultMessageIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 26);
+        final ownerMessageIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 28);
+        final object = BackgroundTaskEntity(
+          internalId: internalIdParam,
+          id: idParam,
+          ownerConversationId: ownerConversationIdParam,
+          taskConversationId: taskConversationIdParam,
+          prompt: promptParam,
+          loopMinutes: loopMinutesParam,
+          maxRuns: maxRunsParam,
+          runCount: runCountParam,
+          state: stateParam,
+          lastRunAt: lastRunAtParam,
+          createdAt: createdAtParam,
+          resultMessageId: resultMessageIdParam,
+          ownerMessageId: ownerMessageIdParam,
+        );
+
+        return object;
+      },
+    ),
   };
 
   return obx_int.ModelDefinition(model, bindings);
@@ -1959,6 +2183,11 @@ class ConversationEntity_ {
   /// See [ConversationEntity.isFork].
   static final isFork = obx.QueryBooleanProperty<ConversationEntity>(
     _entities[0].properties[26],
+  );
+
+  /// See [ConversationEntity.isBackground].
+  static final isBackground = obx.QueryBooleanProperty<ConversationEntity>(
+    _entities[0].properties[27],
   );
 
   /// see [ConversationEntity.messages]
@@ -2402,5 +2631,71 @@ class ForkAnchorEntity_ {
   /// See [ForkAnchorEntity.createdAt].
   static final createdAt = obx.QueryDateProperty<ForkAnchorEntity>(
     _entities[7].properties[6],
+  );
+}
+
+/// [BackgroundTaskEntity] entity fields to define ObjectBox queries.
+class BackgroundTaskEntity_ {
+  /// See [BackgroundTaskEntity.internalId].
+  static final internalId = obx.QueryIntegerProperty<BackgroundTaskEntity>(
+    _entities[8].properties[0],
+  );
+
+  /// See [BackgroundTaskEntity.id].
+  static final id = obx.QueryStringProperty<BackgroundTaskEntity>(
+    _entities[8].properties[1],
+  );
+
+  /// See [BackgroundTaskEntity.ownerConversationId].
+  static final ownerConversationId =
+      obx.QueryStringProperty<BackgroundTaskEntity>(_entities[8].properties[2]);
+
+  /// See [BackgroundTaskEntity.taskConversationId].
+  static final taskConversationId =
+      obx.QueryStringProperty<BackgroundTaskEntity>(_entities[8].properties[3]);
+
+  /// See [BackgroundTaskEntity.prompt].
+  static final prompt = obx.QueryStringProperty<BackgroundTaskEntity>(
+    _entities[8].properties[4],
+  );
+
+  /// See [BackgroundTaskEntity.loopMinutes].
+  static final loopMinutes = obx.QueryIntegerProperty<BackgroundTaskEntity>(
+    _entities[8].properties[5],
+  );
+
+  /// See [BackgroundTaskEntity.maxRuns].
+  static final maxRuns = obx.QueryIntegerProperty<BackgroundTaskEntity>(
+    _entities[8].properties[6],
+  );
+
+  /// See [BackgroundTaskEntity.runCount].
+  static final runCount = obx.QueryIntegerProperty<BackgroundTaskEntity>(
+    _entities[8].properties[7],
+  );
+
+  /// See [BackgroundTaskEntity.state].
+  static final state = obx.QueryStringProperty<BackgroundTaskEntity>(
+    _entities[8].properties[8],
+  );
+
+  /// See [BackgroundTaskEntity.lastRunAt].
+  static final lastRunAt = obx.QueryDateProperty<BackgroundTaskEntity>(
+    _entities[8].properties[9],
+  );
+
+  /// See [BackgroundTaskEntity.createdAt].
+  static final createdAt = obx.QueryDateProperty<BackgroundTaskEntity>(
+    _entities[8].properties[10],
+  );
+
+  /// See [BackgroundTaskEntity.resultMessageId].
+  static final resultMessageId = obx.QueryStringProperty<BackgroundTaskEntity>(
+    _entities[8].properties[11],
+  );
+
+  /// See [BackgroundTaskEntity.ownerMessageId].
+  static final ownerMessageId = obx.QueryStringProperty<BackgroundTaskEntity>(
+    _entities[8].properties[12],
   );
 }

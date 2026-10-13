@@ -2,6 +2,7 @@
 <resources>
     <string name="app_name">LocalMind</string>
     <string name="screen_capture_service_label">LocalMind Screen Capture</string>
+    <string name="notifications_listener_label">LocalMind Notifications</string>
     <string name="screen_capture_service_summary">Captures the current screen so your LocalMind assistant can discuss what you see.</string>
     <string name="screen_capture_service_description">Required for the LocalMind assistant to read the current screen. This app service takes no other action and reads no other events.</string>
     <string name="widget_ask_hint">Ask LocalMind...</string>

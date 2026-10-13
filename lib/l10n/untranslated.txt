@@ -74,7 +74,23 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ],
 
   "bn": [
@@ -156,7 +172,23 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ],
 
   "de": [
@@ -238,7 +270,23 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ],
 
   "es": [
@@ -320,7 +368,23 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ],
 
   "fr": [
@@ -402,7 +466,23 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ],
 
   "hi": [
@@ -484,7 +564,23 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ],
 
   "it": [
@@ -566,7 +662,23 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ],
 
   "ja": [
@@ -648,7 +760,23 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ],
 
   "ko": [
@@ -716,7 +844,23 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ],
 
   "pt": [
@@ -784,7 +928,23 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ],
 
   "ru": [
@@ -866,7 +1026,23 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ],
 
   "tr": [
@@ -948,7 +1124,23 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ],
 
   "zh": [
@@ -1030,7 +1222,23 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ],
 
   "zh_TW": [
@@ -1112,6 +1320,22 @@
     "forkPanelDeleteTooltip",
     "forkPanelEmptyBody",
     "forkPanelInputHint",
-    "forkTurnErrorLabel"
+    "forkTurnErrorLabel",
+    "backgroundCardTitle",
+    "backgroundCardDesc",
+    "backgroundTasksToggleLabel",
+    "backgroundNoTasksLabel",
+    "backgroundCancelTooltip",
+    "backgroundStateRunning",
+    "backgroundStateFinished",
+    "backgroundStateCancelled",
+    "backgroundStateFailed",
+    "backgroundCapNote",
+    "notifications_card_title",
+    "notifications_card_desc",
+    "notifications_toggle_label",
+    "notifications_access_granted",
+    "notifications_access_missing",
+    "notifications_grant_action"
   ]
 }

@@ -102,6 +102,8 @@ dependencies:
   google_sign_in: ^7.2.0
   msal_auth: ^3.5.3
   enough_mail: ^2.1.7
+  flutter_background_service: ^5.1.0
+  async: ^2.13.1
 
 dev_dependencies:
   flutter_test:

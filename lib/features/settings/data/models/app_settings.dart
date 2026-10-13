@@ -94,6 +94,17 @@ class AppSettings {
   /// feature.
   final bool skillsEnabled;
 
+  /// Whether the in-process `local://background` MCP server (bg.spawn +
+  /// bg.status + bg.cancel) is registered at all. Default OFF: autonomous
+  /// background sub-agent threads only exist once the user opts in.
+  final bool backgroundTasksEnabled;
+
+  /// Whether the in-process `local://notifications` MCP server
+  /// (notifications.read_recent) is registered at all. Default OFF: reading
+  /// device notifications is opt-in, and the Android Notification access
+  /// grant (listener service) is granted separately in the card.
+  final bool notificationToolsEnabled;
+
   /// Connected mail connector accounts as raw maps (provider/email only —
   /// non-secret identity rows; tokens never live in here).
   final List<Map<String, dynamic>> mailConnectorAccounts;
@@ -165,6 +176,8 @@ class AppSettings {
     this.shareTargetEnabled = true,
     this.toolWhitelist = const [],
     this.skillsEnabled = true,
+    this.backgroundTasksEnabled = false,
+    this.notificationToolsEnabled = false,
     this.mailConnectorAccounts = const [],
     this.autoCollapseThinking = false,
     this.sendTemperature = true,
@@ -229,6 +242,8 @@ class AppSettings {
     bool? shareTargetEnabled,
     List<String>? toolWhitelist,
     bool? skillsEnabled,
+    bool? backgroundTasksEnabled,
+    bool? notificationToolsEnabled,
     List<Map<String, dynamic>>? mailConnectorAccounts,
     bool? autoCollapseThinking,
     bool? sendTemperature,
@@ -319,6 +334,10 @@ class AppSettings {
       shareTargetEnabled: shareTargetEnabled ?? this.shareTargetEnabled,
       toolWhitelist: toolWhitelist ?? this.toolWhitelist,
       skillsEnabled: skillsEnabled ?? this.skillsEnabled,
+      backgroundTasksEnabled:
+          backgroundTasksEnabled ?? this.backgroundTasksEnabled,
+      notificationToolsEnabled:
+          notificationToolsEnabled ?? this.notificationToolsEnabled,
       mailConnectorAccounts:
           mailConnectorAccounts ?? this.mailConnectorAccounts,
       autoCollapseThinking: autoCollapseThinking ?? this.autoCollapseThinking,
@@ -386,6 +405,8 @@ class AppSettings {
       'shareTargetEnabled': shareTargetEnabled,
       'toolWhitelist': toolWhitelist,
       'skillsEnabled': skillsEnabled,
+      'backgroundTasksEnabled': backgroundTasksEnabled,
+      'notificationToolsEnabled': notificationToolsEnabled,
       'mailConnectorAccounts': mailConnectorAccounts,
       'autoCollapseThinking': autoCollapseThinking,
       'sendTemperature': sendTemperature,
@@ -457,6 +478,8 @@ class AppSettings {
       toolWhitelist:
           (map['toolWhitelist'] as List?)?.cast<String>() ?? const [],
       skillsEnabled: map['skillsEnabled'] ?? true,
+      backgroundTasksEnabled: map['backgroundTasksEnabled'] ?? false,
+      notificationToolsEnabled: map['notificationToolsEnabled'] ?? false,
       mailConnectorAccounts:
           (map['mailConnectorAccounts'] as List?)
               ?.whereType<Map>()

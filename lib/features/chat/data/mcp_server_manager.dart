@@ -7,12 +7,14 @@ import 'package:localmind/features/mcp/data/device_mcp_server.dart';
 import 'package:localmind/features/mcp/data/terminal_mcp_server.dart';
 import 'package:localmind/features/mail/data/mail_common.dart';
 import 'package:localmind/features/mail/mail_mcp_server.dart';
+import 'package:localmind/features/notifications/notifications_mcp_server.dart';
 import 'package:localmind/features/mcp/data/web/web_fetch_service.dart';
 import 'package:localmind/features/mcp/data/web/web_search_service.dart';
 import 'package:localmind/features/skills/data/skills_mcp_server.dart';
 import 'package:localmind/features/skills/data/skills_store.dart';
 
 import 'mcp_client.dart';
+import 'models/background_task.dart';
 
 const exampleMcpServerLabel = 'Example MCP';
 const exampleMcpServerUrl = 'local://example-mcp';
@@ -20,10 +22,55 @@ const exampleMcpServerUrl = 'local://example-mcp';
 const webMcpServerLabel = 'Web Browser';
 const webMcpServerUrl = 'local://web';
 
+const bgMcpServerLabel = 'Background Tasks';
+const bgMcpServerUrl = 'local://background';
+
+/// Engine relays in the run-request seam (`local://background` bundle).
+/// v1 registration wires a no-op; Task 4's engine replaces it with the
+/// live-loop requester.
+typedef RunRequester = void Function(String taskId);
+
 class WebServices {
   const WebServices({required this.search, required this.fetch});
   final WebSearchService search;
   final WebFetchService fetch;
+}
+
+/// Backing services for the in-process `local://background` MCP server
+/// (bg.spawn + bg.status + bg.cancel). Mirrors [MailServices]: the manager
+/// stays riverpod-free and the registration site (tooling_providers.dart)
+/// provides callback closures over providers, plus the
+/// [BackgroundServices.runRequester] seam Task 4's engine takes over.
+///
+/// [currentOwnerConversationId] resolves the owning conversation at CALL
+/// time (not registration time) so the bg.* tools stay scoped to the chat
+/// the user is in.
+class BackgroundServices {
+  const BackgroundServices({
+    required this.spawn,
+    required this.tasksFor,
+    required this.cancelTask,
+    this.runRequester,
+    this.currentOwnerConversationId,
+  });
+
+  final Future<BackgroundTask> Function({
+    required String ownerConversationId,
+    required String prompt,
+    int? loopMinutes,
+    int? maxRuns,
+  }) spawn;
+
+  final Future<List<BackgroundTask>> Function(String ownerConversationId)
+      tasksFor;
+
+  final Future<bool> Function(String taskId) cancelTask;
+
+  /// Run-request relay; v1: no-op void, Task 4 wires the engine loop.
+  final RunRequester? runRequester;
+
+  /// The owning conversation for the CURRENT chat session.
+  final String? Function()? currentOwnerConversationId;
 }
 
 /// Backing services for the in-process `local://terminal` MCP server.
@@ -52,6 +99,8 @@ class McpServerManager {
   final Map<String, SkillsServices> _skillsServices = {};
   final Map<String, DeviceServices> _deviceServices = {};
   final Map<String, MailServices> _mailServices = {};
+  final Map<String, BackgroundServices> _backgroundServices = {};
+  final Map<String, NotificationsServices> _notificationsServices = {};
   final Set<String> _localExampleServers = {};
   final Set<String> _pendingLabels = {};
 
@@ -104,6 +153,8 @@ class McpServerManager {
     _skillsServices.remove(label);
     _deviceServices.remove(label);
     _mailServices.remove(label);
+    _backgroundServices.remove(label);
+    _notificationsServices.remove(label);
     _localExampleServers.remove(label);
   }
 
@@ -591,6 +642,138 @@ class McpServerManager {
 
   bool hasMailServer() => _mailServices.containsKey(mailMcpServerLabel);
 
+  /// Registers the in-process background MCP server (`bg.spawn` /
+  /// `bg.status` / `bg.cancel`). Mirrors [addMailServer]'s re-add semantics
+  /// so a settings rebuild just replaces it. `bg.spawn` NEVER
+  /// auto-approves; the registration bundle defines the spawn orchestration
+  /// (hidden conversation + task row + run request, see
+  /// tooling_providers.dart).
+  Future<void> addBackgroundServer(BackgroundServices services) async {
+    await removeServer(bgMcpServerLabel);
+
+    _backgroundServices[bgMcpServerLabel] = services;
+    _capabilities[bgMcpServerLabel] = const McpCapabilities(tools: true);
+    _tools[bgMcpServerLabel] = const [
+      McpTool(
+        name: 'bg.spawn',
+        description:
+            'Spawn a background sub-agent task: the prompt runs in its own '
+            'hidden chat thread (optionally repeating on a schedule) and the '
+            'result is posted back into this conversation. The user is '
+            'always asked to approve a spawn.',
+        inputSchema: {
+          'type': 'object',
+          'properties': {
+            'prompt': {
+              'type': 'string',
+              'description': 'The task instruction the sub-agent runs.',
+            },
+            'loop_minutes': {
+              'type': 'integer',
+              'description':
+                  'Repeat cadence in minutes (minimum 10). Omit for a '
+                  'single run.',
+            },
+            'max_runs': {
+              'type': 'integer',
+              'description':
+                  'Maximum number of runs (1-25). Defaults to 10.',
+            },
+          },
+          'required': ['prompt'],
+        },
+      ),
+      McpTool(
+        name: 'bg.status',
+        description:
+            "List this chat's background sub-agent tasks with their state "
+            'and last activity.',
+        inputSchema: {'type': 'object', 'properties': {}},
+      ),
+      McpTool(
+        name: 'bg.cancel',
+        description:
+            "Cancel one of this chat's background sub-agent tasks by its "
+            'exact task_id (the rows that bg.status returns carry ids). '
+            'Finished or cancelled tasks cannot be cancelled again.',
+        inputSchema: {
+          'type': 'object',
+          'properties': {
+            'task_id': {
+              'type': 'string',
+              'description': 'The task id from bg.status.',
+            },
+          },
+          'required': ['task_id'],
+        },
+      ),
+    ];
+    _serverUrls[bgMcpServerLabel] = bgMcpServerUrl;
+  }
+
+  /// Test/inspection seam for the background services bundle.
+  @visibleForTesting
+  BackgroundServices? getBackgroundServices() =>
+      _backgroundServices[bgMcpServerLabel];
+
+  bool hasBackgroundServer() =>
+      _backgroundServices.containsKey(bgMcpServerLabel);
+
+  /// Registers the in-process notifications MCP server
+  /// (`notifications.read_recent`). Mirrors [addBackgroundServer]'s
+  /// idempotent re-add semantics so a settings rebuild just replaces it.
+  /// The tool is READ-ONLY observation of the same app session: rows come
+  /// from the listener's session ring and every filter (`max`,
+  /// `since_minutes`, `package`) is applied on the Dart side.
+  Future<void> addNotificationsServer(NotificationsServices services) async {
+    await removeServer(notificationsMcpServerLabel);
+
+    _notificationsServices[notificationsMcpServerLabel] = services;
+    _capabilities[notificationsMcpServerLabel] = const McpCapabilities(
+      tools: true,
+    );
+    _tools[notificationsMcpServerLabel] = const [
+      McpTool(
+        name: 'notifications.read_recent',
+        description:
+            'Read recent notifications captured while this app session has '
+            'been alive (newest first). Rows are `package · HH:MM · title: '
+            'text`. Use it to summarize missed activity or answer "what '
+            'did I miss" questions.',
+        inputSchema: {
+          'type': 'object',
+          'properties': {
+            'max': {
+              'type': 'integer',
+              'description': 'How many rows (1-50). Defaults to 20.',
+            },
+            'since_minutes': {
+              'type': 'integer',
+              'description':
+                  'Only rows posted within the last N minutes. Omit for '
+                  'the whole session ring.',
+            },
+            'package': {
+              'type': 'string',
+              'description':
+                  'Only rows from one app package name (exact match, e.g. '
+                  'com.example.app). Omit for all apps.',
+            },
+          },
+        },
+      ),
+    ];
+    _serverUrls[notificationsMcpServerLabel] = notificationsMcpServerUrl;
+  }
+
+  /// Test/inspection seam for the notifications services bundle.
+  @visibleForTesting
+  NotificationsServices? getNotificationsServices() =>
+      _notificationsServices[notificationsMcpServerLabel];
+
+  bool hasNotificationsServer() =>
+      _notificationsServices.containsKey(notificationsMcpServerLabel);
+
   /// Test/inspection seam for the device services bundle.
   @visibleForTesting
   DeviceServices? getDeviceServices() => _deviceServices[deviceMcpServerLabel];
@@ -602,7 +785,9 @@ class McpServerManager {
       _terminalServices.containsKey(label) ||
       _skillsServices.containsKey(label) ||
       _deviceServices.containsKey(label) ||
-      _mailServices.containsKey(label);
+      _mailServices.containsKey(label) ||
+      _backgroundServices.containsKey(label) ||
+      _notificationsServices.containsKey(label);
 
   bool hasExampleServer() =>
       _localExampleServers.contains(exampleMcpServerLabel);
@@ -649,6 +834,14 @@ class McpServerManager {
       return _callMailTool(toolName, args);
     }
 
+    if (_backgroundServices.containsKey(serverLabel)) {
+      return _callBackgroundTool(toolName, args);
+    }
+
+    if (_notificationsServices.containsKey(serverLabel)) {
+      return _callNotificationsTool(toolName, args);
+    }
+
     if (_localExampleServers.contains(serverLabel)) {
       return _callExampleTool(toolName, args);
     }
@@ -691,6 +884,8 @@ class McpServerManager {
     _skillsServices.clear();
     _deviceServices.clear();
     _mailServices.clear();
+    _backgroundServices.clear();
+    _notificationsServices.clear();
     _localExampleServers.clear();
   }
 
@@ -704,6 +899,54 @@ class McpServerManager {
     final value = args[key];
     if (value is! int) return fallback;
     return value.clamp(min, max);
+  }
+
+  /// Notifications dispatch — read-only. `since_minutes` only accepts
+  /// integers, `package` is exact-matched after trim; empty/blank package
+  /// reads as "all apps" (null), never as an error.
+  Future<String> _callNotificationsTool(
+    String toolName,
+    Map<String, dynamic> args,
+  ) async {
+    final services = _notificationsServices[notificationsMcpServerLabel];
+    if (services == null) {
+      throw McpException(
+        'MCP server not connected: $notificationsMcpServerLabel',
+      );
+    }
+
+    switch (toolName) {
+      case 'notifications.read_recent':
+        final max = _clampInt(
+          args,
+          'max',
+          1,
+          notificationsReadRecentMaxCap,
+          notificationsReadRecentMaxDefault,
+        );
+        final rawSince = args['since_minutes'];
+        if (rawSince != null && rawSince is! int) {
+          throw McpException(
+            'notifications.read_recent requires an integer since_minutes',
+          );
+        }
+        final rawPackage = args['package'];
+        if (rawPackage != null && rawPackage is! String) {
+          throw McpException(
+            'notifications.read_recent requires a string package',
+          );
+        }
+        final package = (rawPackage as String?)?.trim();
+        final items = await services.recent(
+          max: max,
+          sinceMinutes: rawSince as int?,
+          package: (package == null || package.isEmpty) ? null : package,
+        );
+        return notificationsReadRender(items);
+
+      default:
+        throw McpException('Notifications MCP tool not found: $toolName');
+    }
   }
 
   /// The mail tools dispatch across every connected account. A single
@@ -814,6 +1057,125 @@ class McpServerManager {
       return 'ERROR: ${error.message}';
     }
   }
+
+  /// Background dispatch — mirrors the terminal/web device dispatch
+  /// shapes. Bad arguments reject with [McpException]; the engine
+  /// concurrency cap ([StateError] out of createTask) renders as a readable
+  /// `ERROR:` string, because a saturated engine is a normal, recoverable
+  /// model-facing state — not a caller bug.
+  Future<String> _callBackgroundTool(
+    String toolName,
+    Map<String, dynamic> args,
+  ) async {
+    final services = _backgroundServices[bgMcpServerLabel];
+    if (services == null) {
+      throw McpException('MCP server not connected: $bgMcpServerLabel');
+    }
+
+    try {
+      switch (toolName) {
+        case 'bg.spawn':
+          final rawPrompt = args['prompt'];
+          if (rawPrompt is! String || rawPrompt.trim().isEmpty) {
+            throw McpException('bg.spawn requires a string prompt');
+          }
+          final rawLoop = args['loop_minutes'];
+          if (rawLoop != null && rawLoop is! int) {
+            throw McpException('bg.spawn requires an integer loop_minutes');
+          }
+          final rawMaxRuns = args['max_runs'];
+          if (rawMaxRuns != null && rawMaxRuns is! int) {
+            throw McpException('bg.spawn requires an integer max_runs');
+          }
+          final owner = services.currentOwnerConversationId?.call();
+          if (owner == null || owner.isEmpty) {
+            throw McpException(
+              'bg.spawn needs an active conversation to own the task',
+            );
+          }
+          // Trimmed once here (write site): everything downstream renders
+          // the prompt verbatim from the task row.
+          final task = await services.spawn(
+            ownerConversationId: owner,
+            prompt: rawPrompt.trim(),
+            loopMinutes: rawLoop as int?,
+            maxRuns: rawMaxRuns as int?,
+          );
+          // v1 run-request relay: Task 4's engine replaces the no-op.
+          services.runRequester?.call(task.id);
+          return bgSpawnRender(task);
+
+        case 'bg.status':
+          final owner = services.currentOwnerConversationId?.call();
+          if (owner == null || owner.isEmpty) {
+            throw McpException(
+              'bg.status needs an active conversation to list tasks for',
+            );
+          }
+          return bgStatusRender(await services.tasksFor(owner));
+
+        case 'bg.cancel':
+          final rawTaskId = args['task_id'];
+          if (rawTaskId is! String || rawTaskId.trim().isEmpty) {
+            throw McpException('bg.cancel requires a string task_id');
+          }
+          final taskId = rawTaskId.trim();
+          final cancelled = await services.cancelTask(taskId);
+          return cancelled
+              ? 'Cancelled task $taskId.'
+              : 'Task $taskId is already finished — nothing to cancel.';
+
+        default:
+          throw McpException('Background MCP tool not found: $toolName');
+      }
+    } on StateError catch (error) {
+      return 'ERROR: ${error.message}';
+    }
+  }
+
+  /// Spawn output contract (plan constant): the model gets a line shaped
+  /// `task_id ... (cadence, max runs)` and can quote the id onward.
+  String bgSpawnRender(BackgroundTask task) {
+    final cadence = task.loopMinutes > 0
+        ? 'loops every ${task.loopMinutes} min'
+        : 'single run';
+    return '{task_id: ${task.id} ($cadence, max ${task.maxRuns})}';
+  }
+
+  /// Numbered status rows: state text + prompt snippet + cadence/runs +
+  /// last activity. Empty list renders the readable no-tasks line.
+  String bgStatusRender(List<BackgroundTask> tasks) {
+    if (tasks.isEmpty) return 'No background tasks for this conversation.';
+    final rows = StringBuffer();
+    for (final (index, task) in tasks.indexed) {
+      final cadence = task.loopMinutes > 0
+          ? 'loops every ${task.loopMinutes} min'
+          : 'single run';
+      final activity = task.lastRunAt == null
+          ? 'not started'
+          : 'last run ${_backgroundIso(task.lastRunAt!)}';
+      rows
+        ..write('${index + 1}. ${task.state.name}: '
+            '"${bgPromptSnippet(task.prompt)}"')
+        ..write(
+          '\n   task_id: ${task.id} — $cadence, '
+          '${task.runCount}/${task.maxRuns} runs, $activity',
+        )
+        ..write('\n');
+    }
+    return rows.toString().trimRight();
+  }
+
+  String bgPromptSnippet(String prompt) {
+    final flattened = prompt.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return flattened.length <= 48 ? flattened : '${flattened.substring(0, 48)}…';
+  }
+
+  String _backgroundIso(DateTime time) =>
+      DateTime.fromMillisecondsSinceEpoch(
+        time.millisecondsSinceEpoch,
+        isUtc: true,
+      ).toIso8601String().split('.').first;
 
   /// NOTE: the whitelist is deliberately NOT enforced here. It only gates
   /// auto-approval (see `shouldAutoApproveTool` in tooling_providers.dart) —

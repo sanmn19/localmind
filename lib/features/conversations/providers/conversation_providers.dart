@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/storage_providers.dart';
 import '../../../core/storage/entities.dart';
 import '../../../objectbox.g.dart';
+import '../../chat/data/background_task_service.dart';
 import '../../chat/utils/message_variants.dart';
 import '../data/message_search_service.dart';
 import '../data/models/message_search_hit.dart';
@@ -110,6 +111,7 @@ class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
     String? modelId,
     bool? mcpEnabled,
     bool isTemporary = false,
+    bool isBackground = false,
     String? folderId,
   }) async {
     final db = ref.read(databaseProvider);
@@ -130,6 +132,7 @@ class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
       systemPrompt: systemPrompt,
       mcpEnabled: mcpEnabled,
       isTemporary: isTemporary,
+      isBackground: isBackground,
       folderId: folderId,
     );
 
@@ -236,6 +239,12 @@ class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
         .build();
     db.conversationBox.removeMany(convQuery.findIds());
     convQuery.close();
+
+    // Delete-state cascade: task rows owned by the conversation go with it
+    // (live-run cancel is relayed through the engine seam).
+    await ref
+        .read(backgroundTasksServiceProvider)
+        .deleteTasksOwnedBy(id);
 
     await _updateState();
   }
@@ -517,6 +526,12 @@ class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
 
   Future<void> deleteAll() async {
     final db = ref.read(databaseProvider);
+    // Delete-state cascade: the whole background-task table goes in one
+    // sweep (review M8 — also lifts rows whose owner conversation row the
+    // wipe has no in-memory handle for), and each removed row wakes its
+    // live loop through the engine cancel seam.
+    final service = ref.read(backgroundTasksServiceProvider);
+    await service.deleteAllTasks();
     db.messageBox.removeAll();
     db.conversationBox.removeAll();
     await _updateState();
@@ -685,10 +700,12 @@ final filteredConversationsProvider = Provider<AsyncValue<List<Conversation>>>((
   final sortOption = ref.watch(historySortOptionProvider);
 
   return conversationsAsync.whenData((conversations) {
-    // Hidden fork conversations (selection-fork feature) never surface in
-    // history; their turns live only in the fork panel.
+    // Hidden fork conversations (selection-fork feature) and hidden
+    // background-task conversations (background sub-agents feature) never
+    // surface in history; fork turns live in the fork panel, task turns in
+    // the task chat pane.
     var filtered = conversations
-        .where((c) => !c.isTemporary && !c.isFork)
+        .where((c) => !c.isTemporary && !c.isFork && !c.isBackground)
         .toList();
 
     switch (listFilter) {
@@ -982,10 +999,10 @@ final messageSearchResultsProvider = Provider<List<MessageSearchHit>>((ref) {
   }
 
   final db = ref.watch(databaseProvider);
-  // Hidden fork conversations (selection-fork feature) are excluded at
-  // search time — the box query, not the cached conversation list, is the
-  // authoritative freshness point because fork rows are written directly.
-  final exclude = _messageSearchService.forkConversationIds(db);
+  // Hidden fork + background-task conversations are excluded at search
+  // time — the box query, not the cached conversation list, is the
+  // authoritative freshness point because hidden rows are written directly.
+  final exclude = _messageSearchService.hiddenConversationIds(db);
   return _messageSearchService.searchMessages(
     db,
     query: query,

@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'
+    show NotificationResponse;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -16,10 +18,16 @@ import '../core/models/enums.dart';
 import '../features/personas/providers/personas_providers.dart';
 import '../features/servers/data/models/server.dart';
 import '../features/servers/providers/server_providers.dart';
+import '../features/chat/data/background_engine.dart';
+import '../features/chat/providers/tooling_providers.dart';
+import '../features/chat/utils/message_variants.dart';
+import '../features/conversations/providers/conversation_providers.dart'
+    as conv;
 import '../features/skills/data/skills_provider.dart';
 import '../features/cloud_sync/views/cloud_sync_lifecycle_host.dart';
 import '../core/logger/app_logger.dart';
 import '../core/utils/locale_utils.dart';
+import '../objectbox.g.dart';
 import 'bootstrap_screen.dart';
 import 'bootstrap_state.dart';
 import 'safe_riverpod_scope_host.dart';
@@ -134,6 +142,15 @@ class _BootstrapHostState extends State<BootstrapHost> {
         }),
       );
 
+      // Background sub-agent loops resume without blocking startup (only
+      // affects persisted running rows; backgroundTasksEnabled off → no-op).
+      container.read(backgroundResumeProvider);
+
+      // Background result notifications route taps into the owning chat
+      // (review I3): non-blocking registration, house pattern of the
+      // skills refresh above.
+      _registerBackgroundResultRouting();
+
       _container = container;
       _updateStage(BootstrapStage.done, 'Ready');
     } catch (e) {
@@ -151,6 +168,56 @@ class _BootstrapHostState extends State<BootstrapHost> {
     setState(() {
       _state = BootstrapState(stage: stage, statusMessage: message);
     });
+  }
+
+  /// Registers the local-notification tap routing for background task
+  /// result payloads (review I3). Ours-only by prefix; foreign payloads are
+  /// ignored so other notification producers stay unaffected.
+  void _registerBackgroundResultRouting() {
+    BackgroundResultNotifier.onNotificationTap =
+        (NotificationResponse response) {
+      final ownerId = BgNotificationPayload.tryParse(response.payload);
+      if (ownerId == null) return;
+      unawaited(_openOwnerChatForBgResult(ownerId));
+    };
+  }
+
+  /// Opens the owner conversation and scrolls to the active timeline's LAST
+  /// row — by contract that is the delivered background result row (the same
+  /// resolver the engine anchors with). v1: set active id + scroll target.
+  Future<void> _openOwnerChatForBgResult(String ownerId) async {
+    final container = _container;
+    if (container == null) return;
+    final db = container.read(databaseProvider);
+
+    final convQuery = db.conversationBox
+        .query(ConversationEntity_.id.equals(ownerId))
+        .build();
+    final exists = convQuery.findFirst() != null;
+    convQuery.close();
+    if (!exists) return;
+
+    container
+        .read(conv.activeConversationIdProvider.notifier)
+        .setActiveConversationId(ownerId);
+
+    final rows = db.messageBox
+        .query(MessageEntity_.conversationUid.equals(ownerId))
+        .build()
+        .find()
+        .map((entity) => entity.toDomain())
+        .toList()
+      ..sort((a, b) {
+        final order = a.threadOrder.compareTo(b.threadOrder);
+        if (order != 0) return order;
+        return a.createdAt.compareTo(b.createdAt);
+      });
+    final timeline = MessageVariants.resolveActiveTimeline(rows);
+    if (timeline.isNotEmpty) {
+      container
+          .read(conv.scrollToMessageIdProvider.notifier)
+          .scrollTo(timeline.last.id);
+    }
   }
 
   @override

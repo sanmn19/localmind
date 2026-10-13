@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:objectbox/objectbox.dart';
 import '../models/enums.dart';
+import '../../features/chat/data/models/background_task.dart';
 import '../../features/chat/data/models/fork_anchor.dart';
 import '../../features/chat/data/models/message.dart';
 import '../../features/chat/data/tools/tool_event.dart';
@@ -277,6 +278,7 @@ class ConversationEntity {
   String? forkOfMessageId;
   String? forkSpan;
   bool isFork;
+  bool isBackground;
 
   @Backlink()
   final messages = ToMany<MessageEntity>();
@@ -309,6 +311,7 @@ class ConversationEntity {
     this.forkOfMessageId,
     this.forkSpan,
     this.isFork = false,
+    this.isBackground = false,
   });
 
   factory ConversationEntity.fromDomain(Conversation conversation) {
@@ -341,6 +344,7 @@ class ConversationEntity {
       forkOfMessageId: conversation.forkOfMessageId,
       forkSpan: conversation.forkSpan,
       isFork: conversation.isFork,
+      isBackground: conversation.isBackground,
     );
   }
 
@@ -384,6 +388,7 @@ class ConversationEntity {
       forkOfMessageId: forkOfMessageId,
       forkSpan: forkSpan,
       isFork: isFork,
+      isBackground: isBackground,
     );
   }
 }
@@ -721,6 +726,90 @@ class ForkAnchorEntity {
       selectedText: selectedText,
       forkConversationId: forkConversationId,
       createdAt: createdAt,
+    );
+  }
+}
+
+@Entity()
+class BackgroundTaskEntity {
+  @Id()
+  int internalId = 0;
+
+  @Index()
+  String id;
+  @Index()
+  String ownerConversationId;
+  @Index()
+  String taskConversationId;
+
+  String prompt;
+  int loopMinutes;
+  int maxRuns;
+  int runCount;
+
+  /// Stored as the String enum name of [BackgroundTaskState].
+  String state;
+
+  @Property(type: PropertyType.date)
+  DateTime? lastRunAt;
+  @Property(type: PropertyType.date)
+  DateTime createdAt;
+
+  String? resultMessageId;
+  String? ownerMessageId;
+
+  BackgroundTaskEntity({
+    this.internalId = 0,
+    required this.id,
+    required this.ownerConversationId,
+    required this.taskConversationId,
+    required this.prompt,
+    required this.loopMinutes,
+    required this.maxRuns,
+    this.runCount = 0,
+    required this.state,
+    this.lastRunAt,
+    required this.createdAt,
+    this.resultMessageId,
+    this.ownerMessageId,
+  });
+
+  factory BackgroundTaskEntity.fromDomain(BackgroundTask task) {
+    return BackgroundTaskEntity(
+      id: task.id,
+      ownerConversationId: task.ownerConversationId,
+      taskConversationId: task.taskConversationId,
+      prompt: task.prompt,
+      loopMinutes: task.loopMinutes,
+      maxRuns: task.maxRuns,
+      runCount: task.runCount,
+      state: task.state.name,
+      lastRunAt: task.lastRunAt,
+      createdAt: task.createdAt,
+      resultMessageId: task.resultMessageId,
+      ownerMessageId: task.ownerMessageId,
+    );
+  }
+
+  BackgroundTask toDomain() {
+    return BackgroundTask(
+      id: id,
+      ownerConversationId: ownerConversationId,
+      taskConversationId: taskConversationId,
+      prompt: prompt,
+      loopMinutes: loopMinutes,
+      maxRuns: maxRuns,
+      runCount: runCount,
+      state: BackgroundTaskState.values.firstWhere(
+        (s) => s.name == state,
+        // T1 review ruling: unknown stored state names degrade to failed,
+        // never to running (running would wrongly re-arm the engine loop).
+        orElse: () => BackgroundTaskState.failed,
+      ),
+      lastRunAt: lastRunAt,
+      createdAt: createdAt,
+      resultMessageId: resultMessageId,
+      ownerMessageId: ownerMessageId,
     );
   }
 }
