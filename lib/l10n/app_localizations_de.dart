@@ -3600,6 +3600,22 @@ class AppLocalizationsDe extends AppLocalizations {
   String get notifications_grant_action => 'Grant in settings';
 
   @override
+  String get ask_local_card_title => 'Ask Local';
+
+  @override
+  String get ask_local_card_desc =>
+      'Ask about a selected text from any app: the screen is captured locally and answered in a floating card.';
+
+  @override
+  String get ask_local_access_granted => 'Overlay access granted';
+
+  @override
+  String get ask_local_access_missing => 'Overlay access is off';
+
+  @override
+  String get ask_local_grant_action => 'Grant in settings';
+
+  @override
   String get background_tasks_title => 'Background tasks';
 
   @override

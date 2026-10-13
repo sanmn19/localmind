@@ -6615,6 +6615,36 @@ abstract class AppLocalizations {
   /// **'Grant in settings'**
   String get notifications_grant_action;
 
+  /// Ask Local card title on the MCP Tools screen
+  ///
+  /// In en, this message translates to:
+  /// **'Ask Local'**
+  String get ask_local_card_title;
+
+  /// Ask Local card description
+  ///
+  /// In en, this message translates to:
+  /// **'Ask about a selected text from any app: the screen is captured locally and answered in a floating card.'**
+  String get ask_local_card_desc;
+
+  /// Label shown when display-over-apps is granted
+  ///
+  /// In en, this message translates to:
+  /// **'Overlay access granted'**
+  String get ask_local_access_granted;
+
+  /// Label shown when display-over-apps is not granted
+  ///
+  /// In en, this message translates to:
+  /// **'Overlay access is off'**
+  String get ask_local_access_missing;
+
+  /// Button label deep-linking to the Android display-over-apps settings
+  ///
+  /// In en, this message translates to:
+  /// **'Grant in settings'**
+  String get ask_local_grant_action;
+
   /// Background tasks page app bar title
   ///
   /// In en, this message translates to:
