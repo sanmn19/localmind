@@ -5,7 +5,6 @@ import 'package:hugeicons/hugeicons.dart';
 import 'package:localmind/l10n/app_localizations.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-import '../../chat/data/background_task_service.dart';
 import '../../chat/data/mcp_server_manager.dart';
 import '../../chat/data/models/background_task.dart';
 import '../../chat/data/tools/calendar_service.dart';
@@ -1376,18 +1375,59 @@ class _BackgroundCard extends ConsumerWidget {
 }
 
 /// One task row of the Background card: prompt + owner chat, a state chip
-/// and a cancel IconButton (Key terraced by the task id, like the card's
-/// other keyed controls).
-class _BackgroundTaskRow extends ConsumerWidget {
+/// and the pause/resume/stop trio routed through
+/// backgroundTaskActionsProvider (Task 4 parity with the page rows and the
+/// chat pill — the naked cancel button is retired). Keys are terraced by
+/// the task id like the card's other keyed controls.
+class _BackgroundTaskRow extends ConsumerStatefulWidget {
   const _BackgroundTaskRow({required this.row});
 
   final BackgroundTaskRow row;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_BackgroundTaskRow> createState() => _BackgroundTaskRowState();
+}
+
+class _BackgroundTaskRowState extends ConsumerState<_BackgroundTaskRow> {
+  bool _pending = false;
+
+  Future<void> _run(Future<bool> action) async {
+    if (_pending) return;
+    setState(() => _pending = true);
+    try {
+      await action;
+    } finally {
+      if (mounted) setState(() => _pending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
-    final task = row.task;
+    final task = widget.row.task;
+    final actions = ref.read(backgroundTaskActionsProvider);
+
+    Widget cardAction(
+      Key key,
+      List<List<dynamic>> icon,
+      String tooltip,
+      VoidCallback? onPressed,
+    ) =>
+        Tooltip(
+          message: tooltip,
+          child: ShadIconButton.ghost(
+            key: key,
+            icon: HugeIcon(
+              icon: icon,
+              size: 18,
+              color: onPressed == null
+                  ? theme.disabledColor
+                  : theme.colorScheme.onSurfaceVariant,
+            ),
+            onPressed: onPressed,
+          ),
+        );
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -1408,7 +1448,7 @@ class _BackgroundTaskRow extends ConsumerWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  row.ownerTitle,
+                  widget.row.ownerTitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
@@ -1421,23 +1461,28 @@ class _BackgroundTaskRow extends ConsumerWidget {
           const SizedBox(width: 8),
           _BackgroundStateChip(state: task.state),
           const SizedBox(width: 4),
-          Tooltip(
-            message: l10n.backgroundCancelTooltip,
-            child: ShadIconButton.ghost(
-              key: Key('background_cancel_${task.id}'),
-              icon: const HugeIcon(
-                icon: HugeIcons.strokeRoundedCancel01,
-                size: 18,
-                color: Colors.red,
-              ),
-              onPressed: () async {
-                await ref
-                    .read(backgroundTasksServiceProvider)
-                    .cancelTask(task.id);
-                ref.invalidate(backgroundTaskRowsProvider);
-              },
+          if (task.state == BackgroundTaskState.running)
+            cardAction(
+              Key('background_card_pause_${task.id}'),
+              HugeIcons.strokeRoundedPause,
+              l10n.background_pause_task,
+              _pending ? null : () => _run(actions.pause(task.id)),
             ),
-          ),
+          if (task.state == BackgroundTaskState.paused)
+            cardAction(
+              Key('background_card_resume_${task.id}'),
+              HugeIcons.strokeRoundedPlay,
+              l10n.background_resume_task,
+              _pending ? null : () => _run(actions.resume(task.id)),
+            ),
+          if (task.state == BackgroundTaskState.running ||
+              task.state == BackgroundTaskState.paused)
+            cardAction(
+              Key('background_card_stop_${task.id}'),
+              HugeIcons.strokeRoundedCancel01,
+              l10n.backgroundCancelTooltip,
+              _pending ? null : () => _run(actions.stop(task.id)),
+            ),
         ],
       ),
     );
@@ -1469,6 +1514,10 @@ class _BackgroundStateChip extends StatelessWidget {
       BackgroundTaskState.failed => (
         l10n.backgroundStateFailed,
         const Color(0xFFEF4444),
+      ),
+      BackgroundTaskState.paused => (
+        l10n.backgroundStatePaused,
+        const Color(0xFF3B82F6),
       ),
     };
 

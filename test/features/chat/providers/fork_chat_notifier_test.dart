@@ -2,21 +2,26 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:localmind/core/logger/app_logger.dart';
 import 'package:localmind/core/models/enums.dart';
 import 'package:localmind/core/providers/app_providers.dart';
 import 'package:localmind/core/providers/chat_background_service_provider.dart';
 import 'package:localmind/core/providers/storage_providers.dart';
 import 'package:localmind/core/services/chat_background_service.dart';
 import 'package:localmind/features/chat/data/chat_service.dart' hide ToolCallData;
+import 'package:localmind/features/chat/data/chat_service.dart' as cs
+    show ToolCallData;
 import 'package:localmind/features/chat/data/models/chat_parameters.dart';
 import 'package:localmind/features/chat/data/models/message.dart';
 import 'package:localmind/features/chat/data/tools/tool_definition.dart';
+import 'package:localmind/features/chat/data/tools/tool_registry.dart';
 import 'package:localmind/features/chat/providers/chat_mcp_providers.dart';
 import 'package:localmind/features/chat/providers/chat_notifier.dart';
 import 'package:localmind/features/chat/providers/chat_params_providers.dart';
 import 'package:localmind/features/chat/providers/chat_service_providers.dart';
 import 'package:localmind/features/chat/providers/fork_chat_notifier.dart';
 import 'package:localmind/features/chat/providers/model_selection_providers.dart';
+import 'package:localmind/features/chat/providers/tooling_providers.dart';
 import 'package:localmind/features/conversations/data/models/conversation.dart';
 import 'package:localmind/features/conversations/providers/conversation_providers.dart'
     as conv;
@@ -24,6 +29,7 @@ import 'package:localmind/features/on_device/providers/on_device_providers.dart'
 import 'package:localmind/features/servers/data/models/server.dart';
 import 'package:localmind/features/settings/data/models/app_settings.dart';
 import 'package:localmind/features/voice_mode/providers/voice_mode_provider.dart';
+import 'package:logger/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Task 3 of the selection-fork-chats feature: ForkChatNotifier streams the
@@ -399,6 +405,52 @@ void main() {
   );
 
   test(
+    'the empty-reply failure branch emits the forensic Log bundle',
+    () async {
+    final chatService = _StreamingChatService(const []);
+    final saved = <Message>[];
+    final capture = _CapturingLogOutput();
+    Log.attachOutput(capture);
+    addTearDown(() => Log.attachOutput(_DiscardingLogOutput()));
+    final container = await _forkTestContainer(
+      chatService: chatService,
+      onPersist: saved.add,
+    );
+    addTearDown(container.dispose);
+
+    await container
+        .read(chatProvider.notifier)
+        .loadConversation(_mainConversation);
+    final notifier = container.read(
+      forkChatNotifierProvider('forkC1').notifier,
+    );
+
+    await notifier.submit(
+      'forkC1',
+      'who wrote it?',
+      selectedText: 'Ada Lovelace wrote it',
+      anchorMessageId: 'a-1',
+    );
+
+    // User-facing copy unchanged — the forensic trail is log-only.
+    final state = container.read(forkChatNotifierProvider('forkC1'));
+    expect(
+      state.failure,
+      'The model returned an empty reply for this fork.',
+    );
+    expect(state.transcript.last.status, MessageStatus.error);
+
+    final bundle = capture.text();
+    expect(bundle, contains('Fork empty reply'));
+    expect(bundle, contains('fork: forkC1'));
+    expect(bundle, contains('round: 0'));
+    expect(bundle, contains('wireRoles: 4'));
+    expect(bundle, contains('toolsSent: 0'));
+    expect(bundle, contains('hadApproval: false'));
+    expect(bundle, contains('elapsedMs:'));
+  });
+
+  test(
     'empty reply surfaces the failure and persists the error turn',
     () async {
     final chatService = _StreamingChatService(const []);
@@ -718,6 +770,561 @@ void main() {
       );
     },
   );
+
+  test(
+    'an approved fork tool round executes in-panel and the final answer lands',
+    () async {
+      final chatService = _ForkToolChatService([
+        [
+          const ChatResponse(type: ChatResponseType.message,
+              content: 'Let me look that up for you.'),
+          ChatResponse(
+            type: ChatResponseType.toolCall,
+            toolCall: cs.ToolCallData(
+              tool: 'mail.send',
+              arguments: {'to': 'x@example.com'},
+            ),
+          ),
+        ],
+        [const ChatResponse(type: ChatResponseType.message, content: 'ran-ok answer')],
+      ]);
+      final saved = <Message>[];
+      final executed = <String, Map<String, dynamic>>{};
+      final container = await _forkTestContainer(
+        chatService: chatService,
+        onPersist: saved.add,
+        forkToolset: const [
+          ToolDefinition(
+            name: 'mail.send',
+            description: 'send',
+            inputSchema: {},
+            providerType: ToolProviderType.mcp,
+          ),
+        ],
+        toolRegistry: ToolRegistry(providers: [
+          _FakeToolProvider(defs: const [
+            ToolDefinition(
+              name: 'mail.send',
+              description: 'send',
+              inputSchema: {},
+              providerType: ToolProviderType.mcp,
+            ),
+          ], onExecute: (name, args) async {
+            executed[name] = args;
+            return const ToolExecutionResult.success('ran-ok');
+          }),
+        ]),
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(chatProvider.notifier)
+          .loadConversation(_mainConversation);
+      final notifier = container.read(
+        forkChatNotifierProvider('forkC1').notifier,
+      );
+
+      final submitting = notifier.submit(
+        'forkC1',
+        'please run it',
+        selectedText: 'Ada Lovelace wrote it',
+        anchorMessageId: 'a-1',
+      );
+      await _drain();
+      // A dialog-worthy tool surfaces as an in-panel approval chip.
+      final pending =
+          container.read(forkChatNotifierProvider('forkC1')).pendingApproval;
+      expect(pending, isNotNull);
+      expect(pending!.toolName, 'mail.send');
+      expect(executed, isEmpty, reason: 'nothing runs before approval');
+      unawaited(pending.approve());
+      await submitting;
+
+      final state = container.read(forkChatNotifierProvider('forkC1'));
+      expect(state.isStreaming, isFalse);
+      expect(state.failure, isNull);
+      expect(state.pendingApproval, isNull);
+      // The approved executor ran exactly once.
+      expect(executed.keys.single, 'mail.send');
+
+      // The SECOND wire carries the round row + tool feedback row.
+      expect(chatService.requests, hasLength(2));
+      final secondWire = chatService.requests.last;
+      final roundRow = secondWire
+          .where(
+            (m) => m.role == MessageRole.assistant && m.toolCalls != null,
+          )
+          .single;
+      final feedbackRow =
+          secondWire.where((m) => m.role == MessageRole.tool).single;
+      expect(feedbackRow.content, 'ran-ok');
+      expect(feedbackRow.toolCallId, roundRow.toolCalls!.single.id);
+      expect(roundRow.toolCalls!.single.result, 'ran-ok');
+      // At CALL time the second wire ends on the tool feedback row; the
+      // final answer arrives by STREAMING after it.
+      expect(secondWire.last.role, MessageRole.tool);
+      expect(secondWire.last.content, 'ran-ok');
+
+      // Turn rows persist into the fork conversation: user, round
+      // assistant(tool_calls), tool feedback, final assistant.
+      expect(saved, hasLength(4));
+      expect(saved[1].role, MessageRole.assistant);
+      expect(saved[1].toolCalls!.single.toolName, 'mail.send');
+      expect(saved[2].role, MessageRole.tool);
+      expect(saved[2].content, 'ran-ok');
+      expect(saved.last.content, 'ran-ok answer');
+
+      // The fork toolset rode the FIRST request too (the model can call).
+      expect(chatService.toolsSent.first, isNotEmpty);
+      expect(
+        chatService.toolsSent.first!.map((d) => d.name),
+        contains('mail.send'),
+      );
+    },
+  );
+
+  test(
+    'a DENIED approval reports "denied by the user" to the model and never executes',
+    () async {
+      final chatService = _ForkToolChatService([
+        [
+          const ChatResponse(type: ChatResponseType.message, content: 'Sending…'),
+          ChatResponse(
+            type: ChatResponseType.toolCall,
+            toolCall: cs.ToolCallData(
+              tool: 'mail.send',
+              arguments: {'to': 'x@example.com'},
+            ),
+          ),
+        ],
+        [const ChatResponse(type: ChatResponseType.message, content: 'moving on')],
+      ]);
+      final saved = <Message>[];
+      var executed = 0;
+      final container = await _forkTestContainer(
+        chatService: chatService,
+        onPersist: saved.add,
+        forkToolset: const [
+          ToolDefinition(
+            name: 'mail.send',
+            description: 'send',
+            inputSchema: {},
+            providerType: ToolProviderType.mcp,
+          ),
+        ],
+        toolRegistry: ToolRegistry(providers: [
+          _FakeToolProvider(defs: const [
+            ToolDefinition(
+              name: 'mail.send',
+              description: 'send',
+              inputSchema: {},
+              providerType: ToolProviderType.mcp,
+            ),
+          ], onExecute: (_, _) async {
+            executed++;
+            return const ToolExecutionResult.success('ran');
+          }),
+        ]),
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(chatProvider.notifier)
+          .loadConversation(_mainConversation);
+      final notifier = container.read(
+        forkChatNotifierProvider('forkC1').notifier,
+      );
+
+      final submitting = notifier.submit(
+        'forkC1',
+        'please run it',
+        selectedText: 'Ada Lovelace wrote it',
+        anchorMessageId: 'a-1',
+      );
+      await _drain();
+      final pending =
+          container.read(forkChatNotifierProvider('forkC1')).pendingApproval;
+      expect(pending, isNotNull);
+      unawaited(pending!.deny());
+      await submitting;
+
+      expect(executed, 0, reason: 'deny must never execute');
+      final secondWire = chatService.requests.last;
+      final feedbackRow =
+          secondWire.where((m) => m.role == MessageRole.tool).single;
+      expect(feedbackRow.content, contains('denied by the user'));
+      final state = container.read(forkChatNotifierProvider('forkC1'));
+      expect(state.failure, isNull);
+      expect(state.transcript.last.content, 'moving on');
+    },
+  );
+
+  test(
+    'a bg.*-style call inside a fork gets the approval-dialog skip string',
+    () async {
+      // Fork toolsets exclude bg.*/notifications.* STRUCTURALLY, so a model
+      // still emitting bg.spawn receives the not-allowed skip string rather
+      // than an execution.
+      final chatService = _ForkToolChatService([
+        [
+          ChatResponse(
+            type: ChatResponseType.toolCall,
+            toolCall: cs.ToolCallData(tool: 'bg.spawn', arguments: {}),
+          ),
+        ],
+        [const ChatResponse(type: ChatResponseType.message, content: 'no spawn')],
+      ]);
+      final saved = <Message>[];
+      final container = await _forkTestContainer(
+        chatService: chatService,
+        onPersist: saved.add,
+        forkToolset: const [
+          ToolDefinition(
+            name: 'mail.send',
+            description: 'send',
+            inputSchema: {},
+            providerType: ToolProviderType.mcp,
+          ),
+        ],
+        toolRegistry: ToolRegistry(providers: [
+          _FakeToolProvider(onExecute: (_, _) async {
+            fail('bg.spawn must never execute inside a fork');
+          }),
+        ]),
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(chatProvider.notifier)
+          .loadConversation(_mainConversation);
+      final notifier = container.read(
+        forkChatNotifierProvider('forkC1').notifier,
+      );
+      await notifier.submit(
+        'forkC1',
+        'spawn something',
+        selectedText: 'Ada Lovelace wrote it',
+        anchorMessageId: 'a-1',
+      );
+
+      final secondWire = chatService.requests.last;
+      final feedbackRow =
+          secondWire.where((m) => m.role == MessageRole.tool).single;
+      expect(feedbackRow.content, contains('ERROR:'));
+      expect(feedbackRow.content, contains('approval'));
+      // The executor seam stayed idle and the fork ended with the answer.
+      expect(
+        container.read(forkChatNotifierProvider('forkC1')).transcript.last.content,
+        'no spawn',
+      );
+    },
+  );
+
+  test('forkChatToolset drops the bg.*/notifications.* families', () {
+    ToolDefinition def(String name) => ToolDefinition(
+          name: name,
+          description: 'test $name',
+          inputSchema: const {},
+          providerType: ToolProviderType.mcp,
+        );
+    final forkSet = forkChatToolset([
+      def('bg.spawn'),
+      def('bg.status'),
+      def('bg.cancel'),
+      def('notifications.read_recent'),
+      def('mail.send'),
+      def('web.search'),
+      def('calc.add'),
+    ]);
+    expect(
+      forkSet.map((d) => d.name),
+      unorderedEquals(['mail.send', 'web.search', 'calc.add']),
+    );
+  });
+
+  test('forkChatToolsetProvider resolves through the live registry', () async {
+    ToolDefinition def(String name) => ToolDefinition(
+          name: name,
+          description: 'test $name',
+          inputSchema: const {},
+          providerType: ToolProviderType.mcp,
+        );
+    final container = ProviderContainer(
+      overrides: [
+        chatMcpConfigProvider.overrideWith(_EnabledMcpNotifier.new),
+        toolRegistryProvider.overrideWith(
+          (ref) => ToolRegistry(providers: [
+            _FakeToolProvider(defs: [
+              def('bg.spawn'),
+              def('mail.send'),
+            ]),
+          ]),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final defs = await container.read(forkChatToolsetProvider.future);
+    expect(defs.map((d) => d.name), ['mail.send']);
+  });
+
+  test(
+    'forkChatToolsetProvider honors the MCP master switch exactly like the '
+    'main chat (fix round 1)',
+    () async {
+      ToolDefinition def(String name) => ToolDefinition(
+            name: name,
+            description: 'test $name',
+            inputSchema: const {},
+            providerType: ToolProviderType.mcp,
+          );
+      final familyDefs = [
+        def('web.search'),
+        def('terminal.run'),
+        def('mail.send'),
+      ];
+      ToolRegistry fakeRegistry() => ToolRegistry(providers: [
+            _FakeToolProvider(defs: familyDefs),
+          ]);
+
+      // Master OFF: EMPTY toolset even with every per-family toggle on —
+      // parity with the main send path (`mcpConfig.enabled ? list : const []`).
+      final masterOff = ProviderContainer(
+        overrides: [
+          chatMcpConfigProvider.overrideWith(_DisabledMcpNotifier.new),
+          settingsProvider.overrideWith(_ToggleAllOnSettingsNotifier.new),
+          toolRegistryProvider.overrideWith((ref) => fakeRegistry()),
+        ],
+      );
+      addTearDown(masterOff.dispose);
+      expect(await masterOff.read(forkChatToolsetProvider.future), isEmpty);
+
+      // Master ON: the filtered live registry list flows through.
+      final masterOn = ProviderContainer(
+        overrides: [
+          chatMcpConfigProvider.overrideWith(_EnabledMcpNotifier.new),
+          settingsProvider.overrideWith(_ToggleAllOnSettingsNotifier.new),
+          toolRegistryProvider.overrideWith((ref) => fakeRegistry()),
+        ],
+      );
+      addTearDown(masterOn.dispose);
+      final defs = await masterOn.read(forkChatToolsetProvider.future);
+      expect(
+        defs.map((d) => d.name),
+        unorderedEquals(['web.search', 'terminal.run', 'mail.send']),
+      );
+    },
+  );
+
+  test(
+    'cancel while a chip is pending ends the tool loop: no second '
+    'generation fires and no chip re-raises (fix round 1)',
+    () async {
+      final chatService = _ForkToolChatService([
+        [
+          const ChatResponse(
+              type: ChatResponseType.message, content: 'Sending…'),
+          ChatResponse(
+            type: ChatResponseType.toolCall,
+            toolCall: cs.ToolCallData(
+              tool: 'mail.send',
+              arguments: {'to': 'x@example.com'},
+            ),
+          ),
+        ],
+        // The pre-fix bug fired this generation behind the cancelled
+        // exchange; with the guard the service must NEVER receive it.
+        [
+          const ChatResponse(
+              type: ChatResponseType.message, content: 'should not stream'),
+        ],
+      ]);
+      final saved = <Message>[];
+      var executed = 0;
+      final container = await _forkTestContainer(
+        chatService: chatService,
+        onPersist: saved.add,
+        forkToolset: const [
+          ToolDefinition(
+            name: 'mail.send',
+            description: 'send',
+            inputSchema: {},
+            providerType: ToolProviderType.mcp,
+          ),
+        ],
+        toolRegistry: ToolRegistry(providers: [
+          _FakeToolProvider(defs: const [
+            ToolDefinition(
+              name: 'mail.send',
+              description: 'send',
+              inputSchema: {},
+              providerType: ToolProviderType.mcp,
+            ),
+          ], onExecute: (_, _) async {
+            executed++;
+            return const ToolExecutionResult.success('ran');
+          }),
+        ]),
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(chatProvider.notifier)
+          .loadConversation(_mainConversation);
+      final notifier = container.read(
+        forkChatNotifierProvider('forkC1').notifier,
+      );
+
+      final submitting = notifier.submit(
+        'forkC1',
+        'please run it',
+        selectedText: 'Ada Lovelace wrote it',
+        anchorMessageId: 'a-1',
+      );
+      await _drain();
+      expect(
+        container.read(forkChatNotifierProvider('forkC1')).pendingApproval,
+        isNotNull,
+      );
+
+      // Cancel mid-chip: the chip settles as a denial, the round completes
+      // with its feedback row — and the EXCHANGE finalizes there.
+      notifier.cancel();
+      await submitting;
+
+      // The key pin: the fake service recorded NO second generation.
+      expect(chatService.requests, hasLength(1));
+      expect(executed, 0, reason: 'a cancelled round never executes');
+      final state = container.read(forkChatNotifierProvider('forkC1'));
+      expect(state.isStreaming, isFalse);
+      expect(state.pendingApproval, isNull, reason: 'no chip leak');
+      expect(state.failure, isNull);
+      // The current exchange content finalizes once: the round row keeps
+      // its tool call and stops as 'cancelled' (no phantom final answer).
+      final roundRow = state.transcript
+          .where((m) => m.role == MessageRole.assistant && m.toolCalls != null)
+          .single;
+      expect(roundRow.stopReason, 'cancelled');
+      expect(roundRow.toolCalls!.single.toolName, 'mail.send');
+      expect(
+        state.transcript
+            .where((m) => m.role == MessageRole.tool)
+            .map((m) => m.content),
+        contains(contains('denied by the user')),
+      );
+      expect(
+        state.transcript.map((m) => m.content),
+        isNot(contains('should not stream')),
+      );
+      // Persisted: user + ONE round row + tool feedback (no final answer
+      // row). The orphaned finalize re-upserts the round row's own id —
+      // idempotent, one finalized row per turn.
+      expect(
+        saved
+            .where((m) => m.role == MessageRole.assistant)
+            .map((m) => m.id)
+            .toSet(),
+        hasLength(1),
+      );
+    },
+  );
+
+  test(
+    'a THROWING stream finalizes once as an error turn and settles — '
+    'submit returns (fix round 1)',
+    () async {
+      final chatService = _ThrowingChatService();
+      final saved = <Message>[];
+      final container = await _forkTestContainer(
+        chatService: chatService,
+        onPersist: saved.add,
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(chatProvider.notifier)
+          .loadConversation(_mainConversation);
+      final notifier = container.read(
+        forkChatNotifierProvider('forkC1').notifier,
+      );
+
+      final submitting = notifier.submit(
+        'forkC1',
+        'who wrote it?',
+        selectedText: 'Ada Lovelace wrote it',
+        anchorMessageId: 'a-1',
+      );
+      await _drain();
+      // Partial content is already on the row when the transport dies.
+      expect(
+        container.read(forkChatNotifierProvider('forkC1')).transcript.last
+            .content,
+        'Hel',
+      );
+      chatService.failStream(Exception('transport died'));
+
+      // MUST return: pre-fix the throw escaped runRound with the settle
+      // never completing (submit never finished; cancelAndSettle would
+      // deadlock forever).
+      await submitting;
+
+      final state = container.read(forkChatNotifierProvider('forkC1'));
+      expect(state.isStreaming, isFalse);
+      expect(state.failure, contains('transport died'));
+      expect(state.transcript, hasLength(2));
+      expect(state.transcript.last.role, MessageRole.assistant);
+      expect(state.transcript.last.status, MessageStatus.error);
+      expect(state.transcript.last.errorMessage, contains('transport died'));
+      // Partial content preserved through the error finalize.
+      expect(state.transcript.last.content, 'Hel');
+      // Exactly ONE assistant persist (upsert) — no done re-finalization.
+      expect(
+        saved.where((m) => m.role == MessageRole.assistant),
+        hasLength(1),
+      );
+      expect(saved.last.status, MessageStatus.error);
+      expect(chatService.requests, hasLength(1));
+    },
+  );
+
+  test(
+    'cancelAndSettle does not deadlock when the stream throws instead of '
+    'yielding an error event (fix round 1)',
+    () async {
+      final chatService = _ThrowingChatService();
+      final saved = <Message>[];
+      final container = await _forkTestContainer(
+        chatService: chatService,
+        onPersist: saved.add,
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(chatProvider.notifier)
+          .loadConversation(_mainConversation);
+      final notifier = container.read(
+        forkChatNotifierProvider('forkC1').notifier,
+      );
+
+      final submitting = notifier.submit(
+        'forkC1',
+        'who wrote it?',
+        selectedText: 'Ada Lovelace wrote it',
+        anchorMessageId: 'a-1',
+      );
+      await _drain();
+      chatService.failStream(Exception('io exploded mid-exchange'));
+      // The settle completer the throw bypassed must complete — awaiting
+      // it here would hang the suite on the pre-fix code.
+      await notifier.cancelAndSettle();
+      await submitting;
+
+      final state = container.read(forkChatNotifierProvider('forkC1'));
+      expect(state.isStreaming, isFalse);
+      expect(state.failure, contains('io exploded'));
+      expect(state.transcript.last.status, MessageStatus.error);
+    },
+  );
 }
 
 List<Message> _seededForkTurns() {
@@ -798,12 +1405,37 @@ List<Message> _defaultMainTimeline() {
   return [u1, a1];
 }
 
+/// Log capture for the forensic-bundle test: [Log.attachOutput] is the
+/// AppLogger's test hook — the printer's rendered lines flow through
+/// [output]; bundles are matched by their marker tokens.
+class _CapturingLogOutput extends LogOutput {
+  final List<String> captured = [];
+
+  @override
+  void output(OutputEvent event) {
+    captured.addAll(event.lines);
+  }
+
+  /// Whole-test capture as one string: marker tokens survive printer
+  /// wrapping (word-boundary breaks).
+  String text() => captured.join('\n');
+}
+
+/// Post-test teardown replacement so the capturing output never leaks into
+/// sibling tests.
+class _DiscardingLogOutput extends LogOutput {
+  @override
+  void output(OutputEvent event) {}
+}
+
 Future<ProviderContainer> _forkTestContainer({
   required ChatService chatService,
   required void Function(Message) onPersist,
   List<Message>? mainTimeline,
   List<Message>? forkSeed,
   ChatParameters? params,
+  List<ToolDefinition>? forkToolset,
+  ToolRegistry? toolRegistry,
 }) async {
   SharedPreferences.setMockInitialValues({});
   return ProviderContainer(
@@ -843,6 +1475,12 @@ Future<ProviderContainer> _forkTestContainer({
           seedTurns: forkSeed ?? const [],
         ),
       ),
+      if (forkToolset != null)
+        forkChatToolsetProvider.overrideWith(
+          (ref) async => List.of(forkToolset),
+        ),
+      if (toolRegistry != null)
+        toolRegistryProvider.overrideWith((ref) => toolRegistry),
     ],
   );
 }
@@ -908,6 +1546,28 @@ class _DisabledMcpNotifier extends ChatMcpConfigNotifier {
   ChatMcpConfig build() => const ChatMcpConfig(enabled: false);
 }
 
+class _EnabledMcpNotifier extends ChatMcpConfigNotifier {
+  @override
+  ChatMcpConfig build() => const ChatMcpConfig(enabled: true);
+}
+
+/// Every per-family tool toggle ON — the master switch must still gate the
+/// fork toolset (fix round 1 parity with the main chat's master switch).
+class _ToggleAllOnSettingsNotifier extends SettingsNotifier {
+  @override
+  AppSettings build() => AppSettings(
+    resumeLastChat: false,
+    autoGenerateTitle: false,
+    showSystemMessages: true,
+    webToolsEnabled: true,
+    terminalToolsEnabled: true,
+    deviceToolsEnabled: true,
+    skillsEnabled: true,
+    backgroundTasksEnabled: true,
+    notificationToolsEnabled: true,
+  );
+}
+
 class _TestChatBackgroundService extends ChatBackgroundService {
   @override
   Future<void> start() async {}
@@ -960,6 +1620,45 @@ class _StreamingChatService implements ChatService {
 
   @override
   void cancelStream() {}
+}
+
+/// ChatService whose stream body THROWS (as opposed to yielding an
+/// error-data event): StreamQueue.next rethrows — pre-fix round 1 this
+/// escaped the consumption loop with the settle never completing.
+class _ThrowingChatService implements ChatService {
+  final List<List<Message>> requests = [];
+  StreamController<ChatResponse>? _controller;
+
+  /// Pushes the thrown error through the stream then closes it.
+  void failStream(Object error) {
+    final controller = _controller;
+    controller?.addError(error);
+    unawaited(controller?.close());
+  }
+
+  @override
+  Stream<ChatResponse> sendMessage({
+    required Server server,
+    required String modelId,
+    required List<Message> messages,
+    required ChatParameters params,
+    List<McpIntegration>? integrations,
+    List<ToolDefinition>? tools,
+    bool continueGeneration = false,
+  }) {
+    requests.add(messages);
+    final controller = StreamController<ChatResponse>();
+    _controller = controller;
+    controller.add(
+      const ChatResponse(type: ChatResponseType.message, content: 'Hel'),
+    );
+    return controller.stream;
+  }
+
+  @override
+  void cancelStream() {
+    unawaited(_controller?.close());
+  }
 }
 
 /// Mirrors the real services' mid-stream failure shape: partial message
@@ -1017,5 +1716,60 @@ class _HangingChatService implements ChatService {
   void cancelStream() {
     cancelCalls.add('cancel');
     unawaited(_controller?.close());
+  }
+}
+
+/// Scripted per-call ChatService for the fork tool loop: one script entry
+/// per sendMessage call (responses streamed out, stream closes); records
+/// every request wire AND the tool definitions handed to it.
+class _ForkToolChatService implements ChatService {
+  _ForkToolChatService(List<List<ChatResponse>> script) : _script = script;
+
+  final List<List<ChatResponse>> _script;
+  final List<List<Message>> requests = [];
+  final List<List<ToolDefinition>?> toolsSent = [];
+  int _callIndex = 0;
+
+  @override
+  Stream<ChatResponse> sendMessage({
+    required Server server,
+    required String modelId,
+    required List<Message> messages,
+    required ChatParameters params,
+    List<McpIntegration>? integrations,
+    List<ToolDefinition>? tools,
+    bool continueGeneration = false,
+  }) async* {
+    final index = _callIndex < _script.length ? _callIndex++ : _script.length - 1;
+    requests.add(messages);
+    toolsSent.add(tools);
+    yield* Stream.fromIterable(_script[index]);
+  }
+
+  @override
+  void cancelStream() {}
+}
+
+/// In-memory ToolProvider standing in for the real local/MCP registry —
+/// the fake disk-free seam the tests use to drive tool executions.
+class _FakeToolProvider implements ToolProvider {
+  _FakeToolProvider({this.defs = const [], this.onExecute});
+
+  final List<ToolDefinition> defs;
+  final Future<ToolExecutionResult> Function(
+    String name,
+    Map<String, dynamic> args,
+  )? onExecute;
+
+  @override
+  Future<List<ToolDefinition>> listTools() async => List.of(defs);
+
+  @override
+  Future<ToolExecutionResult> execute(
+    String name,
+    Map<String, dynamic> args,
+  ) {
+    return onExecute?.call(name, args) ??
+        Future.value(const ToolExecutionResult.success(''));
   }
 }

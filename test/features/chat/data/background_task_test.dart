@@ -83,6 +83,36 @@ void main() {
     expect(back.state, BackgroundTaskState.finished);
   });
 
+  test('state enum keeps its documented order (paused appended last)', () {
+    expect(
+      BackgroundTaskState.values.map((s) => s.name),
+      ['running', 'finished', 'cancelled', 'failed', 'paused'],
+    );
+  });
+
+  test('BackgroundTask.fromMap parses the paused state; unknown strings '
+      'degrade to failed (T1 review ruling)', () {
+    final base = BackgroundTask(
+      id: 'bt-4',
+      ownerConversationId: 'c-owner',
+      taskConversationId: 'c-task',
+      prompt: 'p',
+      loopMinutes: 15,
+      maxRuns: 10,
+      createdAt: DateTime.fromMillisecondsSinceEpoch(1770000000000),
+    ).toJson();
+
+    expect(
+      BackgroundTask.fromMap({...base, 'state': 'paused'}).state,
+      BackgroundTaskState.paused,
+    );
+    expect(
+      BackgroundTask.fromMap({...base, 'state': 'corrupted-row'}).state,
+      BackgroundTaskState.failed,
+      reason: 'unknown stored names must never re-arm the engine as running',
+    );
+  });
+
   test('BackgroundTaskEntity fromDomain/toDomain round-trip all fields', () {
     final t = BackgroundTask(
       id: 'bt-3',

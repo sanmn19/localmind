@@ -1,14 +1,19 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'
+    hide Message;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 
 import '../../../core/logger/app_logger.dart';
+import '../../../core/models/enums.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/storage_providers.dart';
 import '../../../core/services/device_tools_service.dart';
 import '../../../core/storage/entities.dart';
 import '../../../core/storage/objectbox_store.dart';
+import '../../../core/utils/uuid.dart';
 import '../../../objectbox.g.dart';
 import '../data/chat_service.dart';
 import '../data/background_engine.dart';
@@ -46,6 +51,7 @@ import '../../notifications/notifications_listener_channel.dart';
 import '../../notifications/notifications_mcp_server.dart';
 import 'package:localmind/features/conversations/providers/conversation_providers.dart';
 import 'chat_params_providers.dart';
+import 'chat_mcp_providers.dart';
 import 'model_selection_providers.dart';
 
 /// Per-turn web-tool budgets, owning state in the notifier's tool path.
@@ -164,6 +170,36 @@ Future<bool> shouldAutoApproveTool(
 
   return false;
 }
+
+/// Fork (selection-anchored panel) chat toolset: the FULL toggled registry
+/// minus the structural `bg.*`/`notifications.*` families — spawning
+/// further background tasks and harvesting notifications are never exposed
+/// to a fork, whatever the toggles said (bg-runner structurals reused via
+/// [bgNeverAvailableToolPrefixes]). Dialog-worthy tools STAY in the fork
+/// toolset: forks approve in-panel through completers instead of relying
+/// on [shouldAutoApproveTool] to gate silently. Pure + dependency-injected.
+List<ToolDefinition> forkChatToolset(List<ToolDefinition> allDefs) {
+  return allDefs
+      .where(
+        (def) => !bgNeverAvailableToolPrefixes.any(def.name.startsWith),
+      )
+      .toList();
+}
+
+/// Resolves the fork chat's live toolset from the CURRENT registry — the
+/// registration layer already encodes the tool toggles (web/terminal/
+/// skills servers register only when enabled). The MCP master switch gates
+/// EXACTLY like the main chat (`chat_notifier`'s send path): a disabled
+/// master switch yields an EMPTY toolset even with per-family toggles on.
+final forkChatToolsetProvider = FutureProvider<List<ToolDefinition>>((
+  ref,
+) async {
+  if (!ref.watch(chatMcpConfigProvider).enabled) {
+    return const <ToolDefinition>[];
+  }
+  final registry = ref.watch(toolRegistryProvider);
+  return forkChatToolset(await registry.listTools());
+});
 
 WebSearchProvider webSearchProviderFromName(String name) {
   switch (name) {
@@ -542,12 +578,30 @@ final backgroundEngineProvider = Provider<BackgroundRunEngine>((ref) {
       ownerConversationId,
     ),
     onEngineTouched: () {
-      if (ref.mounted) ref.invalidate(backgroundTaskRowsProvider);
+      if (ref.mounted) {
+        ref.invalidate(backgroundTaskRowsProvider);
+        ref.invalidate(backgroundPageTasksProvider);
+      }
     },
   );
 
   service.attachCancelRequester((taskId) {
     engine.cancelRunsFor(taskId);
+  });
+  // Agent-awareness seam (bg lifecycle upgrade): pause/resume notice rows
+  // persist as USER-role rows in the TASK conversation on the same
+  // MessageEntity path the result rows use (system role is FORBIDDEN for
+  // injected rows — the LM-Studio service folds the first system row into
+  // its prompt).
+  service.setNoticeSink((taskId, content) async {
+    final task = await service.taskById(taskId);
+    final taskConversationId = task?.taskConversationId;
+    if (taskConversationId == null) return;
+    await persistBackgroundNoticeRow(
+      ref.read(databaseProvider),
+      taskConversationId,
+      content,
+    );
   });
   ref.onDispose(() {
     service.attachCancelRequester((taskId) {});
@@ -576,9 +630,79 @@ final backgroundResumeProvider = Provider<void>((ref) {
   unawaited(Future<void>.delayed(const Duration(seconds: 2), resume));
 });
 
-/// Starts the Android foreground-service keep-alive (flutter_background_);
+/// All task rows (oldest spawn first) — the page's grouping source.
+final backgroundPageTasksProvider = FutureProvider<List<BackgroundTask>>(
+  (ref) => ref.read(backgroundTasksServiceProvider).allTasks(),
+);
+
+/// Shared pause/resume/stop closures for EVERY surface (page rows, the chat
+/// pill, the MCP card) — each commits via the service then refreshes rows.
+class BackgroundTaskActions {
+  const BackgroundTaskActions({
+    required this.pause,
+    required this.resume,
+    required this.stop,
+  });
+
+  final Future<bool> Function(String taskId) pause;
+  final Future<bool> Function(String taskId) resume;
+  final Future<bool> Function(String taskId) stop;
+}
+
+final backgroundTaskActionsProvider = Provider<BackgroundTaskActions>((ref) {
+  final service = ref.read(backgroundTasksServiceProvider);
+  Future<bool> finish(bool ok) {
+    if (ref.mounted) {
+      ref.invalidate(backgroundTaskRowsProvider);
+      ref.invalidate(backgroundPageTasksProvider);
+    }
+    return Future.value(ok);
+  }
+
+  return BackgroundTaskActions(
+    pause: (taskId) async {
+      final ok = await service.pauseTask(taskId);
+      return finish(ok);
+    },
+    resume: (taskId) async {
+      final ok = await service.resumeTask(taskId);
+      // Same seam as the resume bridge: the bounded enqueue retry so a
+      // lagging parked loop cannot silently swallow the fresh run.
+      if (ok) unawaited(_ensureTaskRunning(ref, taskId, resumed: true));
+      return finish(ok);
+    },
+    stop: (taskId) async {
+      final ok = await service.cancelTask(taskId);
+      return finish(ok);
+    },
+  );
+});
+
+/// Creates the keep-alive service's notification channel BEFORE the
+/// foreground service starts. The Flutter plugin does NOT auto-create the
+/// channel, and `startForeground` with a notification whose channel is
+/// missing kills the process (RemoteServiceException$CannotPostForeground
+/// ServiceNotificationException) — the exact open-time crash.
+Future<void> _ensureFgServiceChannel() async {
+  final android = FlutterLocalNotificationsPlugin()
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+  await android?.createNotificationChannel(
+    AndroidNotificationChannel(
+      localmindFgServiceChannelId,
+      'LocalMind background service',
+      description: 'Keeps background sub-agent tasks alive.',
+      importance: Importance.low,
+      playSound: false,
+      enableVibration: false,
+    ),
+  );
+}
+
+/// Starts the Android foreground-service keep-alive (flutter_background_);;
 /// throw-suppressed for host tests / unsupported platforms.
 Future<void> startBackgroundKeepAliveService() async {
+  await _ensureFgServiceChannel();
   final service = FlutterBackgroundService();
   await service.configure(
     androidConfiguration: AndroidConfiguration(
@@ -588,7 +712,7 @@ Future<void> startBackgroundKeepAliveService() async {
       notificationChannelId: localmindFgServiceChannelId,
       initialNotificationTitle: 'LocalMind',
       initialNotificationContent: 'Background tasks running',
-      foregroundServiceNotificationId: 0xb6c0ffee,
+      foregroundServiceNotificationId: 531001,
       autoStartOnBoot: false,
     ),
     iosConfiguration: IosConfiguration(),
@@ -605,13 +729,111 @@ Future<void> onBackgroundServiceKeepAlive(ServiceInstance service) async {
 }
 
 /// Bridges a spawn relay into the engine; saturation is a logged refusal
-/// (createTask already enforces the DB-level cap).
-Future<void> _ensureTaskRunning(Ref ref, String taskId) async {
+/// (createTask already enforces the DB-level cap). The RESUME path passes
+/// [resumed] to engage the bounded enqueue retry (Task-1 review #1).
+Future<void> _ensureTaskRunning(
+  Ref ref,
+  String taskId, {
+  bool resumed = false,
+}) async {
+  final engine = ref.read(backgroundEngineProvider);
   try {
-    ref.read(backgroundEngineProvider).requestRun(taskId);
+    if (!resumed) {
+      engine.requestRun(taskId);
+      return;
+    }
+    final landed = await enqueueBackgroundResumeRun(
+      taskId: taskId,
+      tryEnqueue: engine.requestRun,
+      readRow: ref.read(backgroundTasksServiceProvider).taskById,
+    );
+    if (!landed) {
+      Log.error(
+        'Background resume for $taskId: the parked loop never settled '
+        'within the retry window — no fresh run was enqueued.',
+      );
+    }
   } on StateError catch (error) {
     Log.error('Background engine refuses task $taskId: $error');
   }
+}
+
+/// Bounded resume-enqueue retry (Task-1 review #1, host-testable closure
+/// form): the parked loop lingers in the engine registry until its abort
+/// future settles, and a plain [BackgroundRunEngine.requestRun] silently
+/// no-ops in that window ([tryEnqueue] mirroring refutes this shape).
+///
+/// Schedule: waits [delays] (150/300/600ms) BEFORE each attempt, re-reading
+/// the AUTHORITATIVE row first — a row that left `running` meanwhile
+/// (re-paused, cancelled, deleted, finished elsewhere) stops the retrying
+/// without enqueueing. Returns whether the enqueue landed.
+@visibleForTesting
+Future<bool> enqueueBackgroundResumeRun({
+  required String taskId,
+  required bool Function(String taskId) tryEnqueue,
+  required Future<BackgroundTask?> Function(String taskId) readRow,
+  List<Duration> delays = const [
+    Duration(milliseconds: 150),
+    Duration(milliseconds: 300),
+    Duration(milliseconds: 600),
+  ],
+}) async {
+  for (final delay in delays) {
+    await Future<void>.delayed(delay);
+    final row = await readRow(taskId);
+    if (row == null || row.state != BackgroundTaskState.running) return false;
+    if (tryEnqueue(taskId)) return true;
+  }
+  return false;
+}
+
+/// Pause bridge (bg lifecycle upgrade): the service seam does relay →
+/// flip → notice-row injection; callers invalidate their task-row providers
+/// on a true result, mirroring the cancel path.
+Future<bool> pauseBackgroundTask(Ref ref, String taskId) =>
+    ref.read(backgroundTasksServiceProvider).pauseTask(taskId);
+
+/// Resume bridge: flip + resume notice ride the service seam, then THIS
+/// side enqueues the fresh engine run (`_ensureTaskRunning` → requestRun).
+Future<bool> resumeBackgroundTask(Ref ref, String taskId) async {
+  final resumed = await ref.read(backgroundTasksServiceProvider)
+      .resumeTask(taskId);
+  if (resumed) {
+    await _ensureTaskRunning(ref, taskId, resumed: true);
+  }
+  return resumed;
+}
+
+/// Writes one agent-awareness notice row (`Background task paused by user
+/// at <HH:MM>` / `Background task resumed — continue from where this task
+/// left off.`) into the hidden TASK conversation: user-role row at the next
+/// free thread order (max + 1 across all rows, 0 when empty) on the shared
+/// MessageEntity path ([_persistBackgroundRow]). Exposed for tests.
+Future<void> persistBackgroundNoticeRow(
+  ObjectBoxStore db,
+  String taskConversationId,
+  String content,
+) async {
+  final rows = await _backgroundRows(db, taskConversationId);
+  final nextThreadOrder = rows.isEmpty
+      ? 0
+      : rows.map((row) => row.threadOrder).reduce(
+            (a, b) => a > b ? a : b,
+          ) +
+          1;
+  await _persistBackgroundRow(
+    db,
+    Message(
+      id: generateUuidV4(),
+      conversationId: taskConversationId,
+      role: MessageRole.user,
+      content: content,
+      createdAt: DateTime.now(),
+      status: MessageStatus.complete,
+      isActiveVariant: true,
+      threadOrder: nextThreadOrder,
+    ),
+  );
 }
 
 Future<bool> _conversationExists(ObjectBoxStore db, String conversationId) {

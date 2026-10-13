@@ -480,6 +480,66 @@ void main() {
       expect(harness.markedFailed, isEmpty);
     });
 
+    test('a paused row parks the loop without finalizing (lifecycle pause)',
+        () async {
+      final harness = _LoopHarness(loopMinutes: 10, maxRuns: 10);
+      harness.turnScript = (runNumber) =>
+          _TurnResult(content: 'observation $runNumber', doneRequested: false);
+      // The pause relay wakes the run and writes the DB state after the
+      // first turn; the loop's authoritative poll sees `paused` and parks
+      // WITHOUT finalize (a resume starts a FRESH loop instead).
+      harness.pauseAfterTurns = 1;
+
+      await driveBackgroundTaskLoop(harness.taskId, seams: harness.seams());
+
+      expect(harness.turnCalls, 1);
+      expect(harness.recordedRuns, hasLength(1));
+      expect(harness.finalized, isEmpty);
+      expect(harness.markedFailed, isEmpty);
+      expect(harness.task.state, BackgroundTaskState.paused);
+    });
+
+    test('a pause relay landing DURING the between-runs wait parks the loop '
+        'at the top-of-loop poll', () async {
+      final harness = _LoopHarness(loopMinutes: 10, maxRuns: 10);
+      harness.turnScript = (runNumber) =>
+          _TurnResult(content: 'observation $runNumber', doneRequested: false);
+      // The pause relay lands while the driver sleeps between runs: the
+      // relay flags the canceller (waking the sleep) and flips the
+      // authoritative row — the top-of-loop poll then sees `paused` and
+      // parks without a further turn.
+      harness.pauseDuringWait = true;
+
+      await driveBackgroundTaskLoop(harness.taskId, seams: harness.seams());
+
+      expect(harness.turnCalls, 1);
+      expect(harness.recordedRuns, hasLength(1));
+      expect(harness.finalized, isEmpty);
+      expect(harness.markedFailed, isEmpty);
+      expect(harness.task.state, BackgroundTaskState.paused);
+    });
+
+    test('a mid-run pause relay aborts run 1 and leaves zero bookkeeping',
+        () async {
+      final harness = _LoopHarness(loopMinutes: 10, maxRuns: 10);
+      harness.turnScript = (runNumber) =>
+          _TurnResult(content: 'observation $runNumber', doneRequested: false);
+      // Pause relay mid-run = the cancel wire fires while run 1 streams
+      // (the real runner returns aborted from its isCancelled/watch race),
+      // and the authoritative row flipped to paused while streaming. The
+      // driver returns at the aborted result BEFORE any bookkeeping.
+      harness.abortMidRun = true;
+      harness.pauseAfterTurns = 1;
+
+      await driveBackgroundTaskLoop(harness.taskId, seams: harness.seams());
+
+      expect(harness.turnCalls, 1);
+      expect(harness.recordedRuns, isEmpty,
+          reason: 'an aborted run is no run — park silently');
+      expect(harness.finalized, isEmpty);
+      expect(harness.markedFailed, isEmpty);
+    });
+
     test('run-exception marks the task failed once', () async {
       final harness = _LoopHarness(loopMinutes: 0, maxRuns: 10);
       harness.turnError = BackgroundRunException('model failed');
@@ -690,6 +750,15 @@ class _LoopHarness {
   /// the driver's crash-class catch must distinguish resumable crashes.
   Object? turnCrash;
   int? cancelAfterTurns;
+  /// Lifecycle pause: when set, the relay-merged DB state reads `paused`
+  /// after this many completed turns (the loop must park without finalize).
+  int? pauseAfterTurns;
+  /// Relay-in-the-wait pin: the pause relay fires DURING the between-runs
+  /// wait — canceller flag wakes the sleep, the authoritative flip follows.
+  bool pauseDuringWait = false;
+  /// Mid-run relay pin: runTurn resolves `aborted` (the real runner's
+  /// isCancelled/watch race against a flagged canceller).
+  bool abortMidRun = false;
   bool conversationMissing = false;
 
   final recordedRuns = <String>[];
@@ -703,6 +772,10 @@ class _LoopHarness {
         if (cancelAfterTurns != null && turnCalls >= cancelAfterTurns!) {
           // The relay wrote the authoritative DB state between runs.
           task = _task(state: BackgroundTaskState.cancelled);
+        }
+        if (pauseAfterTurns != null && turnCalls >= pauseAfterTurns!) {
+          // The pause relay wrote the authoritative DB state between runs.
+          task = _task(state: BackgroundTaskState.paused);
         }
         return task;
       },
@@ -728,6 +801,15 @@ class _LoopHarness {
         if (crash != null) throw crash;
         final error = turnError;
         if (error != null) throw error;
+        if (abortMidRun) {
+          // The real runner returns this shape when the pause relay flagged
+          // the canceller mid-stream: no content, no bookkeeping input.
+          return const BackgroundRunResult(
+            content: '',
+            doneRequested: false,
+            aborted: true,
+          );
+        }
         final script = turnScript!(runNumber);
         return BackgroundRunResult(
           content: script.content,
@@ -738,7 +820,20 @@ class _LoopHarness {
         finalized.add((task, result));
       },
       canceller: canceller,
-      waitBetweenRuns: (task, delay) async {},
+      waitBetweenRuns: (task, delay) async {
+        if (pauseDuringWait) {
+          // Relay-before-write, exactly as pauseTask does: the flag wakes
+          // the sleeping driver, then the authoritative flip lands (test
+          // waits resolve instantly — speed holes only, like the relay).
+          canceller.request(task.id);
+          this.task = _task(
+            loopMinutes: loopMinutes,
+            maxRuns: maxRuns,
+            runCount: task.runCount,
+            state: BackgroundTaskState.paused,
+          );
+        }
+      },
     );
   }
 }

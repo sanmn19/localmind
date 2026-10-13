@@ -6495,6 +6495,24 @@ abstract class AppLocalizations {
   /// **'An error occurred: {message}'**
   String forkTurnErrorLabel(String message);
 
+  /// Title of the in-panel tool approval chip
+  ///
+  /// In en, this message translates to:
+  /// **'Run {tool} in this fork?'**
+  String forkApprovalTitle(String tool);
+
+  /// Approve button of the in-panel tool approval chip
+  ///
+  /// In en, this message translates to:
+  /// **'Approve'**
+  String get forkApprovalAllow;
+
+  /// Deny button of the in-panel tool approval chip
+  ///
+  /// In en, this message translates to:
+  /// **'Deny'**
+  String get forkApprovalDeny;
+
   /// Background tasks card title
   ///
   /// In en, this message translates to:
@@ -6549,6 +6567,12 @@ abstract class AppLocalizations {
   /// **'Failed'**
   String get backgroundStateFailed;
 
+  /// Chip label for a paused background task
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get backgroundStatePaused;
+
   /// Static note stating the background task concurrency cap and loop floor
   ///
   /// In en, this message translates to:
@@ -6590,6 +6614,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Grant in settings'**
   String get notifications_grant_action;
+
+  /// Background tasks page app bar title
+  ///
+  /// In en, this message translates to:
+  /// **'Background tasks'**
+  String get background_tasks_title;
+
+  /// Chat top-bar menu item opening the background tasks page
+  ///
+  /// In en, this message translates to:
+  /// **'Background tasks'**
+  String get background_tasks_menu;
+
+  /// Section header for tasks whose owner chat no longer exists
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted chat'**
+  String get background_deleted_chat;
+
+  /// Runs-count label for one-shot background tasks
+  ///
+  /// In en, this message translates to:
+  /// **'single run'**
+  String get background_single_run;
+
+  /// Last-run label for a background task that has not run
+  ///
+  /// In en, this message translates to:
+  /// **'not run yet'**
+  String get background_never_ran;
+
+  /// Last-run label under a minute
+  ///
+  /// In en, this message translates to:
+  /// **'just now'**
+  String get background_last_run_now;
+
+  /// Last-run label in minutes
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes}m ago'**
+  String background_last_run_minutes(int minutes);
+
+  /// Last-run label in hours
+  ///
+  /// In en, this message translates to:
+  /// **'{hours}h ago'**
+  String background_last_run_hours(int hours);
+
+  /// Tooltip of a background task's pause button
+  ///
+  /// In en, this message translates to:
+  /// **'Pause task'**
+  String get background_pause_task;
+
+  /// Tooltip of a background task's resume button
+  ///
+  /// In en, this message translates to:
+  /// **'Resume task'**
+  String get background_resume_task;
+
+  /// Inline chat pill prefix next to a background task's state chip
+  ///
+  /// In en, this message translates to:
+  /// **'Background task'**
+  String get background_pill_title;
 }
 
 class _AppLocalizationsDelegate

@@ -136,7 +136,10 @@ class AssistantBubble extends StatelessWidget {
           if (message.toolEvents != null && message.toolEvents!.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: ToolTimeline(events: message.toolEvents!),
+              child: ToolTimeline(
+                events: message.toolEvents!,
+                ownerConversationId: message.conversationId,
+              ),
             ),
           if (isStreaming && message.content.isNotEmpty)
             const Padding(
@@ -345,9 +348,21 @@ class _ForkAwareAssistantContent extends ConsumerStatefulWidget {
       _ForkAwareAssistantContentState();
 }
 
+/// Fixed window the fresh-creation re-read must land within (device store
+/// reads ride isolate round-trips; 2s also bounds the bail-out below).
+const Duration _freshAnchorsWindow = Duration(seconds: 2);
+
 class _ForkAwareAssistantContentState
     extends ConsumerState<_ForkAwareAssistantContent> {
-  final LayerLink _forkLayerLink = LayerLink();
+  /// Measuring keys per fork anchor: the band (or fallback chip) this
+  /// content renders registers its own box so the fork open captures the
+  /// anchor's REAL screen rect for the panel-anchoring solver.
+  final Map<String, GlobalKey> _bandAnchorKeys = {};
+
+  GlobalKey _bandKeyFor(String anchorId) => _bandAnchorKeys.putIfAbsent(
+        anchorId,
+        () => GlobalKey(debugLabel: 'fork_band_box_$anchorId'),
+      );
 
   /// Latest selection inside this bubble's SelectionArea, fed by the
   /// SelectionArea contract needed at menu-press time.
@@ -413,14 +428,73 @@ class _ForkAwareAssistantContentState
     if (!mounted) {
       return;
     }
-    ref.invalidate(
-      forkAnchorsForConversationProvider(widget.message.conversationId),
-    );
+    // Fresh-creation band contract: the invalidate starts a NEW anchors
+    // generation whose re-read rides a real isolate round-trip. Wait for
+    // its ARRIVAL (bounded) before opening the panel so the band row exists
+    // — the arrival rebuild is what renders the band, and the open's band
+    // measurement then captures the REAL box instead of a fallback pose.
+    final provider =
+        forkAnchorsForConversationProvider(widget.message.conversationId);
+    ref.invalidate(provider);
+    await _awaitFreshAnchorsArrival(provider, anchor);
+    if (!mounted) {
+      return;
+    }
     _openFork(anchor);
   }
 
+  /// Bounded (≤2 attempts within a fixed window) wait for the anchors
+  /// generation invalidated by a fresh fork creation to LAND. Why not trust
+  /// the stream alone: the device store reads ride `runInTransactionAsync`
+  /// isolates, and an errored generation is collapsed by the band render
+  /// into `const []` — riverpod 3's default container retry skips
+  /// `Error`-typed failures, leaving a SUCCEEDED fork creation fully
+  /// bandless (device report). Here one explicit retry re-reads before the
+  /// panel opens; if the window expires the panel still opens with the
+  /// fallback pose and the band arrives on the later watch rebuild.
+  Future<void> _awaitFreshAnchorsArrival(
+    FutureProvider<List<ForkAnchor>> provider,
+    ForkAnchor anchor,
+  ) async {
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        final anchors =
+            await ref.read(provider.future).timeout(_freshAnchorsWindow);
+        if (anchors.any((a) => a.id == anchor.id)) {
+          return;
+        }
+      } catch (_) {
+        // Errored/timeout re-read: retry once below; a succeeded creation
+        // must not be silently swallowed by a failed band read.
+      }
+      if (!mounted) {
+        return;
+      }
+      ref.invalidate(provider);
+    }
+  }
+
   void _openFork(ForkAnchor anchor) {
-    ref.read(forkPanelOverlayProvider.notifier).open(anchor, _forkLayerLink);
+    // Fix round 1 (minor): the fresh-selection path invalidates the anchors
+    // and opens the panel in one synchronous tick — measured band rects can
+    // be one frame stale (or null) against the layout the chip row just
+    // forced. Measure + open at endOfFrame (it schedules the pending frame
+    // itself, unlike a raw post-frame callback registered outside frame
+    // generation) so the panel anchors to the CURRENT band box.
+    unawaited(_openForkAfterFrame(anchor));
+  }
+
+  Future<void> _openForkAfterFrame(ForkAnchor anchor) async {
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    Rect? bandRect;
+    final box = _bandAnchorKeys[anchor.id]?.currentContext?.findRenderObject();
+    if (box is RenderBox && box.attached && box.hasSize) {
+      bandRect = box.localToGlobal(Offset.zero) & box.size;
+    }
+    ref
+        .read(forkPanelOverlayProvider.notifier)
+        .open(anchor, bandRect: bandRect);
   }
 
   @override
@@ -437,32 +511,29 @@ class _ForkAwareAssistantContentState
     final segments =
         _ForkBandLayout.compute(widget.message.content, anchors, chips);
 
-    return CompositedTransformTarget(
-      link: _forkLayerLink,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (chips.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Wrap(
-                spacing: 6,
-                runSpacing: 4,
-                children: [for (final anchor in chips) _buildChip(anchor)],
-              ),
-            ),
-          SelectionArea(
-            contextMenuBuilder: _buildForkMenu,
-            onSelectionChanged: (content) => _lastSelection = content,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final segment in segments) _buildSegment(segment),
-              ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (chips.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [for (final anchor in chips) _buildChip(anchor)],
             ),
           ),
-        ],
-      ),
+        SelectionArea(
+          contextMenuBuilder: _buildForkMenu,
+          onSelectionChanged: (content) => _lastSelection = content,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final segment in segments) _buildSegment(segment),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -478,15 +549,18 @@ class _ForkAwareAssistantContentState
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onTap: () => _openFork(anchor),
-      child: Container(
-        key: ValueKey<String>('fork_band_${anchor.id}'),
-        color: forkHighlightColor(context),
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-        child: MarkdownBodyContent(
-          content: segment.text,
-          isDark: widget.isDark,
-          selectable: false,
+      child: RepaintBoundary(
+        key: _bandKeyFor(anchor.id),
+        child: Container(
+          key: ValueKey<String>('fork_band_${anchor.id}'),
+          color: forkHighlightColor(context),
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: MarkdownBodyContent(
+            content: segment.text,
+            isDark: widget.isDark,
+            selectable: false,
+          ),
         ),
       ),
     );
@@ -502,19 +576,22 @@ class _ForkAwareAssistantContentState
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onTap: () => _openFork(anchor),
-      child: Container(
-        key: ValueKey<String>('fork_chip_${anchor.id}'),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: forkChipColor(context),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          AppLocalizations.of(context)!.forkChipLabel(clipped),
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: Colors.black87,
+      child: RepaintBoundary(
+        key: _bandKeyFor(anchor.id),
+        child: Container(
+          key: ValueKey<String>('fork_chip_${anchor.id}'),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: forkChipColor(context),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            AppLocalizations.of(context)!.forkChipLabel(clipped),
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
           ),
         ),
       ),

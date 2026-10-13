@@ -440,6 +440,181 @@ void main() {
       expect(relayed, ['t-2']);
     });
   });
+
+  group('pause/resume lifecycle (bg lifecycle upgrade, Task 1)', () {
+    test('pause flips running→paused and injects the pause notice via the '
+        'sink', () async {
+      final notices = <({String taskId, String content})>[];
+      final db = _FakeTasksDb([_entity(id: 't-p', taskConversation: 'c-tp')]);
+      final service = BackgroundTasksService(db)
+        ..setNoticeSink(
+          (taskId, content) async =>
+              notices.add((taskId: taskId, content: content)),
+        );
+
+      expect(await service.pauseTask('t-p'), isTrue);
+      expect(
+        (await service.taskById('t-p'))!.state,
+        BackgroundTaskState.paused,
+      );
+      expect(notices, hasLength(1));
+      expect(notices.single.taskId, 't-p');
+      // Verbatim template: `Background task paused by user at <HH:MM>`.
+      expect(
+        notices.single.content,
+        matches(RegExp(r'^Background task paused by user at \d{2}:\d{2}$')),
+      );
+    });
+
+    test('pause relays the cancel requester BEFORE the write (I1 mirror)',
+        () async {
+      final relays = <String>[];
+      final db = _FailingWriteTasksDb([
+        _entity(id: 't-live', taskConversation: 'c-live'),
+      ]);
+      final service = BackgroundTasksService(db, relays.add);
+
+      await expectLater(service.pauseTask('t-live'), throwsStateError);
+      expect(relays, ['t-live']);
+    });
+
+    test('pause is idempotent: re-pause returns true without a duplicate '
+        'notice row', () async {
+      final notices = <String>[];
+      final db = _FakeTasksDb([_entity(id: 't-p', taskConversation: 'c-tp')]);
+      final service = BackgroundTasksService(db)
+        ..setNoticeSink((taskId, content) async => notices.add(content));
+
+      expect(await service.pauseTask('t-p'), isTrue);
+      expect(await service.pauseTask('t-p'), isTrue);
+      expect(notices, hasLength(1));
+    });
+
+    test('resume flips paused→running, injects the verbatim resume notice '
+        'and NEVER relays cancels', () async {
+      final relays = <String>[];
+      final notices = <String>[];
+      final db = _FakeTasksDb(
+        [_entity(id: 't-r', taskConversation: 'c-tr', state: 'paused')],
+      );
+      final service = BackgroundTasksService(db, relays.add)
+        ..setNoticeSink((taskId, content) async => notices.add(content));
+
+      expect(await service.resumeTask('t-r'), isTrue);
+      expect(
+        (await service.taskById('t-r'))!.state,
+        BackgroundTaskState.running,
+      );
+      expect(
+        notices.single,
+        'Background task resumed — continue from where this task left off.',
+      );
+      expect(
+        relays,
+        isEmpty,
+        reason: 'resume must only flip + notice; enqueuing is the caller',
+      );
+    });
+
+    test('resume is idempotent on running rows: true, no notice', () async {
+      final notices = <String>[];
+      final db = _FakeTasksDb([_entity(id: 't-r', taskConversation: 'c-tr')]);
+      final service = BackgroundTasksService(db)
+        ..setNoticeSink((taskId, content) async => notices.add(content));
+
+      expect(await service.resumeTask('t-r'), isTrue);
+      expect(notices, isEmpty);
+      expect(
+        (await service.taskById('t-r'))!.state,
+        BackgroundTaskState.running,
+      );
+    });
+
+    test('terminal/unknown rows refuse pause and resume without notices',
+        () async {
+      final notices = <String>[];
+      final db = _FakeTasksDb([
+        _entity(id: 't-fin', state: 'finished', taskConversation: 'c-f'),
+        _entity(id: 't-fail', state: 'failed', taskConversation: 'c-x'),
+        _entity(id: 't-canc', state: 'cancelled', taskConversation: 'c-c'),
+      ]);
+      final service = BackgroundTasksService(db)
+        ..setNoticeSink((taskId, content) async => notices.add(content));
+
+      for (final id in ['t-fin', 't-fail', 't-canc', 't-missing']) {
+        expect(await service.pauseTask(id), isFalse, reason: id);
+        expect(await service.resumeTask(id), isFalse, reason: id);
+      }
+      expect(notices, isEmpty);
+    });
+
+    test('stop from paused: cancelTask flips paused→cancelled', () async {
+      final db = _FakeTasksDb(
+        [_entity(id: 't-p', taskConversation: 'c-tp', state: 'paused')],
+      );
+      final service = BackgroundTasksService(db);
+
+      expect(await service.cancelTask('t-p'), isTrue);
+      expect(
+        (await service.taskById('t-p'))!.state,
+        BackgroundTaskState.cancelled,
+      );
+      // Terminal now: resume refuses.
+      expect(await service.resumeTask('t-p'), isFalse);
+    });
+
+    test('parked (paused) rows accept no run bookkeeping and no finish',
+        () async {
+      final db = _FakeTasksDb([_entity(id: 't-p', taskConversation: 'c-tp')]);
+      final service = BackgroundTasksService(db);
+
+      expect(await service.recordRun('t-p'), isTrue);
+      await service.pauseTask('t-p');
+      expect(await service.recordRun('t-p'), isFalse);
+      expect(await service.markFinished('t-p'), isFalse);
+      expect(await service.markFailed('t-p'), isFalse);
+      expect(
+        (await service.taskById('t-p'))!.state,
+        BackgroundTaskState.paused,
+      );
+      expect((await service.taskById('t-p'))!.runCount, 1);
+    });
+
+    test('an absent notice sink never blocks transitions', () async {
+      final db = _FakeTasksDb(
+        [_entity(id: 't-p', taskConversation: 'c-tp', state: 'paused')],
+      );
+      final service = BackgroundTasksService(db);
+
+      expect(await service.pauseTask('t-p'), isTrue);
+      expect(await service.resumeTask('t-p'), isTrue);
+    });
+
+    test('a THROWING notice sink never surfaces: committed flips still '
+        'return true (Task-1 review #2)', () async {
+      final db = _FakeTasksDb([
+        _entity(id: 't-pause', taskConversation: 'c-sp'),
+        _entity(id: 't-resume', taskConversation: 'c-sr', state: 'paused'),
+      ]);
+      final service = BackgroundTasksService(db)
+        ..setNoticeSink((taskId, content) async {
+          throw StateError('notice row write exploded');
+        });
+
+      // The state flip is already committed — a sink failure is caught and
+      // logged (Log.error), never propagated as a transition failure.
+      expect(await service.pauseTask('t-pause'), isTrue);
+      expect(
+        (await service.taskById('t-pause'))!.state,
+        BackgroundTaskState.paused,
+      );
+      expect(await service.resumeTask('t-resume'), isTrue);
+      expect(
+        (await service.taskById('t-resume'))!.state,
+        BackgroundTaskState.running,
+      );
+    });
+  });
 }
 
 BackgroundTaskEntity _entity({

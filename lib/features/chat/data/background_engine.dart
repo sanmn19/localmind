@@ -131,23 +131,34 @@ class BackgroundRunEngine {
   /// Schedules a task's run driver. Throws [StateError] when the app-wide
   /// engine cap is reached (mirrors createTask's guard so spawn failure via
   /// a saturated engine is a real error the tool render shows).
-  void requestRun(String taskId) {
+  ///
+  /// Returns whether a fresh driver loop was scheduled: `false` means the
+  /// registry still holds this task's loop (parked or winding down) and the
+  /// request no-oped — the resume bridge's bounded retry keys off exactly
+  /// this signal (Task-1 review #1).
+  ///
+  /// Lifecycle pause: the pause relay flags the canceller to wake the live
+  /// run; a RESUMED fresh loop must start with a clean cancel state or its
+  /// first turn would abort instantly on the stale flag.
+  bool requestRun(String taskId) {
     if (_disposed) {
       throw StateError('The background run engine is disposed.');
     }
-    if (_activeLoops.containsKey(taskId)) return;
+    if (_activeLoops.containsKey(taskId)) return false;
     if (_activeLoops.length >= bgMaxConcurrentTasks) {
       throw StateError(
         'Background task concurrency cap reached ($bgMaxConcurrentTasks '
         'running); cancel one first.',
       );
     }
+    _canceller.clear(taskId);
     final future = driveBackgroundTaskLoop(taskId, seams: _seams())
         .whenComplete(() {
       _activeLoops.remove(taskId);
     });
     _activeLoops[taskId] = future;
     onEngineTouched();
+    return true;
   }
 
   /// Schedules every still-running task (bootstrap/startup resume path).

@@ -3535,6 +3535,17 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String forkApprovalTitle(String tool) {
+    return 'Run $tool in this fork?';
+  }
+
+  @override
+  String get forkApprovalAllow => 'Approve';
+
+  @override
+  String get forkApprovalDeny => 'Deny';
+
+  @override
   String get backgroundCardTitle => 'Background tasks';
 
   @override
@@ -3563,6 +3574,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get backgroundStateFailed => 'Failed';
 
   @override
+  String get backgroundStatePaused => 'Paused';
+
+  @override
   String get backgroundCapNote =>
       'At most 3 tasks run at once; recurring tasks repeat every 10 minutes or more.';
 
@@ -3584,4 +3598,41 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get notifications_grant_action => 'Grant in settings';
+
+  @override
+  String get background_tasks_title => 'Background tasks';
+
+  @override
+  String get background_tasks_menu => 'Background tasks';
+
+  @override
+  String get background_deleted_chat => 'Deleted chat';
+
+  @override
+  String get background_single_run => 'single run';
+
+  @override
+  String get background_never_ran => 'not run yet';
+
+  @override
+  String get background_last_run_now => 'just now';
+
+  @override
+  String background_last_run_minutes(int minutes) {
+    return '${minutes}m ago';
+  }
+
+  @override
+  String background_last_run_hours(int hours) {
+    return '${hours}h ago';
+  }
+
+  @override
+  String get background_pause_task => 'Pause task';
+
+  @override
+  String get background_resume_task => 'Resume task';
+
+  @override
+  String get background_pill_title => 'Background task';
 }

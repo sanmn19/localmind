@@ -1,4 +1,9 @@
-enum BackgroundTaskState { running, finished, cancelled, failed }
+/// Lifecycle (docs/specs/2026-10-12-background-upgrades-fork-tools-design.md
+/// §Feature 1): running→paused (pause), paused→running (resume),
+/// running|paused→cancelled (stop); finished/failed stay terminal. `paused`
+/// is APPENDED last so persisted enum-index drift logic and existing tests
+/// keep their stable positions.
+enum BackgroundTaskState { running, finished, cancelled, failed, paused }
 
 class BackgroundTask {
   final String id;
@@ -57,7 +62,10 @@ class BackgroundTask {
       runCount: m['runCount'] as int? ?? 0,
       state: BackgroundTaskState.values.firstWhere(
         (s) => s.name == m['state'],
-        orElse: () => BackgroundTaskState.running,
+        // T1 review ruling mirrors the entity mapping: unknown stored state
+        // names degrade to failed, never to running (running would wrongly
+        // re-arm the engine loop).
+        orElse: () => BackgroundTaskState.failed,
       ),
       lastRunAt: m['lastRunAt'] == null
           ? null

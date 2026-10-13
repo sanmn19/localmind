@@ -11,7 +11,13 @@ import 'models/background_task.dart';
 import 'models/chat_parameters.dart';
 import 'models/message.dart' hide ToolCallData;
 import 'models/message.dart' as msg_model show ToolCallData;
+import 'tool_rounds.dart';
 import 'tools/tool_definition.dart';
+
+/// Re-exposes the shared round-row shapes so every existing
+/// `background_runner.dart` import keeps its surface (the definitions MOVED
+/// to `tool_rounds.dart`).
+export 'tool_rounds.dart' show bgMaxToolRounds, bgUnapprovedToolMessage;
 
 /// Task 4: foreground background-task run pipeline.
 ///
@@ -37,9 +43,6 @@ const bgResultRowPrefix = 'Background task result (';
 /// Composes the owner-visible result row content for [taskId].
 String bgResultRowContent(String taskId, String finalContent) =>
     '$bgResultRowPrefix$taskId): $finalContent';
-
-/// Per-run tool-round budget — mirrors the main pipeline's tool loop.
-const int bgMaxToolRounds = 6;
 
 /// Fixed system framing for autonomous child runs (no persona).
 const String bgRunnerSystemPrompt =
@@ -410,12 +413,6 @@ List<Message> _assembleWire(
 /// recorded `requests` entry when later rounds append to it.
 List<Message> _liveWire(List<Message> wire) => List.of(wire);
 
-/// Empty-mask failure text for tools a background child may never run
-/// (they need the approval dialog) — returned to the MODEL, not the user.
-String bgUnapprovedToolMessage(String toolName) =>
-    'ERROR: tool `$toolName` requires the user\'s approval dialog and is '
-    'not allowed to run in background tasks. Continue without it.';
-
 Future<BackgroundRunResult> _finalizeTurnWithoutTools(
   BackgroundRunSpec spec, {
   required String content,
@@ -474,11 +471,12 @@ Message _assistantRow(
   );
 }
 
-/// One tool round: executes every call through the snapshot-gated executor
-/// (dialog-needing names get the skip-with-error string), persists the
-/// round's assistant(tool_calls) + tool-result rows, and APPENDS them to the
-/// in-memory wire for the follow-up generation. Returns the next free
-/// thread order.
+/// One tool round: delegates to the SHARED [executeToolRound] (task 5B) with
+/// the bg-shaped row builders and the historical always-approved gate — the
+/// dialog-needing names never make it past the allowed set, so the
+/// skip-with-error string path is unchanged. Persists the round's
+/// assistant(tool_calls) + tool-result rows and APPENDS them to the
+/// in-memory wire for the follow-up generation.
 Future<int> _executeToolRound({
   required BackgroundRunSpec spec,
   required List<Message> wire,
@@ -487,31 +485,27 @@ Future<int> _executeToolRound({
   required List<ToolCallData> calls,
   required Set<String> allowedToolNames,
 }) async {
-  final persistedCalls = <msg_model.ToolCallData>[];
-  final feedbackRows = <Message>[];
-  for (final call in calls) {
-    final callId = 'call_${generateUuidV4()}';
-    String resultText;
-    if (!allowedToolNames.contains(call.tool)) {
-      resultText = bgUnapprovedToolMessage(call.tool);
-    } else if (spec.toolExecutor == null) {
-      resultText = bgUnapprovedToolMessage(call.tool);
-    } else {
-      final outcome = await spec.toolExecutor!(call.tool, call.arguments);
-      resultText = outcome.success
-          ? outcome.output
-          : 'ERROR: ${outcome.error ?? 'tool failed'}';
-    }
-    persistedCalls.add(
-      msg_model.ToolCallData(
-        id: callId,
-        toolName: call.tool,
-        arguments: call.arguments,
-        result: resultText,
+  final rounds = await executeToolRound(
+    ToolRoundSpec(
+      conversationId: spec.task.taskConversationId,
+      wire: wire,
+      nextThreadOrder: nextThreadOrder,
+      streamedContent: streamedContent,
+      calls: calls,
+      allowedToolNames: allowedToolNames,
+      executeTool: spec.toolExecutor,
+      persistRow: spec.persistRow,
+      buildRoundRow:
+          ({required content, required toolCalls, required threadOrder}) =>
+              _assistantRow(
+        spec,
+        content: content,
+        threadOrder: threadOrder,
+        toolCalls: toolCalls,
+        isActiveVariant: false,
       ),
-    );
-    feedbackRows.add(
-      Message(
+      buildFeedbackRow: ({required callId, required resultText, required threadOrder}) =>
+          Message(
         id: 'tool_$callId',
         conversationId: spec.task.taskConversationId,
         role: MessageRole.tool,
@@ -520,27 +514,11 @@ Future<int> _executeToolRound({
         status: MessageStatus.complete,
         toolCallId: callId,
         isActiveVariant: false,
-        threadOrder: nextThreadOrder,
+        threadOrder: threadOrder,
       ),
-    );
-  }
-
-  final roundRow = _assistantRow(
-    spec,
-    content: streamedContent,
-    threadOrder: nextThreadOrder,
-    toolCalls: persistedCalls,
-    isActiveVariant: false,
+    ),
   );
-  await spec.persistRow(roundRow);
-  for (final feedback in feedbackRows) {
-    await spec.persistRow(feedback);
-  }
-
-  wire
-    ..add(roundRow)
-    ..addAll(feedbackRows);
-  return nextThreadOrder + 1;
+  return rounds.nextThreadOrder;
 }
 
 /// Loop-driver seams: the DB/service-facing surface the engine injects.
@@ -691,6 +669,14 @@ class BackgroundRunCanceller {
   }
 
   bool isRequested(String taskId) => _flagged.contains(taskId);
+
+  /// Drops a stale flag so a fresh loop for [taskId] starts clean: a
+  /// lifecycle PAUSE flags the task to wake its live run, and the RESUMED
+  /// run (a new requestRun) must not inherit that flag — otherwise its
+  /// first `isCancelled` probe aborts instantly.
+  void clear(String taskId) {
+    _flagged.remove(taskId);
+  }
 
   /// Resolves once a cancel request for [taskId] arrives (never if none
   /// comes). Raced against stream events inside the run.

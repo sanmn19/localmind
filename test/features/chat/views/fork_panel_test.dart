@@ -7,15 +7,19 @@ import 'package:localmind/core/models/enums.dart';
 import 'package:localmind/core/providers/storage_providers.dart';
 import 'package:localmind/features/chat/data/chat_service.dart'
     hide ToolCallData;
+import 'package:localmind/features/chat/data/chat_service.dart' as cs
+    show ToolCallData;
 import 'package:localmind/features/chat/data/fork_service.dart';
 import 'package:localmind/features/chat/data/models/chat_parameters.dart';
 import 'package:localmind/features/chat/data/models/fork_anchor.dart';
 import 'package:localmind/features/chat/data/models/mcp_integration.dart';
 import 'package:localmind/features/chat/data/models/message.dart';
 import 'package:localmind/features/chat/data/tools/tool_definition.dart';
+import 'package:localmind/features/chat/data/tools/tool_registry.dart';
 import 'package:localmind/features/chat/providers/chat_providers.dart';
 import 'package:localmind/features/chat/providers/fork_chat_notifier.dart';
 import 'package:localmind/features/chat/providers/fork_panel_overlay.dart';
+import 'package:localmind/features/chat/providers/tooling_providers.dart';
 import 'package:localmind/features/chat/views/components/chat_bubble/assistant_bubble.dart';
 import 'package:localmind/features/servers/data/models/server.dart';
 import 'package:localmind/l10n/app_localizations.dart';
@@ -140,6 +144,37 @@ class _HangingChatService implements ChatService {
   }
 }
 
+/// Test-scripted fork stream: the wire emits nothing until the test pushes
+/// events through [emit] — holds the exchange in the silent pre-token phase
+/// or mid-reasoning exactly as the real GLM-style streams behave.
+class _ScriptedForkChatService implements ChatService {
+  _ScriptedForkChatService();
+
+  StreamController<ChatResponse>? _controller;
+
+  @override
+  Stream<ChatResponse> sendMessage({
+    required Server server,
+    required String modelId,
+    required List<Message> messages,
+    required ChatParameters params,
+    List<McpIntegration>? integrations,
+    List<ToolDefinition>? tools,
+    bool continueGeneration = false,
+  }) {
+    _controller = StreamController<ChatResponse>();
+    return _controller!.stream;
+  }
+
+  void emit(ChatResponse response) => _controller!.add(response);
+  Future<void> end() => _controller!.close();
+
+  @override
+  void cancelStream() {
+    unawaited(_controller?.close());
+  }
+}
+
 Message _assistantMessage(String content) {
   return Message(
     id: 'msg-done',
@@ -194,6 +229,9 @@ Widget _buildHarness({
   FocusNode? composerFocusNode,
   List<Message> forkSeed = const [],
   List<Message>? mainSeed,
+  double topSpacer = 40,
+  List<ToolDefinition>? forkToolset,
+  ToolRegistry? toolRegistry,
 }) {
   final mainTimeline = mainSeed ?? [ _mainUserRow(), _assistantMessage('Ada Lovelace wrote it')];
   Widget body;
@@ -204,7 +242,7 @@ Widget _buildHarness({
       home: Scaffold(
         body: ListView(
           children: [
-            const SizedBox(height: 40),
+            SizedBox(height: topSpacer),
             AssistantBubble(
               message: _assistantMessage('Ada Lovelace wrote it'),
               isStreaming: false,
@@ -227,7 +265,7 @@ Widget _buildHarness({
               Expanded(
                 child: ListView(
                   children: [
-                    const SizedBox(height: 40),
+                    SizedBox(height: topSpacer),
                     AssistantBubble(
                       message: _assistantMessage('Ada Lovelace wrote it'),
                       isStreaming: false,
@@ -266,6 +304,12 @@ Widget _buildHarness({
           seedTurns: forkSeed,
         ),
       ),
+      if (forkToolset != null)
+        forkChatToolsetProvider.overrideWith(
+          (ref) async => List.of(forkToolset),
+        ),
+      if (toolRegistry != null)
+        toolRegistryProvider.overrideWith((ref) => toolRegistry),
     ],
     child: body,
   );
@@ -647,4 +691,431 @@ void main() {
       expect(state.transcript, isEmpty);
     },
   );
+
+  testWidgets(
+    'a band near the screen bottom anchors the panel ABOVE the band',
+    (tester) async {
+      final service = _FakeForkService([_seedAnchor()]);
+      final chatService = _StreamingChatService(const []);
+
+      await tester.pumpWidget(
+        _buildHarness(
+          prefs: await _prefs(),
+          service: service,
+          chatService: chatService,
+          topSpacer: 420,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final bandKey = const ValueKey<String>('fork_band_anchor-seed');
+      final bandRect = tester.getRect(find.byKey(bandKey));
+      // Sanity: the band genuinely sits near the bottom of the 600px
+      // test surface (within 200 of the bottom edge).
+      expect(600 - bandRect.bottom + bandRect.height, lessThan(200 + bandRect.height));
+
+      await tester.tap(find.byKey(bandKey));
+      await tester.pumpAndSettle();
+      expect(find.byKey(kForkPanelContainerKey), findsOneWidget);
+
+      final panelRect = tester.getRect(find.byKey(kForkPanelContainerKey));
+      expect(panelRect.bottom, lessThanOrEqualTo(bandRect.top - 7.5),
+          reason: 'the panel must land above the band, 8px clear of it');
+      expect(panelRect.top, greaterThanOrEqualTo(8));
+    },
+  );
+
+  testWidgets(
+    'a dialog-worthy fork tool call renders the approval chip; Approve runs the round',
+    (tester) async {
+      final service = _FakeForkService([_seedAnchor()]);
+      final chatService = _ForkToolPanelChatService();
+
+      await tester.pumpWidget(
+        _buildHarness(
+          prefs: await _prefs(),
+          service: service,
+          chatService: chatService,
+          forkToolset: const [
+            ToolDefinition(
+              name: 'mail.send',
+              description: 'send',
+              inputSchema: {},
+              providerType: ToolProviderType.mcp,
+            ),
+          ],
+          toolRegistry: ToolRegistry(providers: [
+            _FakeToolProviderPanel(onExecute: (_, _) async {
+              return const ToolExecutionResult.success('ran-ok');
+            }),
+          ]),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('fork_band_anchor-seed')),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('fork_panel_input')),
+        'please run it',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('fork_panel_send')));
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+
+      // The chip shows the tool name and awaits the user.
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(kForkPanelContainerKey)),
+      );
+      final pending =
+          container.read(forkChatNotifierProvider('fork-seed')).pendingApproval;
+      expect(pending, isNotNull);
+      expect(pending!.toolName, 'mail.send');
+      expect(find.byKey(const ValueKey('fork_approval_approve')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('fork_approval_deny')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('fork_approval_approve')));
+      await _pumpStreaming(tester);
+      await tester.pumpAndSettle();
+
+      expect(
+        container.read(forkChatNotifierProvider('fork-seed')).pendingApproval,
+        isNull,
+      );
+      expect(container.read(forkChatNotifierProvider('fork-seed')).isStreaming,
+          isFalse);
+      expect(find.textContaining('ran-ok answer'), findsOneWidget);
+      // The approved round rode the wire with the tools declared.
+      expect(chatService.toolsSent.first, isNotEmpty);
+    },
+  );
+
+  testWidgets(
+    'closing the panel with a pending approval settles it as denied',
+    (tester) async {
+      final service = _FakeForkService([_seedAnchor()]);
+      final chatService = _ForkToolPanelChatService();
+
+      await tester.pumpWidget(
+        _buildHarness(
+          prefs: await _prefs(),
+          service: service,
+          chatService: chatService,
+          forkToolset: const [
+            ToolDefinition(
+              name: 'mail.send',
+              description: 'send',
+              inputSchema: {},
+              providerType: ToolProviderType.mcp,
+            ),
+          ],
+          toolRegistry: ToolRegistry(providers: [
+            _FakeToolProviderPanel(onExecute: (_, _) async {
+              return const ToolExecutionResult.success('ran');
+            }),
+          ]),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('fork_band_anchor-seed')),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('fork_panel_input')),
+        'please run it',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('fork_panel_send')));
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(kForkPanelContainerKey)),
+      );
+      expect(
+        container.read(forkChatNotifierProvider('fork-seed')).pendingApproval,
+        isNotNull,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('fork_panel_close')));
+      await _pumpStreaming(tester);
+      await tester.pumpAndSettle();
+
+      final state = container.read(forkChatNotifierProvider('fork-seed'));
+      expect(state.pendingApproval, isNull, reason: 'no pending leak');
+      // The settled denial flowed onward as feedback and the exchange
+      // finalized behind the closed panel.
+      expect(state.isStreaming, isFalse);
+      expect(
+        state.transcript.where((m) => m.role == MessageRole.tool).map(
+              (m) => m.content,
+            ),
+        contains(contains('denied by the user')),
+      );
+      // Fix round 1: the closed panel ENDS the loop — no second generation
+      // request may fire behind the dead panel and no fresh chip re-raise.
+      expect(chatService.requests, hasLength(1));
+      // The current exchange content finalizes once: the round row carries
+      // its tool call and stops as 'cancelled'.
+      final roundRow = state.transcript
+          .where((m) => m.role == MessageRole.assistant && m.toolCalls != null)
+          .single;
+      expect(roundRow.stopReason, 'cancelled');
+    },
+  );
+  testWidgets(
+    'a silent pre-token fork stream shows the heartbeat row; it hands off at the first token',
+    (tester) async {
+      final service = _FakeForkService([_seedAnchor()]);
+      final chatService = _ScriptedForkChatService();
+
+      await tester.pumpWidget(
+        _buildHarness(
+          prefs: await _prefs(),
+          service: service,
+          chatService: chatService,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('fork_band_anchor-seed')),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('fork_panel_input')),
+        'who wrote it?',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('fork_panel_send')));
+      // GLM-style silence: no events yet — the panel must show the house
+      // heartbeat + Thinking label instead of a dead transcript.
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(find.byKey(const ValueKey('fork_panel_heartbeat')),
+          findsOneWidget);
+
+      chatService.emit(
+        const ChatResponse(type: ChatResponseType.message, content: 'Hi'),
+      );
+      await tester.pump(const Duration(milliseconds: 40));
+      // Content landed: the heartbeat ends.
+      expect(find.byKey(const ValueKey('fork_panel_heartbeat')), findsNothing);
+      expect(find.textContaining('Hi'), findsOneWidget);
+
+      chatService.emit(const ChatResponse(type: ChatResponseType.done));
+      await chatService.end();
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(kForkPanelContainerKey)),
+      );
+      expect(
+        container.read(forkChatNotifierProvider('fork-seed')).isStreaming,
+        isFalse,
+      );
+    },
+  );
+
+  testWidgets(
+    'reasoning deltas stream a live Thinking row inside the fork panel',
+    (tester) async {
+      final service = _FakeForkService([_seedAnchor()]);
+      final chatService = _ScriptedForkChatService();
+
+      await tester.pumpWidget(
+        _buildHarness(
+          prefs: await _prefs(),
+          service: service,
+          chatService: chatService,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('fork_band_anchor-seed')),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('fork_panel_input')),
+        'who wrote it?',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('fork_panel_send')));
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(find.byKey(const ValueKey('fork_panel_heartbeat')),
+          findsOneWidget);
+
+      chatService.emit(
+        const ChatResponse(
+          type: ChatResponseType.reasoning,
+          reasoningContent: 'Pondering forks',
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 40));
+      // Reasoning arrived: the thinking row takes over from the heartbeat.
+      expect(find.byKey(const ValueKey('fork_panel_heartbeat')), findsNothing);
+      expect(find.text('Thinking'), findsOneWidget);
+      expect(find.textContaining('Pondering forks'), findsOneWidget);
+
+      chatService.emit(
+        const ChatResponse(
+          type: ChatResponseType.reasoning,
+          reasoningContent: ' and their anchors',
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 40));
+      // The reasoning CONTENT streams live — the row is not frozen.
+      expect(find.textContaining('and their anchors'), findsOneWidget);
+
+      chatService.emit(
+        const ChatResponse(type: ChatResponseType.message, content: 'It was Ada.'),
+      );
+      chatService.emit(const ChatResponse(type: ChatResponseType.done));
+      await chatService.end();
+      await tester.pumpAndSettle();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(kForkPanelContainerKey)),
+      );
+      final state = container.read(forkChatNotifierProvider('fork-seed'));
+      expect(state.isStreaming, isFalse);
+      expect(state.failure, isNull);
+      // The finalized turn keeps its reasoning next to the answer.
+      expect(state.transcript.last.reasoningContent,
+          'Pondering forks and their anchors');
+      expect(find.text('Thinking'), findsOneWidget);
+      expect(find.textContaining('It was Ada.'), findsOneWidget);
+      expect(find.byKey(const ValueKey('fork_panel_heartbeat')), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'a tool round renders the tool-activity row and the result line in the transcript',
+    (tester) async {
+      final service = _FakeForkService([_seedAnchor()]);
+      final chatService = _ForkToolPanelChatService();
+
+      await tester.pumpWidget(
+        _buildHarness(
+          prefs: await _prefs(),
+          service: service,
+          chatService: chatService,
+          forkToolset: const [
+            ToolDefinition(
+              name: 'mail.send',
+              description: 'send',
+              inputSchema: {},
+              providerType: ToolProviderType.mcp,
+            ),
+          ],
+          toolRegistry: ToolRegistry(providers: [
+            _FakeToolProviderPanel(onExecute: (_, _) async {
+              return const ToolExecutionResult.success('ran-ok');
+            }),
+          ]),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('fork_band_anchor-seed')),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('fork_panel_input')),
+        'please run it',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('fork_panel_send')));
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      await tester.tap(find.byKey(const ValueKey('fork_approval_approve')));
+      await _pumpStreaming(tester);
+      await tester.pumpAndSettle();
+
+      // Tool-activity row: tool name + verdict; result line: clipped
+      // verdict text (styling language of the main chat's tool rows).
+      expect(find.textContaining('called mail.send'), findsOneWidget);
+      expect(find.textContaining('· done'), findsOneWidget);
+      expect(find.textContaining('result ran-ok'), findsOneWidget);
+    },
+  );
+}
+
+/// Panel-level scripted tool-call ChatService: first sendMessage streams a
+/// toolCall for a dialog-worthy tool, the second yields the final answer.
+class _ForkToolPanelChatService implements ChatService {
+  final List<List<ToolDefinition>?> toolsSent = [];
+  final List<List<Message>> requests = [];
+  int _calls = 0;
+
+  @override
+  Stream<ChatResponse> sendMessage({
+    required Server server,
+    required String modelId,
+    required List<Message> messages,
+    required ChatParameters params,
+    List<McpIntegration>? integrations,
+    List<ToolDefinition>? tools,
+    bool continueGeneration = false,
+  }) async* {
+    toolsSent.add(tools);
+    requests.add(messages);
+    final round = _calls++;
+    if (round == 0) {
+      yield const ChatResponse(
+        type: ChatResponseType.message,
+        content: 'Let me run that tool.',
+      );
+      yield ChatResponse(
+        type: ChatResponseType.toolCall,
+        toolCall: cs.ToolCallData(
+          tool: 'mail.send',
+          arguments: {'to': 'x@example.com'},
+        ),
+      );
+    } else {
+      yield const ChatResponse(
+        type: ChatResponseType.message,
+        content: 'ran-ok answer',
+      );
+    }
+    yield const ChatResponse(type: ChatResponseType.done);
+  }
+
+  @override
+  void cancelStream() {}
+}
+
+class _FakeToolProviderPanel implements ToolProvider {
+  _FakeToolProviderPanel({this.onExecute});
+
+  final Future<ToolExecutionResult> Function(
+    String name,
+    Map<String, dynamic> args,
+  )? onExecute;
+
+  @override
+  Future<List<ToolDefinition>> listTools() async => const [
+        ToolDefinition(
+          name: 'mail.send',
+          description: 'send',
+          inputSchema: {},
+          providerType: ToolProviderType.mcp,
+        ),
+      ];
+
+  @override
+  Future<ToolExecutionResult> execute(
+    String name,
+    Map<String, dynamic> args,
+  ) =>
+      onExecute!(name, args);
 }

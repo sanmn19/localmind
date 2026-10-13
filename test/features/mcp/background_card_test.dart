@@ -111,8 +111,8 @@ void main() {
     );
   });
 
-  testWidgets('task rows render state chips with owner titles and the cancel '
-      'button calls the service', (tester) async {
+  testWidgets('task rows render state chips with owner titles and the '
+      'pause/stop actions route through the service', (tester) async {
     final tasks = [
       _task('bg-live', prompt: 'watch the inbox',
           state: BackgroundTaskState.running),
@@ -133,21 +133,65 @@ void main() {
     expect(find.text('watch the inbox'), findsOneWidget);
     expect(find.text('summarize the notes'), findsOneWidget);
     expect(find.text('Owner Chat'), findsNWidgets(2));
-    expect(find.byKey(const Key('background_cancel_bg-live')), findsOneWidget);
-    expect(find.byKey(const Key('background_cancel_bg-done')), findsOneWidget);
+    expect(
+      find.byKey(const Key('background_cancel_bg-live')),
+      findsNothing,
+      reason: 'naked cancel keys are retired by the Task 4 parity swap',
+    );
+    expect(
+      find.byKey(const Key('background_card_pause_bg-live')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('background_card_stop_bg-live')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('background_card_resume_bg-live')),
+      findsNothing,
+    );
     expect(spy.setBackgroundTasksEnabledCalls, isEmpty);
     expect(service.cancelCalls, isEmpty);
+    expect(service.pauseCalls, isEmpty);
     expect(find.text('Cancel task'), findsNothing,
         reason: 'tooltips do not render as text before hover');
+    expect(find.text('Pause task'), findsNothing,
+        reason: 'tooltips do not render as text before hover');
 
-    // Tapping cancel calls the service for the RUNNING row and the row
-    // flips to cancelled on the next refresh.
-    await tester.tap(find.byKey(const Key('background_cancel_bg-live')));
+    // Tapping pause calls the service for the RUNNING row; the refresh
+    // (through backgroundTaskActionsProvider) flips the chip and swaps the
+    // button set to resume+stop.
+    await tester.tap(find.byKey(const Key('background_card_pause_bg-live')));
+    await tester.pumpAndSettle();
+
+    expect(service.pauseCalls, ['bg-live']);
+    expect(find.text('Paused'), findsOneWidget);
+    expect(find.text('Running'), findsNothing);
+    expect(
+      find.byKey(const Key('background_card_resume_bg-live')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('background_card_pause_bg-live')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const Key('background_task_row_bg-live')),
+      findsOneWidget,
+    );
+
+    // Stop carries the cancel semantics: same service call, terminal flip.
+    await tester.tap(find.byKey(const Key('background_card_stop_bg-live')));
     await tester.pumpAndSettle();
 
     expect(service.cancelCalls, ['bg-live']);
     expect(find.text('Cancelled'), findsOneWidget);
     expect(find.byKey(const Key('background_task_row_bg-live')), findsOneWidget);
+    expect(find.byKey(const Key('background_card_stop_bg-live')), findsNothing,
+        reason: 'terminal rows render no action buttons');
+    expect(find.byKey(const Key('background_card_pause_bg-done')), findsNothing);
+    expect(find.byKey(const Key('background_card_stop_bg-done')), findsNothing,
+        reason: 'finished rows keep chip-only rendering');
   });
 
   testWidgets('shows the empty label when no conversation owns tasks',
@@ -193,12 +237,15 @@ BackgroundTask _task(
 }
 
 /// Card-facing fake over [BackgroundTasksService]: tasksFor answers from an
-/// in-memory list; cancelTask records and flips the row so the invalidated
-/// rows provider observes the cancelled state.
+/// in-memory list; pause/resume/stop record and flip the row so the
+/// invalidated rows provider observes the transition (the actions provider
+/// surfaces them to the card rows).
 class _CardBgService extends Fake implements BackgroundTasksService {
   _CardBgService(this.tasks);
 
   final List<BackgroundTask> tasks;
+  final pauseCalls = <String>[];
+  final resumeCalls = <String>[];
   final cancelCalls = <String>[];
 
   @override
@@ -209,14 +256,32 @@ class _CardBgService extends Fake implements BackgroundTasksService {
   }
 
   @override
+  Future<bool> pauseTask(String taskId) async {
+    pauseCalls.add(taskId);
+    _flip(taskId, BackgroundTaskState.paused);
+    return true;
+  }
+
+  @override
+  Future<bool> resumeTask(String taskId) async {
+    resumeCalls.add(taskId);
+    _flip(taskId, BackgroundTaskState.running);
+    return true;
+  }
+
+  @override
   Future<bool> cancelTask(String taskId) async {
     cancelCalls.add(taskId);
+    _flip(taskId, BackgroundTaskState.cancelled);
+    return true;
+  }
+
+  void _flip(String taskId, BackgroundTaskState state) {
     for (var i = 0; i < tasks.length; i++) {
       if (tasks[i].id == taskId) {
-        tasks[i] = tasks[i].copyTask(state: BackgroundTaskState.cancelled);
+        tasks[i] = tasks[i].copyTask(state: state);
       }
     }
-    return true;
   }
 }
 
