@@ -1,6 +1,9 @@
 import 'dart:async';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:localmind/features/chat/data/background_engine.dart';
+import 'package:localmind/features/chat/data/background_task_service.dart';
 import 'package:localmind/features/chat/data/models/background_task.dart';
 import 'package:localmind/features/chat/providers/tooling_providers.dart';
 
@@ -90,6 +93,48 @@ void main() {
       reason: 'the 150/300/600ms schedule makes exactly three attempts',
     );
   });
+
+  test('actions.resume on a LAGGING parked loop does not silently lose the '
+      'enqueue', () async {
+    // The parked loop's registry entry lingers until its abort future
+    // settles — the T2 lagging-loop fake pattern, now through the FULL
+    // actions-provider closure. Fix round 1: the actions resume used to
+    // call _ensureTaskRunning without `resumed: true`, dropping the
+    // bounded retry for this exact shape.
+    var loopActive = true;
+    Timer(const Duration(milliseconds: 200), () => loopActive = false);
+    final enqueues = <String>[];
+
+    final container = ProviderContainer(
+      overrides: [
+        backgroundTasksServiceProvider.overrideWith((_) => _ActionsService()),
+        backgroundEngineProvider.overrideWith(
+          (_) => _LaggingEngine((id) {
+            // requestRun mirror: refuses while the old loop is still
+            // registered in the engine.
+            if (loopActive) return false;
+            enqueues.add(id);
+            return true;
+          }),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final actions = container.read(backgroundTaskActionsProvider);
+    final resumed = await actions.resume('t-1');
+
+    // Advance past a retry tick: attempt 1 (~150ms) is refused by the
+    // lingering loop, attempt 2 (~450ms) lands after the lag cleared.
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+
+    expect(resumed, isTrue);
+    expect(
+      enqueues,
+      ['t-1'],
+      reason: 'the enqueue lands exactly once, only after the lag cleared',
+    );
+  });
 }
 
 BackgroundTask _resumableRow({
@@ -106,4 +151,31 @@ BackgroundTask _resumableRow({
     state: state,
     createdAt: DateTime.utc(2026, 10, 12, 9),
   );
+}
+
+/// Minimal service fake over the actions-provider resume seam: an
+/// authoritative `taskById` read + a resumeTask flip, matching the
+/// _PageBgService shape without the page harness.
+class _ActionsService extends Fake implements BackgroundTasksService {
+  BackgroundTask row = _resumableRow();
+
+  @override
+  Future<BackgroundTask?> taskById(String taskId) async => row;
+
+  @override
+  Future<bool> resumeTask(String taskId) async {
+    row = _resumableRow();
+    return true;
+  }
+}
+
+/// Engine fake whose requestRun mirrors the parked-loop registry: refuse
+/// while the lagging loop still occupies the slot.
+class _LaggingEngine extends Fake implements BackgroundRunEngine {
+  _LaggingEngine(this.tryRun);
+
+  final bool Function(String taskId) tryRun;
+
+  @override
+  bool requestRun(String taskId) => tryRun(taskId);
 }

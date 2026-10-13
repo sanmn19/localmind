@@ -7,6 +7,7 @@ import '../../../core/providers/storage_providers.dart';
 import '../../../core/storage/entities.dart';
 import '../../../objectbox.g.dart';
 import '../../chat/data/background_task_service.dart';
+import '../../chat/providers/tooling_providers.dart';
 import '../../chat/utils/message_variants.dart';
 import '../data/message_search_service.dart';
 import '../data/models/message_search_hit.dart';
@@ -245,6 +246,7 @@ class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
     await ref
         .read(backgroundTasksServiceProvider)
         .deleteTasksOwnedBy(id);
+    ref.invalidate(backgroundPageTasksProvider);
 
     await _updateState();
   }
@@ -532,6 +534,7 @@ class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
     // live loop through the engine cancel seam.
     final service = ref.read(backgroundTasksServiceProvider);
     await service.deleteAllTasks();
+    ref.invalidate(backgroundPageTasksProvider);
     db.messageBox.removeAll();
     db.conversationBox.removeAll();
     await _updateState();

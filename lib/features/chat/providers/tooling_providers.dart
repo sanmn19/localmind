@@ -545,7 +545,10 @@ final backgroundEngineProvider = Provider<BackgroundRunEngine>((ref) {
       ownerConversationId,
     ),
     onEngineTouched: () {
-      if (ref.mounted) ref.invalidate(backgroundTaskRowsProvider);
+      if (ref.mounted) {
+        ref.invalidate(backgroundTaskRowsProvider);
+        ref.invalidate(backgroundPageTasksProvider);
+      }
     },
   );
 
@@ -630,7 +633,9 @@ final backgroundTaskActionsProvider = Provider<BackgroundTaskActions>((ref) {
     },
     resume: (taskId) async {
       final ok = await service.resumeTask(taskId);
-      if (ok) unawaited(_ensureTaskRunning(ref, taskId));
+      // Same seam as the resume bridge: the bounded enqueue retry so a
+      // lagging parked loop cannot silently swallow the fresh run.
+      if (ok) unawaited(_ensureTaskRunning(ref, taskId, resumed: true));
       return finish(ok);
     },
     stop: (taskId) async {
