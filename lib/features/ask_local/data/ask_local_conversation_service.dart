@@ -15,7 +15,7 @@ const String askLocalConversationKind = 'ask_local';
 const String askLocalConversationTitle = 'Ask Local';
 
 /// Resolves — or creates — THE Ask Local conversation row
-/// (docs/specs/2026-10-13-ask-local-overlay.md).
+/// (docs/specs/2026-10-13-ask-local-overlay-design.md).
 ///
 /// The overlay chat is a single, persistent, user-visible conversation
 /// marked with [askLocalConversationKind] via
@@ -82,6 +82,9 @@ class AskLocalConversationService {
     // 2. Legacy-title tolerance: rows titled 'Ask Local' that carry a null
     //    marker were created before the specialKind column existed — stamp
     //    the oldest one in place instead of creating a duplicate.
+    //    Temporary chats are never adopted, and the stamped row is
+    //    un-archived (same invariant as the create path). The createdAt-then-
+    //    id tie-break keeps the choice deterministic (List.sort is unstable).
     final legacyQuery = box
         .query(ConversationEntity_.title.equals(askLocalConversationTitle))
         .build();
@@ -89,12 +92,18 @@ class AskLocalConversationService {
     legacyQuery.close();
     final legacy = titledRows
         .where((row) =>
-            row.title == askLocalConversationTitle && row.specialKind == null)
+            row.title == askLocalConversationTitle &&
+            row.specialKind == null &&
+            !row.isTemporary)
         .toList()
-      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      ..sort((a, b) {
+        final byDate = a.createdAt.compareTo(b.createdAt);
+        return byDate != 0 ? byDate : a.id.compareTo(b.id);
+      });
     if (legacy.isNotEmpty) {
       final stamped = legacy.first;
       stamped.specialKind = askLocalConversationKind;
+      stamped.isArchived = false;
       box.put(stamped);
       return stamped.toDomain();
     }

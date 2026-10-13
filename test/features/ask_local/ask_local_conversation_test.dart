@@ -97,6 +97,67 @@ void main() {
       expect(newer.specialKind, isNull);
     });
 
+    test('legacy stamping ignores temporary chats', () async {
+      final temp = ConversationEntity(
+        id: 'legacy-temp',
+        title: askLocalConversationTitle,
+        createdAt: DateTime.utc(2026, 10, 1),
+        updatedAt: DateTime.utc(2026, 10, 1),
+        isTemporary: true,
+      );
+      final db = _FakeAskLocalDb([temp]);
+      final service = AskLocalConversationService(db);
+
+      final ensured = await service.ensure();
+
+      expect(ensured.id, isNot('legacy-temp'));
+      expect(ensured.isTemporary, isFalse);
+      expect(ensured.specialKind, askLocalConversationKind);
+      expect(temp.specialKind, isNull);
+      expect(db.conversations.map((c) => c.id), contains('legacy-temp'));
+    });
+
+    test('legacy stamping un-archives the stamped row', () async {
+      final archived = ConversationEntity(
+        id: 'legacy-archived',
+        title: askLocalConversationTitle,
+        createdAt: DateTime.utc(2026, 10, 1),
+        updatedAt: DateTime.utc(2026, 10, 1),
+        isArchived: true,
+      );
+      final db = _FakeAskLocalDb([archived]);
+      final service = AskLocalConversationService(db);
+
+      final ensured = await service.ensure();
+
+      expect(ensured.id, 'legacy-archived');
+      expect(ensured.isArchived, isFalse);
+      expect(archived.isArchived, isFalse);
+    });
+
+    test('legacy stamping breaks equal-createdAt ties by id', () async {
+      final tieB = ConversationEntity(
+        id: 'tie-b',
+        title: askLocalConversationTitle,
+        createdAt: DateTime.utc(2026, 10, 5),
+        updatedAt: DateTime.utc(2026, 10, 5),
+      );
+      final tieA = ConversationEntity(
+        id: 'tie-a',
+        title: askLocalConversationTitle,
+        createdAt: DateTime.utc(2026, 10, 5),
+        updatedAt: DateTime.utc(2026, 10, 5),
+      );
+      final db = _FakeAskLocalDb([tieB, tieA]);
+      final service = AskLocalConversationService(db);
+
+      final ensured = await service.ensure();
+
+      expect(ensured.id, 'tie-a');
+      expect(tieA.specialKind, askLocalConversationKind);
+      expect(tieB.specialKind, isNull);
+    });
+
     test('unrelated rows are never stamped or duped', () async {
       final other = ConversationEntity(
         id: 'c-other',
