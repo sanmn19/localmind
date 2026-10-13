@@ -78,6 +78,23 @@
                     android:scheme="localmind" />
             </intent-filter>
         </activity>
+        <!-- "Ask Local" text-selection target. Translucent + history-free:
+             the activity only extracts EXTRA_PROCESS_TEXT, stakes the
+             capture request, then finishes without text replacement. -->
+        <activity
+            android:name=".AskLocalTextActivity"
+            android:exported="true"
+            android:label="@string/ask_local_menu_label"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:noHistory="true"
+            android:excludeFromRecents="true"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

@@ -28,6 +28,7 @@ class MainActivity : AudioServiceActivity() {
     private val MEMORY_CHANNEL = "localmind/device_memory"
     private val ASSISTANT_CHANNEL = "localmind/android_assistant"
     private val SHARE_CHANNEL = "localmind/share_receive"
+    private val ASK_LOCAL_CHANNEL = "localmind/ask_local"
     private val DEVICE_TOOLS_CHANNEL = "localmind/device_tools"
     private val NOTIFICATIONS_CHANNEL = "localmind/notifications"
 
@@ -36,6 +37,7 @@ class MainActivity : AudioServiceActivity() {
     private var pendingRoleRequest: MethodChannel.Result? = null
     private var shareChannel: MethodChannel? = null
     private var pendingSharePayload: Map<String, Any?>? = null
+    private var askLocalChannel: MethodChannel? = null
     private val shareIoExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
     private val shareMainHandler = Handler(Looper.getMainLooper())
 
@@ -222,6 +224,45 @@ class MainActivity : AudioServiceActivity() {
                                 "payload" to payload
                             ) else mapOf("pending" to false)
                         )
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        }
+
+        // Ask Local ("Ask LocalMind" PROCESS_TEXT staging). Dart listens for
+        // `askLocalRequestArrived` pushes and pulls any request that landed
+        // while no engine was attached via `consumePendingAskLocal`.
+        askLocalChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            ASK_LOCAL_CHANNEL
+        ).also { channel ->
+            NativeAskLocalSink.onRequest = ::pushAskLocalRequest
+            deliverPendingAskLocal()
+            channel.setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "consumePendingAskLocal" -> {
+                        val payload = NativeAskLocalSink.consumePending()
+                        result.success(
+                            if (payload != null) mapOf(
+                                "pending" to true,
+                                "payload" to payload
+                            ) else mapOf("pending" to false)
+                        )
+                    }
+                    "isCaptureAvailable" -> result.success(isAssistantScreenCaptureEnabled())
+                    "captureNow" -> askLocalCaptureNow(result)
+                    "openOverlayNow" -> {
+                        val delivered = NativeAskLocalSink.onOpenOverlay?.invoke(
+                            call.argument<String?>("capturePath"),
+                            call.argument<String>("selectedText") ?: ""
+                        )
+                        if (delivered == true) {
+                            result.success(true)
+                        } else {
+                            Log.w("LocalMindAskLocal", "openOverlayNow: no overlay host attached")
+                            result.success(false)
+                        }
                     }
                     else -> result.notImplemented()
                 }
@@ -739,6 +780,66 @@ class MainActivity : AudioServiceActivity() {
         )
     }
 
+    /** Deliver-or-stash for [NativeAskLocalSink.submit] (AskLocalTextActivity
+     *  hand-offs): the payload pushes to Dart as `askLocalRequestArrived` and
+     *  is cleared only via the truthy ack; a missing/unready engine (or a
+     *  null reply = no Dart handler) keeps it stashed for the
+     *  `consumePendingAskLocal` pull. Newest request wins. */
+    private fun pushAskLocalRequest(payload: Map<String, Any?>) {
+        val channel = askLocalChannel
+        if (channel == null) {
+            Log.w("LocalMindAskLocal", "Ask Local request arrived with no engine; stashed")
+            NativeAskLocalSink.pending = payload
+            return
+        }
+        NativeAskLocalSink.pending = payload
+        channel.invokeMethod(
+            "askLocalRequestArrived",
+            payload,
+            object : MethodChannel.Result {
+                override fun success(result: Any?) {
+                    if (result != null) {
+                        NativeAskLocalSink.pending = null
+                    }
+                }
+
+                override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) = Unit
+
+                override fun notImplemented() = Unit
+            }
+        )
+    }
+
+    /** Re-push a request that landed while no Dart handler was attached;
+     *  the stash survives until the push is acked (same dance as
+     *  [pushAskLocalRequest]). */
+    private fun deliverPendingAskLocal() {
+        NativeAskLocalSink.pending?.let(::pushAskLocalRequest)
+    }
+
+    /** Single-frame capture for an already-open card (device_tools
+     *  "screenshot" minus the app-launch staging). Null path resolves as a
+     *  success(null) so the card opens without a thumbnail instead of an
+     *  error dialog. */
+    private fun askLocalCaptureNow(result: MethodChannel.Result) {
+        val service = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            ScreenCaptureAccessibilityService.instance
+        } else {
+            null
+        }
+        if (service == null) {
+            result.error(
+                SCREEN_CAPTURE_OFF_CODE,
+                "LocalMind's Screen Capture accessibility service is not enabled.",
+                null
+            )
+            return
+        }
+        service.captureScreenTo(AskLocalTextActivity.ASK_LOCAL_SCREENSHOTS_DIR, "ask_local") { path ->
+            result.success(path)
+        }
+    }
+
     companion object {
         private const val ASSISTANT_ROLE_REQUEST_CODE = 4101
         private const val SCREENSHOT_TIMEOUT_MS = 2000L
@@ -747,5 +848,35 @@ class MainActivity : AudioServiceActivity() {
         private const val SCREENSHOT_FAILED_CODE = "screenshot_failed"
         private const val PACKAGE_NAME_PATTERN = "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)+\$"
         private const val URI_COMPONENT_LEAVE_CHARS = "-_.!~*'()"
+    }
+}
+
+/** Simple callback holder between the process-local ask-local entry points
+ *  ([AskLocalTextActivity] now, the overlay host later) and MainActivity's
+ *  `localmind/ask_local` channel. [onRequest] routes capture hand-offs into
+ *  the Dart main engine; [pending] keeps the latest request when no host is
+ *  attached yet (newest wins, cleared by the consume pull or an ack);
+ *  [onOpenOverlay] is the door Task 3's window host installs. */
+object NativeAskLocalSink {
+    @Volatile var onRequest: ((Map<String, Any?>) -> Unit)? = null
+
+    @Volatile var onOpenOverlay: ((capturePath: String?, selectedText: String) -> Boolean)? = null
+
+    @Volatile var pending: Map<String, Any?>? = null
+
+    fun submit(payload: Map<String, Any?>) {
+        val handler = onRequest
+        if (handler == null) {
+            Log.w("LocalMindAskLocal", "Ask Local request arrived with no host; stashed")
+            pending = payload
+            return
+        }
+        handler(payload)
+    }
+
+    fun consumePending(): Map<String, Any?>? {
+        val stash = pending
+        pending = null
+        return stash
     }
 }

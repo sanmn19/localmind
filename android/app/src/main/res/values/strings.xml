@@ -9,4 +9,5 @@
     <string name="widget_new_chat">New Chat</string>
     <string name="widget_voice">Voice</string>
     <string name="widget_no_model">No default model</string>
+    <string name="ask_local_menu_label">Ask Local</string>
 </resources>
