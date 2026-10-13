@@ -348,6 +348,10 @@ class _ForkAwareAssistantContent extends ConsumerStatefulWidget {
       _ForkAwareAssistantContentState();
 }
 
+/// Fixed window the fresh-creation re-read must land within (device store
+/// reads ride isolate round-trips; 2s also bounds the bail-out below).
+const Duration _freshAnchorsWindow = Duration(seconds: 2);
+
 class _ForkAwareAssistantContentState
     extends ConsumerState<_ForkAwareAssistantContent> {
   /// Measuring keys per fork anchor: the band (or fallback chip) this
@@ -424,10 +428,50 @@ class _ForkAwareAssistantContentState
     if (!mounted) {
       return;
     }
-    ref.invalidate(
-      forkAnchorsForConversationProvider(widget.message.conversationId),
-    );
+    // Fresh-creation band contract: the invalidate starts a NEW anchors
+    // generation whose re-read rides a real isolate round-trip. Wait for
+    // its ARRIVAL (bounded) before opening the panel so the band row exists
+    // — the arrival rebuild is what renders the band, and the open's band
+    // measurement then captures the REAL box instead of a fallback pose.
+    final provider =
+        forkAnchorsForConversationProvider(widget.message.conversationId);
+    ref.invalidate(provider);
+    await _awaitFreshAnchorsArrival(provider, anchor);
+    if (!mounted) {
+      return;
+    }
     _openFork(anchor);
+  }
+
+  /// Bounded (≤2 attempts within a fixed window) wait for the anchors
+  /// generation invalidated by a fresh fork creation to LAND. Why not trust
+  /// the stream alone: the device store reads ride `runInTransactionAsync`
+  /// isolates, and an errored generation is collapsed by the band render
+  /// into `const []` — riverpod 3's default container retry skips
+  /// `Error`-typed failures, leaving a SUCCEEDED fork creation fully
+  /// bandless (device report). Here one explicit retry re-reads before the
+  /// panel opens; if the window expires the panel still opens with the
+  /// fallback pose and the band arrives on the later watch rebuild.
+  Future<void> _awaitFreshAnchorsArrival(
+    FutureProvider<List<ForkAnchor>> provider,
+    ForkAnchor anchor,
+  ) async {
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        final anchors =
+            await ref.read(provider.future).timeout(_freshAnchorsWindow);
+        if (anchors.any((a) => a.id == anchor.id)) {
+          return;
+        }
+      } catch (_) {
+        // Errored/timeout re-read: retry once below; a succeeded creation
+        // must not be silently swallowed by a failed band read.
+      }
+      if (!mounted) {
+        return;
+      }
+      ref.invalidate(provider);
+    }
   }
 
   void _openFork(ForkAnchor anchor) {
