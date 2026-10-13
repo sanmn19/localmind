@@ -10,7 +10,7 @@ in-card approval chips (extra).
 ## UX contract
 
 1. Any app: long-press/select text → OS selection menu shows **"Ask Local"**
-   (Android PROCESS_TEXT intent-filter). Tappe:
+   (Android PROCESS_TEXT intent-filter). Tapping it:
    - the app screenshots the CURRENT screen first via the existing
      accessibility capture service (clean frame: nothing of ours is on
      screen yet);
