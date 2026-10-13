@@ -20,6 +20,7 @@ import android.util.Log
 import android.content.pm.PackageManager
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
@@ -29,6 +30,7 @@ class MainActivity : AudioServiceActivity() {
     private val ASSISTANT_CHANNEL = "localmind/android_assistant"
     private val SHARE_CHANNEL = "localmind/share_receive"
     private val ASK_LOCAL_CHANNEL = "localmind/ask_local"
+    private val ASK_LOCAL_EVENTS_CHANNEL = "localmind/ask_local/events"
     private val DEVICE_TOOLS_CHANNEL = "localmind/device_tools"
     private val NOTIFICATIONS_CHANNEL = "localmind/notifications"
 
@@ -38,6 +40,7 @@ class MainActivity : AudioServiceActivity() {
     private var shareChannel: MethodChannel? = null
     private var pendingSharePayload: Map<String, Any?>? = null
     private var askLocalChannel: MethodChannel? = null
+    private var askLocalClosedSink: EventChannel.EventSink? = null
     private val shareIoExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
     private val shareMainHandler = Handler(Looper.getMainLooper())
 
@@ -253,6 +256,14 @@ class MainActivity : AudioServiceActivity() {
                     "isCaptureAvailable" -> result.success(isAssistantScreenCaptureEnabled())
                     "captureNow" -> askLocalCaptureNow(result)
                     "openOverlayNow" -> {
+                        if (!Settings.canDrawOverlays(this)) {
+                            result.error(
+                                OVERLAY_PERMISSION_MISSING_CODE,
+                                "Display over other apps permission is not granted.",
+                                null
+                            )
+                            return@setMethodCallHandler
+                        }
                         val delivered = NativeAskLocalSink.onOpenOverlay?.invoke(
                             call.argument<String?>("capturePath"),
                             call.argument<String>("selectedText") ?: ""
@@ -264,10 +275,52 @@ class MainActivity : AudioServiceActivity() {
                             result.success(false)
                         }
                     }
+                    "isOverlayPermitted" -> result.success(Settings.canDrawOverlays(this))
+                    "openOverlaySettings" -> {
+                        try {
+                            startActivity(
+                                Intent(
+                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    Uri.parse("package:$packageName")
+                                )
+                            )
+                            result.success(null)
+                        } catch (error: ActivityNotFoundException) {
+                            result.error(
+                                "overlay_settings_unavailable",
+                                "Display-over-apps settings are unavailable.",
+                                null
+                            )
+                        }
+                    }
+                    "closeCard" -> result.success(AskLocalOverlayWindow.close(closedByRequest = true))
+                    "isCardShown" -> result.success(AskLocalOverlayWindow.isShown)
                     else -> result.notImplemented()
                 }
             }
         }
+
+        // Overlay-card lifecycle function-backs (Task 3): show/close hooks
+        // for the window host + an events channel so Dart reaps state when
+        // the window goes away without a Dart close (permission revoked,
+        // token teardown).
+        NativeAskLocalSink.onOpenOverlay =
+            { capturePath, selectedText ->
+                AskLocalOverlayWindow.show(this, capturePath, selectedText)
+            }
+        NativeAskLocalSink.onCardClosed = ::notifyAskLocalCardClosed
+        EventChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            ASK_LOCAL_EVENTS_CHANNEL
+        ).setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                askLocalClosedSink = events
+            }
+
+            override fun onCancel(arguments: Any?) {
+                askLocalClosedSink = null
+            }
+        })
     }
 
 
@@ -817,6 +870,18 @@ class MainActivity : AudioServiceActivity() {
         NativeAskLocalSink.pending?.let(::pushAskLocalRequest)
     }
 
+    /** Ask-local card window torn down without a Dart close request;
+     *  pushes the closed event so Dart can clear "card shown" state. */
+    private fun notifyAskLocalCardClosed() {
+        mainHandler.post {
+            try {
+                askLocalClosedSink?.success(true)
+            } catch (error: Exception) {
+                Log.w("LocalMindAskLocal", "Card-closed event dropped: $error")
+            }
+        }
+    }
+
     /** Single-frame capture for an already-open card (device_tools
      *  "screenshot" minus the app-launch staging). Null path resolves as a
      *  success(null) so the card opens without a thumbnail instead of an
@@ -846,21 +911,26 @@ class MainActivity : AudioServiceActivity() {
         private const val SCREENSHOT_LAUNCH_SETTLE_MS = 1200L
         private const val SCREEN_CAPTURE_OFF_CODE = "screen_capture_service_off"
         private const val SCREENSHOT_FAILED_CODE = "screenshot_failed"
+        private const val OVERLAY_PERMISSION_MISSING_CODE = "overlay_permission_missing"
         private const val PACKAGE_NAME_PATTERN = "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)+\$"
         private const val URI_COMPONENT_LEAVE_CHARS = "-_.!~*'()"
     }
 }
 
 /** Simple callback holder between the process-local ask-local entry points
- *  ([AskLocalTextActivity] now, the overlay host later) and MainActivity's
- *  `localmind/ask_local` channel. [onRequest] routes capture hand-offs into
- *  the Dart main engine; [pending] keeps the latest request when no host is
- *  attached yet (newest wins, cleared by the consume pull or an ack);
- *  [onOpenOverlay] is the door Task 3's window host installs. */
+ *  ([AskLocalTextActivity] now, [AskLocalOverlayWindow] since Task 3) and
+ *  MainActivity's `localmind/ask_local` channel. [onRequest] routes capture
+ *  hand-offs into the Dart main engine; [pending] keeps the latest request
+ *  when no host is attached yet (newest wins, cleared by the consume pull or
+ *  an ack); [onOpenOverlay] is the window-show hook (Task 3 installs it);
+ *  [onCardClosed] fires when the overlay window dies without a Dart close
+ *  request so Dart can reap "card shown" state. */
 object NativeAskLocalSink {
     @Volatile var onRequest: ((Map<String, Any?>) -> Unit)? = null
 
     @Volatile var onOpenOverlay: ((capturePath: String?, selectedText: String) -> Boolean)? = null
+
+    @Volatile var onCardClosed: (() -> Unit)? = null
 
     @Volatile var pending: Map<String, Any?>? = null
 
