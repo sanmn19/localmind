@@ -350,7 +350,15 @@ class _ForkAwareAssistantContent extends ConsumerStatefulWidget {
 
 class _ForkAwareAssistantContentState
     extends ConsumerState<_ForkAwareAssistantContent> {
-  final LayerLink _forkLayerLink = LayerLink();
+  /// Measuring keys per fork anchor: the band (or fallback chip) this
+  /// content renders registers its own box so the fork open captures the
+  /// anchor's REAL screen rect for the panel-anchoring solver.
+  final Map<String, GlobalKey> _bandAnchorKeys = {};
+
+  GlobalKey _bandKeyFor(String anchorId) => _bandAnchorKeys.putIfAbsent(
+        anchorId,
+        () => GlobalKey(debugLabel: 'fork_band_box_$anchorId'),
+      );
 
   /// Latest selection inside this bubble's SelectionArea, fed by the
   /// SelectionArea contract needed at menu-press time.
@@ -423,7 +431,14 @@ class _ForkAwareAssistantContentState
   }
 
   void _openFork(ForkAnchor anchor) {
-    ref.read(forkPanelOverlayProvider.notifier).open(anchor, _forkLayerLink);
+    Rect? bandRect;
+    final box = _bandAnchorKeys[anchor.id]?.currentContext?.findRenderObject();
+    if (box is RenderBox && box.attached && box.hasSize) {
+      bandRect = box.localToGlobal(Offset.zero) & box.size;
+    }
+    ref
+        .read(forkPanelOverlayProvider.notifier)
+        .open(anchor, bandRect: bandRect);
   }
 
   @override
@@ -440,32 +455,29 @@ class _ForkAwareAssistantContentState
     final segments =
         _ForkBandLayout.compute(widget.message.content, anchors, chips);
 
-    return CompositedTransformTarget(
-      link: _forkLayerLink,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (chips.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Wrap(
-                spacing: 6,
-                runSpacing: 4,
-                children: [for (final anchor in chips) _buildChip(anchor)],
-              ),
-            ),
-          SelectionArea(
-            contextMenuBuilder: _buildForkMenu,
-            onSelectionChanged: (content) => _lastSelection = content,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final segment in segments) _buildSegment(segment),
-              ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (chips.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [for (final anchor in chips) _buildChip(anchor)],
             ),
           ),
-        ],
-      ),
+        SelectionArea(
+          contextMenuBuilder: _buildForkMenu,
+          onSelectionChanged: (content) => _lastSelection = content,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final segment in segments) _buildSegment(segment),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -481,15 +493,18 @@ class _ForkAwareAssistantContentState
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onTap: () => _openFork(anchor),
-      child: Container(
-        key: ValueKey<String>('fork_band_${anchor.id}'),
-        color: forkHighlightColor(context),
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-        child: MarkdownBodyContent(
-          content: segment.text,
-          isDark: widget.isDark,
-          selectable: false,
+      child: RepaintBoundary(
+        key: _bandKeyFor(anchor.id),
+        child: Container(
+          key: ValueKey<String>('fork_band_${anchor.id}'),
+          color: forkHighlightColor(context),
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: MarkdownBodyContent(
+            content: segment.text,
+            isDark: widget.isDark,
+            selectable: false,
+          ),
         ),
       ),
     );
@@ -505,19 +520,22 @@ class _ForkAwareAssistantContentState
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onTap: () => _openFork(anchor),
-      child: Container(
-        key: ValueKey<String>('fork_chip_${anchor.id}'),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: forkChipColor(context),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          AppLocalizations.of(context)!.forkChipLabel(clipped),
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: Colors.black87,
+      child: RepaintBoundary(
+        key: _bandKeyFor(anchor.id),
+        child: Container(
+          key: ValueKey<String>('fork_chip_${anchor.id}'),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: forkChipColor(context),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            AppLocalizations.of(context)!.forkChipLabel(clipped),
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
           ),
         ),
       ),

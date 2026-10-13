@@ -168,6 +168,31 @@ Future<bool> shouldAutoApproveTool(
   return false;
 }
 
+/// Fork (selection-anchored panel) chat toolset: the FULL toggled registry
+/// minus the structural `bg.*`/`notifications.*` families — spawning
+/// further background tasks and harvesting notifications are never exposed
+/// to a fork, whatever the toggles said (bg-runner structurals reused via
+/// [bgNeverAvailableToolPrefixes]). Dialog-worthy tools STAY in the fork
+/// toolset: forks approve in-panel through completers instead of relying
+/// on [shouldAutoApproveTool] to gate silently. Pure + dependency-injected.
+List<ToolDefinition> forkChatToolset(List<ToolDefinition> allDefs) {
+  return allDefs
+      .where(
+        (def) => !bgNeverAvailableToolPrefixes.any(def.name.startsWith),
+      )
+      .toList();
+}
+
+/// Resolves the fork chat's live toolset from the CURRENT registry — the
+/// registration layer already encodes the tool toggles (web/terminal/
+/// skills servers register only when enabled).
+final forkChatToolsetProvider = FutureProvider<List<ToolDefinition>>((
+  ref,
+) async {
+  final registry = ref.watch(toolRegistryProvider);
+  return forkChatToolset(await registry.listTools());
+});
+
 WebSearchProvider webSearchProviderFromName(String name) {
   switch (name) {
     case 'tavily':

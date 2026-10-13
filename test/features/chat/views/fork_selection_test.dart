@@ -146,6 +146,10 @@ Future<ForkAnchor> _seedAnchor({
 }
 
 void main() {
+  /// Mid-screen band rect the controller-only tests anchor to (the widget
+  /// path measures the real band box; the controller accepts any rect).
+  const Rect anchorRectHarness = Rect.fromLTRB(360, 300, 560, 330);
+
   testWidgets(
     'long selection on a completed bubble offers Fork from this selection',
     (tester) async {
@@ -425,15 +429,15 @@ void main() {
       anchorMessageId: 'msg-done',
     );
 
-    controller.open(anchorA, LayerLink());
+    controller.open(anchorA, bandRect: anchorRectHarness);
     await tester.pump();
     expect(find.byKey(kForkPanelContainerKey), findsOneWidget);
 
-    controller.open(anchorA, LayerLink());
+    controller.open(anchorA, bandRect: anchorRectHarness);
     await tester.pump();
     expect(find.byKey(kForkPanelContainerKey), findsOneWidget);
 
-    controller.open(anchorB, LayerLink());
+    controller.open(anchorB, bandRect: anchorRectHarness);
     await tester.pump();
     expect(find.byKey(kForkPanelContainerKey), findsOneWidget);
 

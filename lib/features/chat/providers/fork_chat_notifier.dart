@@ -1,37 +1,82 @@
 import 'dart:async';
 
+import 'package:async/async.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:localmind/core/logger/app_logger.dart';
 import 'package:localmind/core/models/enums.dart';
+import 'package:localmind/core/providers/app_providers.dart';
 import 'package:localmind/core/providers/storage_providers.dart';
 import 'package:localmind/core/storage/entities.dart';
 import 'package:localmind/core/utils/uuid.dart';
 import 'package:localmind/features/chat/data/chat_service.dart'
     hide ToolCallData;
+import 'package:localmind/features/chat/data/chat_service.dart' as cs
+    show ToolCallData;
 import 'package:localmind/features/chat/data/fork_service.dart';
 import 'package:localmind/features/chat/data/models/message.dart';
+import 'package:localmind/features/chat/data/tool_rounds.dart';
+import 'package:localmind/features/chat/data/tools/tool_definition.dart';
 import 'package:localmind/features/chat/providers/chat_notifier.dart';
 import 'package:localmind/features/chat/providers/chat_params_providers.dart';
 import 'package:localmind/features/chat/providers/chat_service_providers.dart';
 import 'package:localmind/features/chat/providers/model_selection_providers.dart';
+import 'package:localmind/features/chat/providers/tooling_providers.dart';
+import 'package:localmind/features/mcp/data/terminal_mcp_server.dart';
 import 'package:localmind/objectbox.g.dart';
+
+/// Completer-bound ask-the-user record for ONE fork tool call: the panel
+/// renders it as an in-transcript approval chip; approve()/deny() drive the
+/// pending [Completer] the round is blocked on. Lives in ForkChatState —
+/// fork approvals NEVER touch ChatNotifier's main-feed approval stream.
+class PendingForkApproval {
+  PendingForkApproval({
+    required this.toolName,
+    required this.arguments,
+    required this.completer,
+  });
+
+  final String toolName;
+  final Map<String, dynamic> arguments;
+  final Completer<bool> completer;
+
+  /// Completes the gate with an approval. Idempotent.
+  Future<bool> approve() => _settle(true);
+
+  /// Completes the gate with a denial (the model later receives the
+  /// `denied by the user` feedback string). Idempotent.
+  Future<bool> deny() => _settle(false);
+
+  /// Completes the gate with a denial without UI involvement (panel-close
+  /// / cancel settle paths deny implicitly).
+  void settleAsDenied() => _settle(false);
+
+  Future<bool> _settle(bool approved) {
+    if (!completer.isCompleted) {
+      completer.complete(approved);
+    }
+    return completer.future;
+  }
+}
 
 /// State of one fork (selection-anchored) chat.
 ///
 /// [transcript] carries the fork conversation's own user + assistant turns
 /// in chronological order; [failure] surfaces the last typed rejection
 /// (e.g. an anchor no longer on the active timeline) or stream error, and
-/// is reset when the next [ForkChatNotifier.submit] starts.
+/// is reset when the next [ForkChatNotifier.submit] starts. A non-null
+/// [pendingApproval] pauses the active tool round on an in-panel chip.
 class ForkChatState {
   final List<Message> transcript;
   final bool isStreaming;
   final String? failure;
+  final PendingForkApproval? pendingApproval;
 
   const ForkChatState({
     this.transcript = const [],
     this.isStreaming = false,
     this.failure,
+    this.pendingApproval,
   });
 
   ForkChatState copyWith({
@@ -39,25 +84,32 @@ class ForkChatState {
     bool? isStreaming,
     String? failure,
     bool clearFailure = false,
+    PendingForkApproval? pendingApproval,
+    bool clearPendingApproval = false,
   }) {
     return ForkChatState(
       transcript: transcript ?? this.transcript,
       isStreaming: isStreaming ?? this.isStreaming,
       failure: clearFailure ? null : (failure ?? this.failure),
+      pendingApproval: clearPendingApproval
+          ? null
+          : (pendingApproval ?? this.pendingApproval),
     );
   }
 }
 
 /// Streams replies for one fork (selection-anchored) conversation and
-/// persists every exchange — user turn + assistant turn — into its hidden
-/// fork conversation.
+/// persists every exchange — user turn + assistant turn + any tool-round
+/// rows — into its hidden fork conversation.
 ///
 /// The family is keyed by the fork conversation id; each instance owns its
 /// transcript and builds its ChatService through the same
 /// [chatServiceFactoryProvider] the main sends use (no second Dio/config
 /// path), with `cancel()` forwarding to `ChatService.cancelStream()` just
-/// like `ChatNotifier.cancelStream` does. Forks are plain Q/A v1: no
-/// integrations, no tool loop, no background continuation machinery.
+/// like `ChatNotifier.cancelStream` does. Tool support (task 5B): the fork
+/// send carries the [forkChatToolsetProvider] definitions (structurally
+/// minus `bg.*`/`notifications.*`), and dialog-worthy calls pause the round
+/// on a completer-backed approval chip instead of running silently.
 final forkChatNotifierProvider =
     NotifierProvider.family<ForkChatNotifier, ForkChatState, String>(
       (forkConversationId) =>
@@ -81,6 +133,10 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
   ChatService? _chatService;
   StreamSubscription<ChatResponse>? _streamSubscription;
   bool _cancelled = false;
+  /// Notifier-held mirror of the current approval: resolves (deny) WITHOUT
+  /// `state` usage when the container tears down — riverpod 3 forbids
+  /// state access inside dispose life-cycles.
+  PendingForkApproval? _pendingApproval;
   /// Set at the top of every [submit] and completed on every terminal path
   /// (typed failure, empty reply, error, cancel, success) — [cancelAndSettle]
   /// awaits it so downstream mutations (ForkService.deleteFork) cannot race
@@ -143,6 +199,84 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
       return;
     }
     _failAndStop(anchorUnavailableMessage);
+  }
+
+  /// Fork chat toolset: FULL toggled registry minus the structural
+  /// bg.*/notifications.* families (see [forkChatToolset]). Dialog-worthy
+  /// tools STAY — forks approve in-panel. Best-effort: any registry
+  /// resolution failure (fresh install, missing plugin in early boot) falls
+  /// back to `null` — a plain tool-less fork send, the pre-task-5 behavior.
+  Future<List<ToolDefinition>?> _resolveForkTools() async {
+    try {
+      final defs = await ref.read(forkChatToolsetProvider.future);
+      return defs.isEmpty ? null : defs;
+    } catch (error) {
+      Log.error('Fork toolset resolution failed (tool-less fork): $error');
+      return null;
+    }
+  }
+
+  /// The fork approval gate for the shared round executor: auto-approve
+  /// when the toggles already allow the call (same verdict the main chat
+  /// uses); otherwise park the completer-backed
+  /// [PendingForkApproval] in state and await the panel chip.
+  ToolApprovalGate _forkApprovalGate() {
+    return (toolName, arguments) async {
+      var auto = false;
+      try {
+        final settings = ref.read(settingsProvider);
+        final registry = ref.read(toolRegistryProvider);
+        auto = await shouldAutoApproveTool(
+          toolName,
+          args: arguments,
+          webToolsEnabled: settings.webToolsEnabled,
+          terminalToolsEnabled: settings.terminalToolsEnabled,
+          deviceToolsEnabled: settings.deviceToolsEnabled,
+          mailAccountsConnected: settings.mailConnectorAccounts.isNotEmpty,
+          skillsEnabled: settings.skillsEnabled,
+          backgroundTasksEnabled: settings.backgroundTasksEnabled,
+          notificationToolsEnabled: settings.notificationToolsEnabled,
+          registry: registry,
+          whitelist: TerminalWhitelist(settings.toolWhitelist),
+        );
+      } catch (_) {
+        auto = false;
+      }
+      if (auto) return true;
+      if (!ref.mounted) return false;
+      final completer = Completer<bool>();
+      final approval = PendingForkApproval(
+        toolName: toolName,
+        arguments: arguments,
+        completer: completer,
+      );
+      _pendingApproval = approval;
+      state = state.copyWith(pendingApproval: approval);
+      final approved = await completer.future;
+      if (identical(_pendingApproval, approval)) {
+        _pendingApproval = null;
+      }
+      if (ref.mounted && identical(state.pendingApproval, approval)) {
+        state = state.copyWith(clearPendingApproval: true);
+      }
+      return approved;
+    };
+  }
+
+  /// Completes a pending approval as DENIED and clears it. Called by the
+  /// overlay controller when a panel closes (or a cancel/settle) over a
+  /// live chip — the awaiting round then resumes with the denial feedback
+  /// instead of dead-waiting. Never touches the main feed.
+  void settlePendingApproval() {
+    final pending = _pendingApproval;
+    if (pending == null) return;
+    pending.settleAsDenied();
+    if (identical(_pendingApproval, pending)) {
+      _pendingApproval = null;
+    }
+    if (ref.mounted && identical(state.pendingApproval, pending)) {
+      state = state.copyWith(clearPendingApproval: true);
+    }
   }
 
   /// Submits [question] to the fork conversation whose slot this notifier
@@ -225,20 +359,8 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
       conversationId: forkConversationId,
       threadOrder: forkTurns.length,
     );
-    var streamingAssistant = Message(
-      id: generateUuidV4(),
-      conversationId: forkConversationId,
-      role: MessageRole.assistant,
-      content: '',
-      createdAt: DateTime.now(),
-      status: MessageStatus.streaming,
-      modelId: effectiveModelId,
-      threadOrder: forkTurns.length + 1,
-    );
 
-    state = state.copyWith(
-      transcript: [...forkTurns, userRow, streamingAssistant],
-    );
+    state = state.copyWith(transcript: [...forkTurns, userRow]);
 
     // The user turn persists up front; the assistant row persists when it
     // finalizes (complete/error/cancelled) — one row per turn.
@@ -251,125 +373,238 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
     _chatService = chatService;
     // Mirrors ChatNotifier's streamHadError guard: real services yield the
     // error/timeoutError as a data event and then return, which closes the
-    // stream — onDone fires AFTER the failure already finalized the turn,
-    // so the done branch must not re-finalize over the error state.
+    // stream — the done branch must not re-finalize over the error state.
     var errorFinalized = false;
 
-    _streamSubscription = chatService
-        .sendMessage(
+    // Fork tool loop (task 5B): the fork partner speaks with the same
+    // toolset the main chat would send minus the bg.*/notifications.* families;
+    // dialog-worthy calls pause the round on an in-panel approval chip.
+    final forkTools = await _resolveForkTools();
+    var nextThreadOrder = forkTurns.length + 1;
+
+    // Drives ONE generation round: streams against the (frozen) wire,
+    // mirrors the main pipeline's feedback protocol, and finalizes at a
+    // content-only close. Tool rounds persist the round rows, then the
+    // next round streams over the grown wire. Errors finalize ONCE.
+    Future<void> runRound(int roundIndex) async {
+      var streamingRow = Message(
+        id: generateUuidV4(),
+        conversationId: forkConversationId,
+        role: MessageRole.assistant,
+        content: '',
+        createdAt: DateTime.now(),
+        status: MessageStatus.streaming,
+        modelId: effectiveModelId,
+        threadOrder: nextThreadOrder,
+      );
+      _upsertTranscript(streamingRow);
+
+      var content = '';
+      var reasoningContent = '';
+      final roundCalls = <cs.ToolCallData>[];
+
+      final responseQueue = StreamQueue<ChatResponse>(
+        chatService.sendMessage(
           server: server,
           modelId: effectiveModelId,
-          messages: wire,
+          messages: List.of(wire),
           params: ref.read(chatParamsProvider),
-        )
-        .listen(
-          (response) async {
-            switch (response.type) {
-              case ChatResponseType.message:
-                streamingAssistant = streamingAssistant.copyWith(
-                  content:
-                      streamingAssistant.content + (response.content ?? ''),
-                  isProcessing: false,
-                );
-                _bumpTranscript(streamingAssistant);
-                break;
-              case ChatResponseType.reasoning:
-                streamingAssistant = streamingAssistant.copyWith(
-                  reasoningContent:
-                      (streamingAssistant.reasoningContent ?? '') +
-                      (response.reasoningContent ?? ''),
-                  isProcessing: false,
-                );
-                _bumpTranscript(streamingAssistant);
-                break;
-              case ChatResponseType.processing:
-                streamingAssistant = streamingAssistant.copyWith(
-                  isProcessing: true,
-                );
-                _bumpTranscript(streamingAssistant);
-                break;
-              case ChatResponseType.error:
-              case ChatResponseType.timeoutError:
-                errorFinalized = true;
-                streamingAssistant = streamingAssistant.copyWith(
-                  status: MessageStatus.error,
-                  errorMessage:
-                      response.content ?? 'The model failed to respond.',
-                  isProcessing: false,
-                );
-                await _finalize(
-                  streamingAssistant,
-                  failure: streamingAssistant.errorMessage,
-                );
-                if (!finished.isCompleted) finished.complete();
-                break;
-              case ChatResponseType.toolCall:
-              case ChatResponseType.invalidToolCall:
-              case ChatResponseType.done:
-                // Forks are plain Q/A v1: no tool loop. The `done` event is
-                // finalized by the stream's own onDone below.
-                break;
-            }
-          },
-          onDone: () async {
-            if (errorFinalized) {
-              // The error branch already finalized this turn and left the
-              // failure surfaced — do not overwrite the error state (e.g.
-              // re-upserting the row as `complete`) when the stream simply
-              // closes after the error response.
-              if (!finished.isCompleted) finished.complete();
-              return;
-            }
-            final hasContent =
-                streamingAssistant.content.trim().isNotEmpty ||
-                (streamingAssistant.reasoningContent?.trim().isNotEmpty ??
-                    false);
-            if (_cancelled) {
-              // A forwarded cancel keeps the partially received content in
-              // the transcript instead of surfacing a failure.
-              await _finalize(
-                streamingAssistant.copyWith(
-                  status: MessageStatus.complete,
-                  isProcessing: false,
-                  stopReason: 'cancelled',
-                ),
-              );
-            } else if (!hasContent) {
-              await _finalize(
-                streamingAssistant.copyWith(
-                  status: MessageStatus.error,
-                  errorMessage:
-                      'Model failed to respond. This may happen with free '
-                      'tier models that refuse certain prompts or when the '
-                      'service is busy.',
-                  isProcessing: false,
-                ),
-                failure: 'The model returned an empty reply for this fork.',
-              );
-            } else {
-              await _finalize(
-                streamingAssistant.copyWith(
-                  status: MessageStatus.complete,
-                  isProcessing: false,
-                  stopReason: 'complete',
-                ),
-              );
-            }
-            if (!finished.isCompleted) finished.complete();
-          },
-          onError: (Object error, StackTrace stackTrace) async {
+          tools: forkTools == null ? null : List.of(forkTools),
+        ),
+      );
+
+      while (await responseQueue.hasNext) {
+        final response = await responseQueue.next;
+        switch (response.type) {
+          case ChatResponseType.message:
+            content += response.content ?? '';
+            streamingRow = streamingRow.copyWith(
+              content: streamingRow.content + (response.content ?? ''),
+              isProcessing: false,
+            );
+            _bumpTranscript(streamingRow);
+          case ChatResponseType.reasoning:
+            reasoningContent += response.reasoningContent ?? '';
+            streamingRow = streamingRow.copyWith(
+              reasoningContent: reasoningContent,
+              isProcessing: false,
+            );
+            _bumpTranscript(streamingRow);
+          case ChatResponseType.processing:
+            streamingRow = streamingRow.copyWith(
+              isProcessing: true,
+            );
+            _bumpTranscript(streamingRow);
+          case ChatResponseType.toolCall:
+            if (response.toolCall != null) roundCalls.add(response.toolCall!);
+          case ChatResponseType.error:
+          case ChatResponseType.timeoutError:
+            errorFinalized = true;
+            streamingRow = streamingRow.copyWith(
+              status: MessageStatus.error,
+              errorMessage:
+                  response.content ?? 'The model failed to respond.',
+              isProcessing: false,
+            );
             await _finalize(
-              streamingAssistant.copyWith(
-                status: MessageStatus.error,
-                errorMessage: error.toString(),
-                isProcessing: false,
-              ),
-              failure: error.toString(),
+              streamingRow,
+              failure: streamingRow.errorMessage,
             );
             if (!finished.isCompleted) finished.complete();
-          },
-          cancelOnError: true,
+            return;
+          case ChatResponseType.invalidToolCall:
+          case ChatResponseType.done:
+            break;
+        }
+      }
+
+      if (errorFinalized) {
+        // The error branch already finalized this turn and left the
+        // failure surfaced — do not overwrite the error state when the
+        // stream simply closes after the error response.
+        if (!finished.isCompleted) finished.complete();
+        return;
+      }
+      if (roundCalls.isEmpty) {
+        final hasContent = content.trim().isNotEmpty ||
+            reasoningContent.trim().isNotEmpty;
+        if (_cancelled) {
+          // A forwarded cancel keeps the partially received content in
+          // the transcript instead of surfacing a failure.
+          await _finalize(
+            streamingRow.copyWith(
+              status: MessageStatus.complete,
+              isProcessing: false,
+              stopReason: 'cancelled',
+            ),
+          );
+        } else if (!hasContent) {
+          await _finalize(
+            streamingRow.copyWith(
+              status: MessageStatus.error,
+              errorMessage:
+                  'Model failed to respond. This may happen with free tier '
+                  'models that refuse certain prompts or when the service is '
+                  'busy.',
+              isProcessing: false,
+            ),
+            failure: 'The model returned an empty reply for this fork.',
+          );
+        } else {
+          await _finalize(
+            streamingRow.copyWith(
+              status: MessageStatus.complete,
+              isProcessing: false,
+              stopReason: 'complete',
+            ),
+          );
+        }
+        if (!finished.isCompleted) finished.complete();
+        return;
+      }
+
+      // A tool round: the stream closed with pending calls — budget guard,
+      // then persist round + feedback rows through the SHARED executor with
+      // the fork approval gate.
+      if (roundIndex >= bgMaxToolRounds) {
+        streamingRow = streamingRow.copyWith(
+          status: MessageStatus.error,
+          errorMessage:
+              'Tool round limit reached ($bgMaxToolRounds) without a '
+              'final answer.',
+          isProcessing: false,
         );
+        await _finalize(
+          streamingRow,
+          failure: streamingRow.errorMessage,
+        );
+        if (!finished.isCompleted) finished.complete();
+        return;
+      }
+      final ToolRoundRows roundResult;
+      try {
+        roundResult = await executeToolRound(
+          ToolRoundSpec(
+            conversationId: forkConversationId,
+            wire: wire,
+            nextThreadOrder: nextThreadOrder,
+            streamedContent: content,
+            calls: List.of(roundCalls),
+            allowedToolNames: {
+              for (final def in forkTools ?? const <ToolDefinition>[])
+                def.name,
+            },
+            approvalGate: _forkApprovalGate(),
+            executeTool: (toolName, arguments) =>
+                ref.read(toolRegistryProvider).execute(toolName, arguments),
+            persistRow: persistMessage,
+            buildRoundRow: ({
+              required content,
+              required toolCalls,
+              required threadOrder,
+            }) =>
+                Message(
+              id: streamingRow.id,
+              conversationId: forkConversationId,
+              role: MessageRole.assistant,
+              content: content,
+              createdAt: DateTime.now(),
+              status: MessageStatus.complete,
+              modelId: effectiveModelId,
+              toolCalls: toolCalls,
+              isActiveVariant: false,
+              threadOrder: threadOrder,
+            ),
+            buildFeedbackRow: ({
+              required callId,
+              required resultText,
+              required threadOrder,
+            }) =>
+                Message(
+              id: 'tool_$callId',
+              conversationId: forkConversationId,
+              role: MessageRole.tool,
+              content: resultText,
+              createdAt: DateTime.now(),
+              status: MessageStatus.complete,
+              toolCallId: callId,
+              isActiveVariant: false,
+              threadOrder: threadOrder,
+            ),
+          ),
+        );
+      } catch (error) {
+        // The tool round machinery itself must not tear the whole exchange
+        // down without a persisted turn: finalize the reset streaming row.
+        streamingRow = streamingRow.copyWith(
+          status: MessageStatus.error,
+          errorMessage: error.toString(),
+          isProcessing: false,
+        );
+        await _finalize(
+          streamingRow,
+          failure: error.toString(),
+        );
+        if (!finished.isCompleted) finished.complete();
+        return;
+      }
+
+      nextThreadOrder = roundResult.nextThreadOrder;
+
+      // Transcript mirrors the persisted protocol: the round row replaces
+      // its streaming twin (same id), then each feedback row lands.
+      _upsertTranscript(roundResult.roundRow);
+      for (final feedback in roundResult.feedbackRows) {
+        _upsertTranscript(feedback);
+      }
+      if (!ref.mounted) {
+        if (!finished.isCompleted) finished.complete();
+        return;
+      }
+      return runRound(roundIndex + 1);
+    }
+
+    await runRound(0);
 
     try {
       await finished.future;
@@ -381,10 +616,13 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
 
   /// Forwards cancellation to the active fork reply's [ChatService] — the
   /// same mechanism `ChatNotifier.cancelStream` uses for main-chat replies.
+  /// A pending approval (the round sits inside the gate) is settled as a
+  /// denial so the awaiting exchange cannot dead-wait on a gone panel.
   void cancel() {
     if (!state.isStreaming) return;
     _cancelled = true;
     _chatService?.cancelStream();
+    settlePendingApproval();
   }
 
   /// Cancels the active fork reply (if any) and awaits its terminal
@@ -492,16 +730,29 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
     return assembled.sublist(0, end);
   }
 
-  void _bumpTranscript(Message updated) {
+  /// Transcript seam that ADDS or replaces-by-id: streaming rounds bump the
+  /// active assistant row, tool rounds append their feedback rows, and
+  /// final rows append themselves — replace-by-id is what keeps the round
+  /// row (same id as its streamed twin) a single transcript entry.
+  void _upsertTranscript(Message row) {
     if (!ref.mounted) return;
-    state = state.copyWith(transcript: _replaceLast(state.transcript, updated));
+    final copy = List.of(state.transcript);
+    final index = copy.indexWhere((existing) => existing.id == row.id);
+    if (index >= 0) {
+      copy[index] = row;
+    } else {
+      copy.add(row);
+    }
+    state = state.copyWith(transcript: copy);
   }
+
+  void _bumpTranscript(Message updated) => _upsertTranscript(updated);
 
   Future<void> _finalize(Message finalRow, {String? failure}) async {
     await persistMessage(finalRow);
     if (!ref.mounted) return;
+    _upsertTranscript(finalRow);
     state = state.copyWith(
-      transcript: _replaceLast(state.transcript, finalRow),
       isStreaming: false,
       failure: failure,
       clearFailure: failure == null,
@@ -519,21 +770,20 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
     }
   }
 
-  static List<Message> _replaceLast(List<Message> rows, Message replacement) {
-    final copy = List.of(rows);
-    if (copy.isEmpty) {
-      copy.add(replacement);
-      return copy;
-    }
-    copy[copy.length - 1] = replacement;
-    return copy;
-  }
-
   void _disposeStream() {
     final subscription = _streamSubscription;
     _streamSubscription = null;
     _chatService = null;
     _cancelled = false;
+    // Defense in depth: a torn-down slot must never leave a pending
+    // approval completer dangling (settle is idempotent). The mirror is
+    // resolved WITHOUT touching `state` — riverpod 3 forbids state use in
+    // dispose life-cycles.
+    final pending = _pendingApproval;
+    _pendingApproval = null;
+    if (pending != null) {
+      pending.settleAsDenied();
+    }
     if (subscription != null) {
       unawaited(subscription.cancel());
     }

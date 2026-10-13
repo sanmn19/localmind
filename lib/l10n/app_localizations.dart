@@ -6495,6 +6495,24 @@ abstract class AppLocalizations {
   /// **'An error occurred: {message}'**
   String forkTurnErrorLabel(String message);
 
+  /// Title of the in-panel tool approval chip
+  ///
+  /// In en, this message translates to:
+  /// **'Run {tool} in this fork?'**
+  String forkApprovalTitle(String tool);
+
+  /// Approve button of the in-panel tool approval chip
+  ///
+  /// In en, this message translates to:
+  /// **'Approve'**
+  String get forkApprovalAllow;
+
+  /// Deny button of the in-panel tool approval chip
+  ///
+  /// In en, this message translates to:
+  /// **'Deny'**
+  String get forkApprovalDeny;
+
   /// Background tasks card title
   ///
   /// In en, this message translates to:

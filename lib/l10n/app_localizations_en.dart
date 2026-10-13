@@ -3523,6 +3523,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String forkApprovalTitle(String tool) {
+    return 'Run $tool in this fork?';
+  }
+
+  @override
+  String get forkApprovalAllow => 'Approve';
+
+  @override
+  String get forkApprovalDeny => 'Deny';
+
+  @override
   String get backgroundCardTitle => 'Background tasks';
 
   @override
