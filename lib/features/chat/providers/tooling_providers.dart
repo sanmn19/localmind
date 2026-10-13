@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'
+    hide Message;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 
@@ -676,9 +678,31 @@ final backgroundTaskActionsProvider = Provider<BackgroundTaskActions>((ref) {
   );
 });
 
-/// Starts the Android foreground-service keep-alive (flutter_background_);
+/// Creates the keep-alive service's notification channel BEFORE the
+/// foreground service starts. The Flutter plugin does NOT auto-create the
+/// channel, and `startForeground` with a notification whose channel is
+/// missing kills the process (RemoteServiceException$CannotPostForeground
+/// ServiceNotificationException) — the exact open-time crash.
+Future<void> _ensureFgServiceChannel() async {
+  final android = FlutterLocalNotificationsPlugin()
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+  await android?.createNotificationChannel(
+    AndroidNotificationChannel(
+      localmindFgServiceChannelId,
+      'LocalMind background service',
+      description: 'Keeps background sub-agent tasks alive.',
+      importance: Importance.low,
+      playSound: false,
+      enableVibration: false,
+    ),
+  );
+}
+
+/// Starts the Android foreground-service keep-alive (flutter_background_);;
 /// throw-suppressed for host tests / unsupported platforms.
 Future<void> startBackgroundKeepAliveService() async {
+  await _ensureFgServiceChannel();
   final service = FlutterBackgroundService();
   await service.configure(
     androidConfiguration: AndroidConfiguration(
@@ -688,7 +712,7 @@ Future<void> startBackgroundKeepAliveService() async {
       notificationChannelId: localmindFgServiceChannelId,
       initialNotificationTitle: 'LocalMind',
       initialNotificationContent: 'Background tasks running',
-      foregroundServiceNotificationId: 0xb6c0ffee,
+      foregroundServiceNotificationId: 531001,
       autoStartOnBoot: false,
     ),
     iosConfiguration: IosConfiguration(),
