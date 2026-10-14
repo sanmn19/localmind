@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "1:6060443518060866028",
-      "lastPropertyId": "28:5491618122077238252",
+      "lastPropertyId": "29:2724687612514915050",
       "name": "ConversationEntity",
       "properties": [
         {
@@ -150,6 +150,11 @@
           "id": "28:5491618122077238252",
           "name": "isBackground",
           "type": 1
+        },
+        {
+          "id": "29:2724687612514915050",
+          "name": "specialKind",
+          "type": 9
         }
       ],
       "relations": []

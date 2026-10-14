@@ -3600,6 +3600,83 @@ class AppLocalizationsDe extends AppLocalizations {
   String get notifications_grant_action => 'Grant in settings';
 
   @override
+  String get ask_local_card_title => 'Ask Local';
+
+  @override
+  String get ask_local_card_desc =>
+      'Ask about a selected text from any app: the screen is captured locally and answered in a floating card.';
+
+  @override
+  String get ask_local_access_granted => 'Overlay access granted';
+
+  @override
+  String get ask_local_access_missing => 'Overlay access is off';
+
+  @override
+  String get ask_local_grant_action => 'Grant in settings';
+
+  @override
+  String get ask_local_boot_failed => 'Ask Local card failed to start';
+
+  @override
+  String get ask_local_card_empty_prompt => 'Ask about what\'s on screen';
+
+  @override
+  String get ask_local_card_streaming => 'streaming…';
+
+  @override
+  String get ask_local_card_no_model => 'No model';
+
+  @override
+  String get ask_local_card_recapture_tooltip => 'Re-capture screen';
+
+  @override
+  String get ask_local_card_close_tooltip => 'Close card';
+
+  @override
+  String get ask_local_card_selection_missing =>
+      'No text selection carried over';
+
+  @override
+  String ask_local_card_run_tool_question(String tool) {
+    return 'Run $tool?';
+  }
+
+  @override
+  String get ask_local_card_approve_tooltip => 'Approve';
+
+  @override
+  String get ask_local_card_deny_tooltip => 'Deny';
+
+  @override
+  String get ask_local_card_input_hint => 'Ask LocalMind…';
+
+  @override
+  String get ask_local_card_thinking => 'Thinking…';
+
+  @override
+  String ask_local_card_tool_called(String tool, String verdict) {
+    return 'called $tool · $verdict';
+  }
+
+  @override
+  String get ask_local_card_verdict_done => 'done';
+
+  @override
+  String get ask_local_card_verdict_denied => 'denied';
+
+  @override
+  String get ask_local_card_verdict_failed => 'failed';
+
+  @override
+  String ask_local_card_tool_result(String output) {
+    return 'result $output';
+  }
+
+  @override
+  String get ask_local_card_tool_no_output => 'no output';
+
+  @override
   String get background_tasks_title => 'Background tasks';
 
   @override

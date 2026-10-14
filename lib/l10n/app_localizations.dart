@@ -6615,6 +6615,144 @@ abstract class AppLocalizations {
   /// **'Grant in settings'**
   String get notifications_grant_action;
 
+  /// Ask Local card title on the MCP Tools screen
+  ///
+  /// In en, this message translates to:
+  /// **'Ask Local'**
+  String get ask_local_card_title;
+
+  /// Ask Local card description
+  ///
+  /// In en, this message translates to:
+  /// **'Ask about a selected text from any app: the screen is captured locally and answered in a floating card.'**
+  String get ask_local_card_desc;
+
+  /// Label shown when display-over-apps is granted
+  ///
+  /// In en, this message translates to:
+  /// **'Overlay access granted'**
+  String get ask_local_access_granted;
+
+  /// Label shown when display-over-apps is not granted
+  ///
+  /// In en, this message translates to:
+  /// **'Overlay access is off'**
+  String get ask_local_access_missing;
+
+  /// Button label deep-linking to the Android display-over-apps settings
+  ///
+  /// In en, this message translates to:
+  /// **'Grant in settings'**
+  String get ask_local_grant_action;
+
+  /// Typed boot-failure banner label inside the Ask Local overlay card
+  ///
+  /// In en, this message translates to:
+  /// **'Ask Local card failed to start'**
+  String get ask_local_boot_failed;
+
+  /// Empty-transcript placeholder inside the Ask Local card
+  ///
+  /// In en, this message translates to:
+  /// **'Ask about what\'s on screen'**
+  String get ask_local_card_empty_prompt;
+
+  /// Header status word while the Ask Local card is streaming
+  ///
+  /// In en, this message translates to:
+  /// **'streaming…'**
+  String get ask_local_card_streaming;
+
+  /// Header status word when no model is connected to the Ask Local card
+  ///
+  /// In en, this message translates to:
+  /// **'No model'**
+  String get ask_local_card_no_model;
+
+  /// Tooltip of the Ask Local card's re-capture button
+  ///
+  /// In en, this message translates to:
+  /// **'Re-capture screen'**
+  String get ask_local_card_recapture_tooltip;
+
+  /// Tooltip of the Ask Local card's close button
+  ///
+  /// In en, this message translates to:
+  /// **'Close card'**
+  String get ask_local_card_close_tooltip;
+
+  /// Covered-context strip label when no selection reached the Ask Local card
+  ///
+  /// In en, this message translates to:
+  /// **'No text selection carried over'**
+  String get ask_local_card_selection_missing;
+
+  /// In-card approval chip question for one pending tool call
+  ///
+  /// In en, this message translates to:
+  /// **'Run {tool}?'**
+  String ask_local_card_run_tool_question(String tool);
+
+  /// Tooltip of the Ask Local card's chip approve button
+  ///
+  /// In en, this message translates to:
+  /// **'Approve'**
+  String get ask_local_card_approve_tooltip;
+
+  /// Tooltip of the Ask Local card's chip deny button
+  ///
+  /// In en, this message translates to:
+  /// **'Deny'**
+  String get ask_local_card_deny_tooltip;
+
+  /// Hint text of the Ask Local card's typing field
+  ///
+  /// In en, this message translates to:
+  /// **'Ask LocalMind…'**
+  String get ask_local_card_input_hint;
+
+  /// Empty streamed assistant round label inside the Ask Local card
+  ///
+  /// In en, this message translates to:
+  /// **'Thinking…'**
+  String get ask_local_card_thinking;
+
+  /// Compact tool-activity row in the Ask Local card
+  ///
+  /// In en, this message translates to:
+  /// **'called {tool} · {verdict}'**
+  String ask_local_card_tool_called(String tool, String verdict);
+
+  /// Verdict label for a successful tool call in the Ask Local card
+  ///
+  /// In en, this message translates to:
+  /// **'done'**
+  String get ask_local_card_verdict_done;
+
+  /// Verdict label for a user-denied tool call in the Ask Local card
+  ///
+  /// In en, this message translates to:
+  /// **'denied'**
+  String get ask_local_card_verdict_denied;
+
+  /// Verdict label for a failed tool call in the Ask Local card
+  ///
+  /// In en, this message translates to:
+  /// **'failed'**
+  String get ask_local_card_verdict_failed;
+
+  /// Tool feedback row prefix in the Ask Local card
+  ///
+  /// In en, this message translates to:
+  /// **'result {output}'**
+  String ask_local_card_tool_result(String output);
+
+  /// Tool feedback row label when a tool produced no output
+  ///
+  /// In en, this message translates to:
+  /// **'no output'**
+  String get ask_local_card_tool_no_output;
+
   /// Background tasks page app bar title
   ///
   /// In en, this message translates to:

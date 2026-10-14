@@ -22,7 +22,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(1, 6060443518060866028),
     name: 'ConversationEntity',
-    lastPropertyId: const obx_int.IdUid(28, 5491618122077238252),
+    lastPropertyId: const obx_int.IdUid(29, 2724687612514915050),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -192,6 +192,12 @@ final _entities = <obx_int.ModelEntity>[
         id: const obx_int.IdUid(28, 5491618122077238252),
         name: 'isBackground',
         type: 1,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(29, 2724687612514915050),
+        name: 'specialKind',
+        type: 9,
         flags: 0,
       ),
     ],
@@ -986,7 +992,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final forkSpanOffset = object.forkSpan == null
             ? null
             : fbb.writeString(object.forkSpan!);
-        fbb.startTable(29);
+        final specialKindOffset = object.specialKind == null
+            ? null
+            : fbb.writeString(object.specialKind!);
+        fbb.startTable(30);
         fbb.addInt64(0, object.internalId);
         fbb.addOffset(1, idOffset);
         fbb.addOffset(2, titleOffset);
@@ -1015,6 +1024,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addOffset(25, forkSpanOffset);
         fbb.addBool(26, object.isFork);
         fbb.addBool(27, object.isBackground);
+        fbb.addOffset(28, specialKindOffset);
         fbb.finish(fbb.endTable());
         return object.internalId;
       },
@@ -1141,6 +1151,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
           58,
           false,
         );
+        final specialKindParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 60);
         final object = ConversationEntity(
           internalId: internalIdParam,
           id: idParam,
@@ -1170,6 +1183,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           forkSpan: forkSpanParam,
           isFork: isForkParam,
           isBackground: isBackgroundParam,
+          specialKind: specialKindParam,
         );
         obx_int.InternalToManyAccess.setRelInfo<ConversationEntity>(
           object.messages,
@@ -2188,6 +2202,11 @@ class ConversationEntity_ {
   /// See [ConversationEntity.isBackground].
   static final isBackground = obx.QueryBooleanProperty<ConversationEntity>(
     _entities[0].properties[27],
+  );
+
+  /// See [ConversationEntity.specialKind].
+  static final specialKind = obx.QueryStringProperty<ConversationEntity>(
+    _entities[0].properties[28],
   );
 
   /// see [ConversationEntity.messages]
