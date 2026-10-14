@@ -77,6 +77,7 @@ class _AskLocalCardState extends ConsumerState<AskLocalCard> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(askLocalCardNotifierProvider);
+    final locale = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final displayRows = [
       ..._historyTail(state),
@@ -88,8 +89,8 @@ class _AskLocalCardState extends ConsumerState<AskLocalCard> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _header(theme, state),
-        if (state.hasTarget) _contextStrip(theme, state),
+        _header(theme, state, locale),
+        if (state.hasTarget) _contextStrip(theme, state, locale),
         if (state.failure != null)
           _failureBanner(state.failure!, theme),
         Padding(
@@ -97,8 +98,8 @@ class _AskLocalCardState extends ConsumerState<AskLocalCard> {
           child: _transcript(theme, state, displayRows),
         ),
         if (state.pendingApproval != null)
-          _approvalChipRow(state, theme),
-        _inputRow(theme, state),
+          _approvalChipRow(state, theme, locale),
+        _inputRow(theme, state, locale),
       ],
     );
 
@@ -149,7 +150,7 @@ class _AskLocalCardState extends ConsumerState<AskLocalCard> {
       return Padding(
         padding: const EdgeInsets.all(10),
         child: Text(
-          "Ask about what's on screen",
+          AppLocalizations.of(context)!.ask_local_card_empty_prompt,
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 12,
@@ -174,7 +175,11 @@ class _AskLocalCardState extends ConsumerState<AskLocalCard> {
         transcript.last.id == message.id;
   }
 
-  Widget _header(ThemeData theme, AskLocalCardState state) {
+  Widget _header(
+    ThemeData theme,
+    AskLocalCardState state,
+    AppLocalizations locale,
+  ) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 6, 0),
       child: Row(
@@ -185,7 +190,7 @@ class _AskLocalCardState extends ConsumerState<AskLocalCard> {
           const SizedBox(width: 6),
           Expanded(
             child: Text(
-              'Ask Local',
+              locale.ask_local_card_title,
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
@@ -195,8 +200,10 @@ class _AskLocalCardState extends ConsumerState<AskLocalCard> {
           ),
           Text(
             state.isStreaming
-                ? 'streaming…'
-                : (state.hasTarget ? state.modelLabel : 'No model'),
+                ? locale.ask_local_card_streaming
+                : (state.hasTarget
+                    ? state.modelLabel
+                    : locale.ask_local_card_no_model),
             style: TextStyle(
               fontSize: 10,
               color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
@@ -204,7 +211,7 @@ class _AskLocalCardState extends ConsumerState<AskLocalCard> {
           ),
           IconButton(
             key: const ValueKey('ask_local_card_recapture'),
-            tooltip: 'Re-capture screen',
+            tooltip: locale.ask_local_card_recapture_tooltip,
             visualDensity: VisualDensity.compact,
             iconSize: 17,
             color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
@@ -216,7 +223,7 @@ class _AskLocalCardState extends ConsumerState<AskLocalCard> {
           ),
           IconButton(
             key: const ValueKey('ask_local_card_close'),
-            tooltip: 'Close card',
+            tooltip: locale.ask_local_card_close_tooltip,
             visualDensity: VisualDensity.compact,
             iconSize: 17,
             color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
@@ -237,7 +244,11 @@ class _AskLocalCardState extends ConsumerState<AskLocalCard> {
     unawaited(env.closeCard?.call());
   }
 
-  Widget _contextStrip(ThemeData theme, AskLocalCardState state) {
+  Widget _contextStrip(
+    ThemeData theme,
+    AskLocalCardState state,
+    AppLocalizations locale,
+  ) {
     final capturePath = state.capturePath;
     final selectedText = state.delivery?.payload.selectedText.trim();
     return Padding(
@@ -258,7 +269,7 @@ class _AskLocalCardState extends ConsumerState<AskLocalCard> {
           Expanded(
             child: Text(
               selectedText == null || selectedText.isEmpty
-                  ? 'No text selection carried over'
+                  ? locale.ask_local_card_selection_missing
                   : '"$selectedText"',
               key: const ValueKey('ask_local_selected_text'),
               maxLines: 3,
@@ -329,7 +340,11 @@ class _AskLocalCardState extends ConsumerState<AskLocalCard> {
     );
   }
 
-  Widget _approvalChipRow(AskLocalCardState state, ThemeData theme) {
+  Widget _approvalChipRow(
+    AskLocalCardState state,
+    ThemeData theme,
+    AppLocalizations locale,
+  ) {
     final approval = state.pendingApproval!;
     return Container(
       key: const ValueKey('ask_local_approval_chip'),
@@ -346,7 +361,7 @@ class _AskLocalCardState extends ConsumerState<AskLocalCard> {
           const SizedBox(width: 6),
           Expanded(
             child: Text(
-              'Run ${approval.toolName}?',
+              locale.ask_local_card_run_tool_question(approval.toolName),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -358,7 +373,7 @@ class _AskLocalCardState extends ConsumerState<AskLocalCard> {
           ),
           IconButton(
             key: const ValueKey('ask_local_chip_approve'),
-            tooltip: 'Approve',
+            tooltip: locale.ask_local_card_approve_tooltip,
             visualDensity: VisualDensity.compact,
             iconSize: 16,
             color: theme.colorScheme.primary,
@@ -369,7 +384,7 @@ class _AskLocalCardState extends ConsumerState<AskLocalCard> {
           ),
           IconButton(
             key: const ValueKey('ask_local_chip_deny'),
-            tooltip: 'Deny',
+            tooltip: locale.ask_local_card_deny_tooltip,
             visualDensity: VisualDensity.compact,
             iconSize: 16,
             color: theme.colorScheme.error,
@@ -382,7 +397,11 @@ class _AskLocalCardState extends ConsumerState<AskLocalCard> {
     );
   }
 
-  Widget _inputRow(ThemeData theme, AskLocalCardState state) {
+  Widget _inputRow(
+    ThemeData theme,
+    AskLocalCardState state,
+    AppLocalizations locale,
+  ) {
     final canSend = !state.isStreaming &&
         _inputController.text.trim().isNotEmpty;
     return Padding(
@@ -416,7 +435,7 @@ class _AskLocalCardState extends ConsumerState<AskLocalCard> {
                   borderRadius: BorderRadius.circular(10),
                   borderSide: BorderSide.none,
                 ),
-                hintText: 'Ask LocalMind…',
+                hintText: locale.ask_local_card_input_hint,
                 hintStyle: TextStyle(
                   fontSize: 13,
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.38),
@@ -452,11 +471,10 @@ class _CardRow extends StatelessWidget {
   const _CardRow({required this.message, required this.isStreamingRow});
 
   final Message message;
-  final bool isStreamingRow;
-
-  @override
+  final bool isStreamingRow;  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final locale = AppLocalizations.of(context)!;
     if (message.role == MessageRole.user) {
       return Align(
         alignment: Alignment.centerRight,
@@ -491,7 +509,11 @@ class _CardRow extends StatelessWidget {
             const SizedBox(width: 4),
             Expanded(
               child: Text(
-                'result ${_clipResult(message.content)}',
+                locale.ask_local_card_tool_result(
+                  message.content.isEmpty
+                      ? locale.ask_local_card_tool_no_output
+                      : _clipResult(message.content),
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(fontSize: 11, color: muted),
@@ -526,7 +548,7 @@ class _CardRow extends StatelessWidget {
               hasMainContent: content.trim().isNotEmpty,
             ),
           if (toolCalls != null && toolCalls.isNotEmpty)
-            ..._toolActivityRows(toolCalls, theme),
+            ..._toolActivityRows(toolCalls, theme, locale),
           if (isError)
             Text(
               message.errorMessage ?? message.content,
@@ -539,7 +561,7 @@ class _CardRow extends StatelessWidget {
                 const HeartbeatDot(size: 7),
                 const SizedBox(width: 8),
                 Text(
-                  'Thinking…',
+                  AppLocalizations.of(context)!.ask_local_card_thinking,
                   style: TextStyle(
                     fontSize: 12,
                     color:
@@ -553,13 +575,22 @@ class _CardRow extends StatelessWidget {
               content: content,
               isDark: theme.brightness == Brightness.dark,
               selectable: false,
+              // Overlay-engine contract: the card has NO url_launcher
+              // (plugins auto-registration off) and must never launch app
+              // surfaces from a floating window — links render styled but
+              // taps are swallowed.
+              onLinkTapOverride: (_, _) {},
             ),
         ],
       ),
     );
   }
 
-  List<Widget> _toolActivityRows(List<ToolCallData> calls, ThemeData theme) {
+  List<Widget> _toolActivityRows(
+    List<ToolCallData> calls,
+    ThemeData theme,
+    AppLocalizations locale,
+  ) {
     final muted = theme.colorScheme.onSurface.withValues(alpha: 0.55);
     return [
       for (final call in calls)
@@ -578,7 +609,10 @@ class _CardRow extends StatelessWidget {
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                'called ${call.toolName} · ${_verdictLabel(call.result)}',
+                locale.ask_local_card_tool_called(
+                  call.toolName,
+                  _verdictLabel(call.result, locale),
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -598,15 +632,17 @@ class _CardRow extends StatelessWidget {
     return result.startsWith('ERROR:') || result.contains('denied by the user');
   }
 
-  static String _verdictLabel(String? result) {
-    if (result == null || result.isEmpty) return 'done';
-    if (result.contains('denied by the user')) return 'denied';
-    if (result.startsWith('ERROR:')) return 'failed';
-    return 'done';
+  static String _verdictLabel(String? result, AppLocalizations locale) {
+    if (result == null || result.isEmpty) return locale.ask_local_card_verdict_done;
+    if (result.contains('denied by the user')) {
+      return locale.ask_local_card_verdict_denied;
+    }
+    if (result.startsWith('ERROR:')) return locale.ask_local_card_verdict_failed;
+    return locale.ask_local_card_verdict_done;
   }
 
   static String _clipResult(String? content) =>
       content == null || content.isEmpty
-          ? 'no output'
+          ? ''
           : (content.length <= 80 ? content : '${content.substring(0, 80)}…');
 }

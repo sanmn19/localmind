@@ -768,12 +768,29 @@ class AskLocalCardNotifier extends Notifier<AskLocalCardState> {
     }
   }
 
+  /// The capture's save directory. Envelope v2: the MAIN engine resolved the
+  /// attachments dir at hand-off and ships it explicitly — v2 cards consume
+  /// it verbatim. A v2 envelope MISSING the path is logged typed (contract:
+  /// tolerate missing optional strings with the documented fallback), and a
+  /// v1 envelope (schemaVersion 0 / absent paths) keeps the historical
+  /// storeDir-parent inference.
   Future<Directory> _attachmentsDir(
     AskLocalCardBootstrapPayload bootstrap,
   ) async {
     final override = ref.read(askLocalCardEnvProvider).attachmentsDirOf;
     final overridden = override?.call();
     if (overridden != null) return overridden;
+    final shipped = bootstrap.attachmentsDirPath;
+    if (shipped != null && shipped.isNotEmpty) {
+      return Directory(shipped);
+    }
+    if (bootstrap.schemaVersion >=
+        AskLocalCardBootstrapPayload.currentSchemaVersion) {
+      Log.error(
+        'Ask Local envelope v${bootstrap.schemaVersion} missing '
+        'attachmentsDirPath — falling back to the v1 inference',
+      );
+    }
     final docsDir = File(bootstrap.storeDir).parent;
     return Directory('${docsDir.path}${Platform.pathSeparator}attachments');
   }

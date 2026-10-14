@@ -22,6 +22,9 @@ class AskLocalCardBootstrapPayload {
     required this.toolDefs,
     required this.settingsJson,
     this.conversationId,
+    this.attachmentsDirPath,
+    this.appDirPath,
+    this.schemaVersion = 0,
   });
 
   /// Dedupe id handed to the card with every delivery; identical across the
@@ -48,6 +51,24 @@ class AskLocalCardBootstrapPayload {
   /// FULL AppSettings snapshot (json) that freezes the card's
   /// settingsProvider (the approval gate's toggles at hand-off time).
   final String settingsJson;
+
+  /// Explicit attachments directory the MAIN engine resolved at hand-off
+  /// (envelope v2); the card stages captures there. Null (v1 payloads) ⇒
+  /// the historical storeDir-parent/attachments inference applies.
+  final String? attachmentsDirPath;
+
+  /// App documents directory path (envelope v2, informational for v1) —
+  /// places the card in the same app sandbox the main engine resolved its
+  /// paths from. Null on v1 payloads.
+  final String? appDirPath;
+
+  /// Envelope-schema version the sender shipped. 0 = legacy (v1) payload.
+  /// Decode is version-tolerant: unknown/absent fields never break the
+  /// card — later versions may add keys freely, this reader ignores them.
+  final int schemaVersion;
+
+  /// Highest schema version this build understands; senders stamp it.
+  static const int currentSchemaVersion = 1;
 }
 
 class AskLocalCardServerWire {
@@ -182,6 +203,9 @@ class AskLocalCardBootstrapKeys {
   static const String params = 'params';
   static const String toolDefs = 'toolDefs';
   static const String settings = 'settings';
+  static const String schemaVersion = 'schemaVersion';
+  static const String attachmentsDirPath = 'attachmentsDirPath';
+  static const String appDirPath = 'appDirPath';
 
   /// Kotlin re-pushes the payload into the live card under this card-channel
   /// method when a new ask lands while the window is already up.
@@ -190,6 +214,11 @@ class AskLocalCardBootstrapKeys {
   /// Approval chips execute through here (card channel): the main engine's
   /// registry runs the tool — plain execute(), no approval machinery.
   static const String executeToolCardMethod = 'askLocalExecuteTool';
+
+  /// The MAIN-engine execute method on `localmind/ask_local` (Kotlin's
+  /// [NativeAskLocalSink.mainDartBridge] forward target). Same literal as
+  /// the card-channel method; distinct channels, never the same call.
+  static const String executeToolMainMethod = 'askLocalExecuteTool';
 }
 
 /// Decodes the `bootstrap` map. Tolerant: anything malformed yields null so
@@ -220,10 +249,23 @@ AskLocalCardBootstrapPayload? bootstrapFromMap(Object? raw) {
     params: chatParametersFromWire(raw['params']),
     toolDefs: toolDefs,
     settingsJson: settings is String ? settings : '',
+    attachmentsDirPath:
+        raw[AskLocalCardBootstrapKeys.attachmentsDirPath] is String
+            ? raw[AskLocalCardBootstrapKeys.attachmentsDirPath]! as String
+            : null,
+    appDirPath: raw[AskLocalCardBootstrapKeys.appDirPath] is String
+        ? raw[AskLocalCardBootstrapKeys.appDirPath]! as String
+        : null,
+    schemaVersion: raw[AskLocalCardBootstrapKeys.schemaVersion] is num
+        ? (raw[AskLocalCardBootstrapKeys.schemaVersion]! as num).toInt()
+        : 0,
   );
 }
 
 /// Builds the envelope the main engine ships to the card at overlay-open.
+/// Version-stamped with [AskLocalCardBootstrapPayload.currentSchemaVersion];
+/// the decoder tolerates later versions (+ unknown keys) and earlier ones
+/// (the v2-only fields decode to null and fall back to the v1 inferences).
 Map<String, Object?> bootstrapToWire(AskLocalCardBootstrapPayload payload) =>
     <String, Object?>{
       'requestId': payload.requestId,
@@ -236,6 +278,9 @@ Map<String, Object?> bootstrapToWire(AskLocalCardBootstrapPayload payload) =>
         for (final def in payload.toolDefs) def.toWire(),
       ],
       'settings': payload.settingsJson,
+      'schemaVersion': AskLocalCardBootstrapPayload.currentSchemaVersion,
+      'attachmentsDirPath': payload.attachmentsDirPath,
+      'appDirPath': payload.appDirPath,
     };
 
 /// FULL ChatParameters wire so the card streams with the exact frozen
