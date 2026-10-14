@@ -44,7 +44,7 @@ in-card approval chips (extra).
 - Overlay window: `TYPE_APPLICATION_OVERLAY` + `SYSTEM_ALERT_WINDOW`
   permission ("display over other apps" — one-time settings trip, grant row
   on the MCP Tools 'Ask Local' card w/ live state + re-check on resume).
-  Compact card ~ (min(420dp, screen-32), ~38% height), top-right by
+  Compact card ~ (min(420dp, screenPx-16dp), ~38% height), top-right by
   default, drag-handle future-proof hook; FlutterView from the engine
   group's second engine running the `askLocalCardMain` entrypoint.
 - Card isolate bootstrap: own ProviderContainer over providers that accept
