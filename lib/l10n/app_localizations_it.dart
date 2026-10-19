@@ -3728,4 +3728,31 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get background_pill_title => 'Background task';
+
+  @override
+  String get model_load_confirm_title => 'Load model?';
+
+  @override
+  String model_load_confirm_body(String model) {
+    return 'Loading $model unloads the current model and can take 6-20 minutes.';
+  }
+
+  @override
+  String get model_load_action => 'Load';
+
+  @override
+  String get model_load_progress_title => 'Loading model';
+
+  @override
+  String get model_load_cancel => 'Cancel load';
+
+  @override
+  String get model_load_cancel_confirm =>
+      'Cancel the switch? The model stays unloaded.';
+
+  @override
+  String get model_load_retry => 'Retry';
+
+  @override
+  String get model_pick_target_title => 'Pick the switcher target';
 }

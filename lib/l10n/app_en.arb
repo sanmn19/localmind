@@ -3779,5 +3779,21 @@
   "background_resume_task": "Resume task",
   "@background_resume_task": {"description": "Tooltip of a background task's resume button"},
   "background_pill_title": "Background task",
-  "@background_pill_title": {"description": "Inline chat pill prefix next to a background task's state chip"}
+  "@background_pill_title": {"description": "Inline chat pill prefix next to a background task's state chip"},
+  "model_load_confirm_title": "Load model?",
+  "@model_load_confirm_title": {"description": "Ask Local rig load confirmation dialog title"},
+  "model_load_confirm_body": "Loading {model} unloads the current model and can take 6-20 minutes.",
+  "@model_load_confirm_body": {"description": "Ask Local rig load confirmation body", "placeholders": {"model": {"type": "String"}}},
+  "model_load_action": "Load",
+  "@model_load_action": {"description": "Confirm button of the rig load dialog"},
+  "model_load_progress_title": "Loading model",
+  "@model_load_progress_title": {"description": "Title of the rig load progress sheet"},
+  "model_load_cancel": "Cancel load",
+  "@model_load_cancel": {"description": "Button that cancels an in-flight rig switch"},
+  "model_load_cancel_confirm": "Cancel the switch? The model stays unloaded.",
+  "@model_load_cancel_confirm": {"description": "Confirmation before cancelling a rig switch"},
+  "model_load_retry": "Retry",
+  "@model_load_retry": {"description": "Retry button after a failed rig switch"},
+  "model_pick_target_title": "Pick the switcher target",
+  "@model_pick_target_title": {"description": "Title of the target picker when several roster entries share a served id"}
 }

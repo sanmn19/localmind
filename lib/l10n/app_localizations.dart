@@ -6818,6 +6818,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Background task'**
   String get background_pill_title;
+
+  /// Ask Local rig load confirmation dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Load model?'**
+  String get model_load_confirm_title;
+
+  /// Ask Local rig load confirmation body
+  ///
+  /// In en, this message translates to:
+  /// **'Loading {model} unloads the current model and can take 6-20 minutes.'**
+  String model_load_confirm_body(String model);
+
+  /// Confirm button of the rig load dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Load'**
+  String get model_load_action;
+
+  /// Title of the rig load progress sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Loading model'**
+  String get model_load_progress_title;
+
+  /// Button that cancels an in-flight rig switch
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel load'**
+  String get model_load_cancel;
+
+  /// Confirmation before cancelling a rig switch
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel the switch? The model stays unloaded.'**
+  String get model_load_cancel_confirm;
+
+  /// Retry button after a failed rig switch
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get model_load_retry;
+
+  /// Title of the target picker when several roster entries share a served id
+  ///
+  /// In en, this message translates to:
+  /// **'Pick the switcher target'**
+  String get model_pick_target_title;
 }
 
 class _AppLocalizationsDelegate

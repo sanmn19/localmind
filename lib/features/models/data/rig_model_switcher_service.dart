@@ -12,15 +12,28 @@ class RigSwitcherException implements Exception {
   String toString() => 'RigSwitcherException: $message';
 }
 
+/// Client surface used by the load flow; the concrete implementation talks to
+/// the rig over HTTP, tests fake this interface.
+abstract class RigModelSwitcherApi {
+  Future<List<RigModelEntry>> fetchRoster(Uri base);
+
+  Future<RigSwitchStatus> fetchStatus(Uri base);
+
+  Future<void> switchTo(Uri base, String name);
+
+  Future<void> cancel(Uri base);
+}
+
 /// Client for the rig model switcher API (port 9000 by convention):
 /// `GET /v1/list`, `GET /v1/status`, `POST /v1/switch/{name}`, `POST /v1/cancel`.
-class RigModelSwitcherService {
+class RigModelSwitcherService implements RigModelSwitcherApi {
   RigModelSwitcherService(this._dio);
 
   final Dio _dio;
 
   static const Duration _timeout = Duration(seconds: 10);
 
+  @override
   Future<List<RigModelEntry>> fetchRoster(Uri base) async {
     final response = await _dio.get(_url(base, '/v1/list'), options: _options());
     _ensureSuccess(response, 'list');
@@ -31,6 +44,7 @@ class RigModelSwitcherService {
     return list.whereType<Map>().map(_entryFrom).toList();
   }
 
+  @override
   Future<RigSwitchStatus> fetchStatus(Uri base) async {
     final response =
         await _dio.get(_url(base, '/v1/status'), options: _options());
@@ -55,6 +69,7 @@ class RigModelSwitcherService {
     );
   }
 
+  @override
   Future<void> switchTo(Uri base, String name) async {
     final response = await _dio.post(
       _url(base, '/v1/switch/${Uri.encodeComponent(name)}'),
@@ -63,6 +78,7 @@ class RigModelSwitcherService {
     _ensureSuccess(response, 'switch');
   }
 
+  @override
   Future<void> cancel(Uri base) async {
     final response =
         await _dio.post(_url(base, '/v1/cancel'), options: _options());

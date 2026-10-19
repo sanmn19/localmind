@@ -10,6 +10,7 @@ import 'package:localmind/core/theme/colors.dart';
 import 'package:localmind/features/chat/providers/chat_providers.dart';
 import 'package:localmind/features/on_device/components/on_device_picker_section.dart';
 import 'package:localmind/features/on_device/providers/on_device_providers.dart';
+import 'package:localmind/features/models/providers/rig_load_providers.dart';
 import 'package:localmind/features/servers/providers/server_providers.dart';
 import 'package:localmind/features/lm_studio_catalog/views/lm_studio_download_widgets.dart';
 import 'package:localmind/core/providers/app_providers.dart';
@@ -31,6 +32,22 @@ class ModelPickerSheet extends ConsumerStatefulWidget {
 }
 
 class _ModelPickerSheetState extends ConsumerState<ModelPickerSheet> {
+  @override
+  void initState() {
+    super.initState();
+    // Resume an in-flight rig switch after an app restart: the switch runs on
+    // the rig, so reopening the picker reattaches to its status.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final server = ref.read(activeServerProvider);
+      final raw = server?.switcherBaseUrl?.trim();
+      final base = raw == null ? null : Uri.tryParse(raw);
+      if (server != null && base != null) {
+        ref.read(rigLoadProvider.notifier).resumeIfInFlight(base, server.id);
+      }
+    });
+  }
+
   @override
   void deactivate() {
     // Reset search when the sheet closes so the next open starts from a

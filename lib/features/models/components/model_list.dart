@@ -10,6 +10,10 @@ import 'package:localmind/core/theme/colors.dart';
 import 'package:localmind/features/chat/providers/model_selection_providers.dart';
 import 'package:localmind/features/models/components/model_vision_override_row.dart';
 import 'package:localmind/features/models/data/models/model_info.dart';
+import 'package:localmind/features/models/data/models/rig_model_entry.dart';
+import 'package:localmind/features/models/providers/rig_load_providers.dart';
+import 'package:localmind/features/models/providers/rig_switcher_providers.dart';
+import 'package:localmind/features/models/views/rig_load_dialog.dart';
 import 'package:localmind/features/models/providers/model_metadata_providers.dart';
 import 'package:localmind/features/models/providers/model_picker_providers.dart';
 import 'package:localmind/features/models/utils/model_instance_utils.dart';
@@ -402,6 +406,50 @@ class _ModelListState extends ConsumerState<ModelList> {
                 if (activeServer == null) return;
 
                 final supportsLoad = model.serverType == ServerType.lmStudio;
+
+                if (model.availability == ModelAvailability.loadable) {
+                  final switcherUrl = activeServer.switcherBaseUrl?.trim();
+                  final base =
+                      switcherUrl == null ? null : Uri.tryParse(switcherUrl);
+                  if (base != null && switcherUrl != null) {
+                    final roster =
+                        await ref.read(rigRosterProvider(switcherUrl).future) ??
+                            const <RigModelEntry>[];
+                    final targets = roster
+                        .where(
+                          (entry) =>
+                              entry.servedModelName == model.id &&
+                              entry.enabled &&
+                              !entry.active,
+                        )
+                        .toList();
+                    if (targets.isNotEmpty) {
+                      if (!context.mounted) return;
+                      final target =
+                          await confirmRigLoad(context, l10n, model, targets);
+                      if (target != null && context.mounted) {
+                        await ref.read(rigLoadProvider.notifier).start(
+                          base,
+                          activeServer.id,
+                          model,
+                          target,
+                          onLoaded: () {
+                            ref.invalidate(
+                              availableModelsProvider(activeServer.id),
+                            );
+                            ref
+                                .read(selectedModelProvider.notifier)
+                                .setModel(model);
+                          },
+                        );
+                        if (context.mounted) {
+                          showRigLoadProgress(context, ref);
+                        }
+                      }
+                      return;
+                    }
+                  }
+                }
 
                 if (supportsLoad && !isLoaded) {
                   ref.read(modelLoadingProvider.notifier).setLoading(model.id);
