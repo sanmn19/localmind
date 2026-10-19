@@ -6,6 +6,8 @@ import '../../../core/providers/storage_providers.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/storage/entities.dart';
 import '../../models/data/model_cache.dart';
+import '../../models/providers/manual_model_providers.dart';
+import '../../models/utils/manual_model_merge.dart';
 
 import '../../../objectbox.g.dart';
 import '../../models/data/models/model_info.dart';
@@ -135,7 +137,7 @@ final loadedModelsProvider = FutureProvider.family<Set<String>, Server>((
   }
 });
 
-final availableModelsProvider = FutureProvider.family<List<dynamic>, String>((
+final availableModelsProvider = FutureProvider.family<List<ModelInfo>, String>((
   ref,
   serverId,
 ) async {
@@ -192,9 +194,34 @@ final availableModelsProvider = FutureProvider.family<List<dynamic>, String>((
   final cached = _modelCache.get(serverId);
   if (cached != null) return cached;
 
-  final models = await apiService.fetchModels(server);
-  _modelCache.put(serverId, models);
-  return models;
+  var detectionFailed = false;
+  Object? detectionError;
+  var detected = <ModelInfo>[];
+  try {
+    detected = await apiService.fetchModels(server);
+  } catch (error) {
+    detectionFailed = true;
+    detectionError = error;
+  }
+
+  final manual = await ref.watch(manualModelsProvider(serverId).future);
+  if (detectionFailed && manual.isEmpty) {
+    throw detectionError!;
+  }
+
+  final merged = mergeManualModels(
+    detected,
+    manual,
+    serverId: serverId,
+    serverType: server.type,
+    // The roster wiring lands with the switcher client (Task 3); until then
+    // manual models are selectable but not loadable.
+    rosterConfigured: false,
+    roster: null,
+    detectionFailed: detectionFailed,
+  );
+  _modelCache.put(serverId, merged);
+  return merged;
 });
 
 class ServersNotifier extends AsyncNotifier<List<Server>> {

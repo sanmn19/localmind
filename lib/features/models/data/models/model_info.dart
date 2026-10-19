@@ -14,6 +14,9 @@ class ModelInfo {
   final String serverId;
   final DateTime? modifiedAt;
   final ModelStatus status;
+
+  /// Whether the model is usable right now (see [ModelAvailability]).
+  final ModelAvailability availability;
   final OnDeviceModelRuntime? onDeviceRuntime;
   final OnDeviceModelFormat? onDeviceFormat;
   final String? localPath;
@@ -56,6 +59,7 @@ class ModelInfo {
     required this.serverId,
     this.modifiedAt,
     this.status = ModelStatus.unloaded,
+    this.availability = ModelAvailability.available,
     this.onDeviceRuntime,
     this.onDeviceFormat,
     this.localPath,
