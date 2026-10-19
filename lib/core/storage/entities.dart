@@ -39,6 +39,7 @@ class ServerEntity {
   String? pathPrefix;
   int? availableRamGb;
   int? availableVramGb;
+  String? switcherBaseUrl;
 
   ServerEntity({
     this.internalId = 0,
@@ -56,6 +57,7 @@ class ServerEntity {
     this.pathPrefix,
     this.availableRamGb,
     this.availableVramGb,
+    this.switcherBaseUrl,
   });
 
   factory ServerEntity.fromDomain(Server server) {
@@ -74,6 +76,7 @@ class ServerEntity {
       pathPrefix: server.pathPrefix,
       availableRamGb: server.availableRamGb,
       availableVramGb: server.availableVramGb,
+      switcherBaseUrl: server.switcherBaseUrl,
     );
   }
 
@@ -156,6 +159,7 @@ class ServerEntity {
       pathPrefix: pathPrefix,
       availableRamGb: availableRamGb,
       availableVramGb: availableVramGb,
+      switcherBaseUrl: switcherBaseUrl,
     );
   }
 }

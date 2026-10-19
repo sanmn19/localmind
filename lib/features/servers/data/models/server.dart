@@ -161,6 +161,10 @@ class Server {
   /// Optional GPU VRAM in GB for model compatibility hints in the browser.
   final int? availableVramGb;
 
+  /// Optional rig model switcher base URL (e.g. `http://rig:9000`). When set,
+  /// the app can load listed-but-inactive models through the switcher.
+  final String? switcherBaseUrl;
+
   Server({
     required this.id,
     required this.name,
@@ -176,6 +180,7 @@ class Server {
     this.pathPrefix,
     this.availableRamGb,
     this.availableVramGb,
+    this.switcherBaseUrl,
   });
 
   String get apiPathPrefix => normalizeServerPathPrefix(pathPrefix);
@@ -325,9 +330,11 @@ class Server {
     String? pathPrefix,
     int? availableRamGb,
     int? availableVramGb,
+    String? switcherBaseUrl,
     bool clearPathPrefix = false,
     bool clearAvailableRamGb = false,
     bool clearAvailableVramGb = false,
+    bool clearSwitcherBaseUrl = false,
   }) {
     return Server(
       id: id ?? this.id,
@@ -348,6 +355,8 @@ class Server {
       availableVramGb: clearAvailableVramGb
           ? null
           : (availableVramGb ?? this.availableVramGb),
+      switcherBaseUrl:
+          clearSwitcherBaseUrl ? null : (switcherBaseUrl ?? this.switcherBaseUrl),
     );
   }
 }

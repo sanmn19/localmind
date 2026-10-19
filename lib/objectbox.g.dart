@@ -479,7 +479,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(4, 6971506781199819057),
     name: 'ServerEntity',
-    lastPropertyId: const obx_int.IdUid(15, 6058370228992885505),
+    lastPropertyId: const obx_int.IdUid(16, 7764442332437625176),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -571,6 +571,12 @@ final _entities = <obx_int.ModelEntity>[
         id: const obx_int.IdUid(15, 6058370228992885505),
         name: 'availableVramGb',
         type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(16, 7764442332437625176),
+        name: 'switcherBaseUrl',
+        type: 9,
         flags: 0,
       ),
     ],
@@ -1593,7 +1599,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final pathPrefixOffset = object.pathPrefix == null
             ? null
             : fbb.writeString(object.pathPrefix!);
-        fbb.startTable(16);
+        final switcherBaseUrlOffset = object.switcherBaseUrl == null
+            ? null
+            : fbb.writeString(object.switcherBaseUrl!);
+        fbb.startTable(17);
         fbb.addInt64(0, object.internalId);
         fbb.addOffset(1, idOffset);
         fbb.addOffset(2, nameOffset);
@@ -1609,6 +1618,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addOffset(12, pathPrefixOffset);
         fbb.addInt64(13, object.availableRamGb);
         fbb.addInt64(14, object.availableVramGb);
+        fbb.addOffset(15, switcherBaseUrlOffset);
         fbb.finish(fbb.endTable());
         return object.internalId;
       },
@@ -1679,6 +1689,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
           rootOffset,
           32,
         );
+        final switcherBaseUrlParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 34);
         final object = ServerEntity(
           internalId: internalIdParam,
           id: idParam,
@@ -1695,6 +1708,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           pathPrefix: pathPrefixParam,
           availableRamGb: availableRamGbParam,
           availableVramGb: availableVramGbParam,
+          switcherBaseUrl: switcherBaseUrlParam,
         );
 
         return object;
@@ -2594,6 +2608,11 @@ class ServerEntity_ {
   /// See [ServerEntity.availableVramGb].
   static final availableVramGb = obx.QueryIntegerProperty<ServerEntity>(
     _entities[3].properties[14],
+  );
+
+  /// See [ServerEntity.switcherBaseUrl].
+  static final switcherBaseUrl = obx.QueryStringProperty<ServerEntity>(
+    _entities[3].properties[15],
   );
 }
 

@@ -6,7 +6,9 @@ import '../../../core/providers/storage_providers.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/storage/entities.dart';
 import '../../models/data/model_cache.dart';
+import '../../models/data/models/rig_model_entry.dart';
 import '../../models/providers/manual_model_providers.dart';
+import '../../models/providers/rig_switcher_providers.dart';
 import '../../models/utils/manual_model_merge.dart';
 
 import '../../../objectbox.g.dart';
@@ -209,15 +211,19 @@ final availableModelsProvider = FutureProvider.family<List<ModelInfo>, String>((
     throw detectionError!;
   }
 
+  final switcherBaseUrl = server.switcherBaseUrl;
+  List<RigModelEntry>? roster;
+  if (switcherBaseUrl != null) {
+    roster = await ref.watch(rigRosterProvider(switcherBaseUrl).future);
+  }
+
   final merged = mergeManualModels(
     detected,
     manual,
     serverId: serverId,
     serverType: server.type,
-    // The roster wiring lands with the switcher client (Task 3); until then
-    // manual models are selectable but not loadable.
-    rosterConfigured: false,
-    roster: null,
+    rosterConfigured: switcherBaseUrl != null,
+    roster: roster,
     detectionFailed: detectionFailed,
   );
   _modelCache.put(serverId, merged);
