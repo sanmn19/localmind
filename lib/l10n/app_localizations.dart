@@ -6866,6 +6866,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Pick the switcher target'**
   String get model_pick_target_title;
+
+  /// Button that opens the manual model dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Add model'**
+  String get model_manual_add;
+
+  /// Tooltip of a manual model's remove button
+  ///
+  /// In en, this message translates to:
+  /// **'Remove model'**
+  String get model_manual_remove;
+
+  /// Manual model dialog: model id field label
+  ///
+  /// In en, this message translates to:
+  /// **'Model ID'**
+  String get model_manual_id_label;
+
+  /// Manual model dialog: optional display name label
+  ///
+  /// In en, this message translates to:
+  /// **'Display name (optional)'**
+  String get model_manual_name_label;
+
+  /// Manual model dialog: add button
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get model_manual_save;
+
+  /// Manual model dialog: duplicate id error
+  ///
+  /// In en, this message translates to:
+  /// **'That model is already in the list.'**
+  String get model_manual_duplicate;
+
+  /// Manual model dialog: blank id error
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a model ID.'**
+  String get model_manual_blank;
+
+  /// Manual models section: empty state
+  ///
+  /// In en, this message translates to:
+  /// **'No manual models yet.'**
+  String get model_manual_empty;
+
+  /// Provider form: model switcher base URL label
+  ///
+  /// In en, this message translates to:
+  /// **'Model switcher URL (optional)'**
+  String get model_switcher_url_label;
+
+  /// Provider form: model switcher base URL hint
+  ///
+  /// In en, this message translates to:
+  /// **'http://host:9000'**
+  String get model_switcher_url_hint;
+
+  /// Models section: refresh detection button
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get models_refresh;
+
+  /// Models section: detected model count
+  ///
+  /// In en, this message translates to:
+  /// **'{count} detected'**
+  String models_detected_count(int count);
+
+  /// Availability label: the model can be loaded through the switcher
+  ///
+  /// In en, this message translates to:
+  /// **'Load'**
+  String get model_availability_loadable;
+
+  /// Availability label: the provider does not serve the model right now
+  ///
+  /// In en, this message translates to:
+  /// **'Unavailable'**
+  String get model_availability_unavailable;
+
+  /// Availability label: detection or roster check failed
+  ///
+  /// In en, this message translates to:
+  /// **'Status unknown'**
+  String get model_availability_unknown;
 }
 
 class _AppLocalizationsDelegate

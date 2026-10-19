@@ -3727,4 +3727,51 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get model_pick_target_title => 'Pick the switcher target';
+
+  @override
+  String get model_manual_add => 'Add model';
+
+  @override
+  String get model_manual_remove => 'Remove model';
+
+  @override
+  String get model_manual_id_label => 'Model ID';
+
+  @override
+  String get model_manual_name_label => 'Display name (optional)';
+
+  @override
+  String get model_manual_save => 'Add';
+
+  @override
+  String get model_manual_duplicate => 'That model is already in the list.';
+
+  @override
+  String get model_manual_blank => 'Enter a model ID.';
+
+  @override
+  String get model_manual_empty => 'No manual models yet.';
+
+  @override
+  String get model_switcher_url_label => 'Model switcher URL (optional)';
+
+  @override
+  String get model_switcher_url_hint => 'http://host:9000';
+
+  @override
+  String get models_refresh => 'Refresh';
+
+  @override
+  String models_detected_count(int count) {
+    return '$count detected';
+  }
+
+  @override
+  String get model_availability_loadable => 'Load';
+
+  @override
+  String get model_availability_unavailable => 'Unavailable';
+
+  @override
+  String get model_availability_unknown => 'Status unknown';
 }

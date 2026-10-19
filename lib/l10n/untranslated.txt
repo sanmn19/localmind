@@ -136,7 +136,22 @@
     "model_load_cancel",
     "model_load_cancel_confirm",
     "model_load_retry",
-    "model_pick_target_title"
+    "model_pick_target_title",
+    "model_manual_add",
+    "model_manual_remove",
+    "model_manual_id_label",
+    "model_manual_name_label",
+    "model_manual_save",
+    "model_manual_duplicate",
+    "model_manual_blank",
+    "model_manual_empty",
+    "model_switcher_url_label",
+    "model_switcher_url_hint",
+    "models_refresh",
+    "models_detected_count",
+    "model_availability_loadable",
+    "model_availability_unavailable",
+    "model_availability_unknown"
   ],
 
   "bn": [
@@ -280,7 +295,22 @@
     "model_load_cancel",
     "model_load_cancel_confirm",
     "model_load_retry",
-    "model_pick_target_title"
+    "model_pick_target_title",
+    "model_manual_add",
+    "model_manual_remove",
+    "model_manual_id_label",
+    "model_manual_name_label",
+    "model_manual_save",
+    "model_manual_duplicate",
+    "model_manual_blank",
+    "model_manual_empty",
+    "model_switcher_url_label",
+    "model_switcher_url_hint",
+    "models_refresh",
+    "models_detected_count",
+    "model_availability_loadable",
+    "model_availability_unavailable",
+    "model_availability_unknown"
   ],
 
   "de": [
@@ -424,7 +454,22 @@
     "model_load_cancel",
     "model_load_cancel_confirm",
     "model_load_retry",
-    "model_pick_target_title"
+    "model_pick_target_title",
+    "model_manual_add",
+    "model_manual_remove",
+    "model_manual_id_label",
+    "model_manual_name_label",
+    "model_manual_save",
+    "model_manual_duplicate",
+    "model_manual_blank",
+    "model_manual_empty",
+    "model_switcher_url_label",
+    "model_switcher_url_hint",
+    "models_refresh",
+    "models_detected_count",
+    "model_availability_loadable",
+    "model_availability_unavailable",
+    "model_availability_unknown"
   ],
 
   "es": [
@@ -568,7 +613,22 @@
     "model_load_cancel",
     "model_load_cancel_confirm",
     "model_load_retry",
-    "model_pick_target_title"
+    "model_pick_target_title",
+    "model_manual_add",
+    "model_manual_remove",
+    "model_manual_id_label",
+    "model_manual_name_label",
+    "model_manual_save",
+    "model_manual_duplicate",
+    "model_manual_blank",
+    "model_manual_empty",
+    "model_switcher_url_label",
+    "model_switcher_url_hint",
+    "models_refresh",
+    "models_detected_count",
+    "model_availability_loadable",
+    "model_availability_unavailable",
+    "model_availability_unknown"
   ],
 
   "fr": [
@@ -712,7 +772,22 @@
     "model_load_cancel",
     "model_load_cancel_confirm",
     "model_load_retry",
-    "model_pick_target_title"
+    "model_pick_target_title",
+    "model_manual_add",
+    "model_manual_remove",
+    "model_manual_id_label",
+    "model_manual_name_label",
+    "model_manual_save",
+    "model_manual_duplicate",
+    "model_manual_blank",
+    "model_manual_empty",
+    "model_switcher_url_label",
+    "model_switcher_url_hint",
+    "models_refresh",
+    "models_detected_count",
+    "model_availability_loadable",
+    "model_availability_unavailable",
+    "model_availability_unknown"
   ],
 
   "hi": [
@@ -856,7 +931,22 @@
     "model_load_cancel",
     "model_load_cancel_confirm",
     "model_load_retry",
-    "model_pick_target_title"
+    "model_pick_target_title",
+    "model_manual_add",
+    "model_manual_remove",
+    "model_manual_id_label",
+    "model_manual_name_label",
+    "model_manual_save",
+    "model_manual_duplicate",
+    "model_manual_blank",
+    "model_manual_empty",
+    "model_switcher_url_label",
+    "model_switcher_url_hint",
+    "models_refresh",
+    "models_detected_count",
+    "model_availability_loadable",
+    "model_availability_unavailable",
+    "model_availability_unknown"
   ],
 
   "it": [
@@ -1000,7 +1090,22 @@
     "model_load_cancel",
     "model_load_cancel_confirm",
     "model_load_retry",
-    "model_pick_target_title"
+    "model_pick_target_title",
+    "model_manual_add",
+    "model_manual_remove",
+    "model_manual_id_label",
+    "model_manual_name_label",
+    "model_manual_save",
+    "model_manual_duplicate",
+    "model_manual_blank",
+    "model_manual_empty",
+    "model_switcher_url_label",
+    "model_switcher_url_hint",
+    "models_refresh",
+    "models_detected_count",
+    "model_availability_loadable",
+    "model_availability_unavailable",
+    "model_availability_unknown"
   ],
 
   "ja": [
@@ -1144,7 +1249,22 @@
     "model_load_cancel",
     "model_load_cancel_confirm",
     "model_load_retry",
-    "model_pick_target_title"
+    "model_pick_target_title",
+    "model_manual_add",
+    "model_manual_remove",
+    "model_manual_id_label",
+    "model_manual_name_label",
+    "model_manual_save",
+    "model_manual_duplicate",
+    "model_manual_blank",
+    "model_manual_empty",
+    "model_switcher_url_label",
+    "model_switcher_url_hint",
+    "models_refresh",
+    "models_detected_count",
+    "model_availability_loadable",
+    "model_availability_unavailable",
+    "model_availability_unknown"
   ],
 
   "ko": [
@@ -1274,7 +1394,22 @@
     "model_load_cancel",
     "model_load_cancel_confirm",
     "model_load_retry",
-    "model_pick_target_title"
+    "model_pick_target_title",
+    "model_manual_add",
+    "model_manual_remove",
+    "model_manual_id_label",
+    "model_manual_name_label",
+    "model_manual_save",
+    "model_manual_duplicate",
+    "model_manual_blank",
+    "model_manual_empty",
+    "model_switcher_url_label",
+    "model_switcher_url_hint",
+    "models_refresh",
+    "models_detected_count",
+    "model_availability_loadable",
+    "model_availability_unavailable",
+    "model_availability_unknown"
   ],
 
   "pt": [
@@ -1404,7 +1539,22 @@
     "model_load_cancel",
     "model_load_cancel_confirm",
     "model_load_retry",
-    "model_pick_target_title"
+    "model_pick_target_title",
+    "model_manual_add",
+    "model_manual_remove",
+    "model_manual_id_label",
+    "model_manual_name_label",
+    "model_manual_save",
+    "model_manual_duplicate",
+    "model_manual_blank",
+    "model_manual_empty",
+    "model_switcher_url_label",
+    "model_switcher_url_hint",
+    "models_refresh",
+    "models_detected_count",
+    "model_availability_loadable",
+    "model_availability_unavailable",
+    "model_availability_unknown"
   ],
 
   "ru": [
@@ -1548,7 +1698,22 @@
     "model_load_cancel",
     "model_load_cancel_confirm",
     "model_load_retry",
-    "model_pick_target_title"
+    "model_pick_target_title",
+    "model_manual_add",
+    "model_manual_remove",
+    "model_manual_id_label",
+    "model_manual_name_label",
+    "model_manual_save",
+    "model_manual_duplicate",
+    "model_manual_blank",
+    "model_manual_empty",
+    "model_switcher_url_label",
+    "model_switcher_url_hint",
+    "models_refresh",
+    "models_detected_count",
+    "model_availability_loadable",
+    "model_availability_unavailable",
+    "model_availability_unknown"
   ],
 
   "tr": [
@@ -1692,7 +1857,22 @@
     "model_load_cancel",
     "model_load_cancel_confirm",
     "model_load_retry",
-    "model_pick_target_title"
+    "model_pick_target_title",
+    "model_manual_add",
+    "model_manual_remove",
+    "model_manual_id_label",
+    "model_manual_name_label",
+    "model_manual_save",
+    "model_manual_duplicate",
+    "model_manual_blank",
+    "model_manual_empty",
+    "model_switcher_url_label",
+    "model_switcher_url_hint",
+    "models_refresh",
+    "models_detected_count",
+    "model_availability_loadable",
+    "model_availability_unavailable",
+    "model_availability_unknown"
   ],
 
   "zh": [
@@ -1836,7 +2016,22 @@
     "model_load_cancel",
     "model_load_cancel_confirm",
     "model_load_retry",
-    "model_pick_target_title"
+    "model_pick_target_title",
+    "model_manual_add",
+    "model_manual_remove",
+    "model_manual_id_label",
+    "model_manual_name_label",
+    "model_manual_save",
+    "model_manual_duplicate",
+    "model_manual_blank",
+    "model_manual_empty",
+    "model_switcher_url_label",
+    "model_switcher_url_hint",
+    "models_refresh",
+    "models_detected_count",
+    "model_availability_loadable",
+    "model_availability_unavailable",
+    "model_availability_unknown"
   ],
 
   "zh_TW": [
@@ -1980,6 +2175,21 @@
     "model_load_cancel",
     "model_load_cancel_confirm",
     "model_load_retry",
-    "model_pick_target_title"
+    "model_pick_target_title",
+    "model_manual_add",
+    "model_manual_remove",
+    "model_manual_id_label",
+    "model_manual_name_label",
+    "model_manual_save",
+    "model_manual_duplicate",
+    "model_manual_blank",
+    "model_manual_empty",
+    "model_switcher_url_label",
+    "model_switcher_url_hint",
+    "models_refresh",
+    "models_detected_count",
+    "model_availability_loadable",
+    "model_availability_unavailable",
+    "model_availability_unknown"
   ]
 }

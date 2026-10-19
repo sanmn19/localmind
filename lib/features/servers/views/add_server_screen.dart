@@ -6,7 +6,10 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:localmind/l10n/app_localizations.dart';
 import '../../../core/components/server_logo.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../models/data/models/manual_model.dart';
+import '../../models/providers/manual_model_providers.dart';
 import '../data/models/server.dart';
+import 'components/models_section.dart';
 import '../../../core/models/enums.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/utils/system_insets.dart';
@@ -31,6 +34,7 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> {
   late TextEditingController _hostController;
   late TextEditingController _portController;
   late TextEditingController _apiKeyController;
+  late TextEditingController _switcherController;
   late TextEditingController _ramGbController;
   late TextEditingController _vramGbController;
 
@@ -38,6 +42,8 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> {
   String? _selectedIconName;
   bool _isTesting = false;
   bool _isSaving = false;
+  bool _connectionVerified = false;
+  List<ManualModel> _stagedManualModels = const [];
   String? _testResult;
 
   bool get _isEditing => widget.editServer != null;
@@ -104,6 +110,9 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> {
           AppConstants.lmStudioDefaultPort.toString(),
     );
     _apiKeyController = TextEditingController(text: server?.apiKey ?? '');
+    _switcherController = TextEditingController(
+      text: server?.switcherBaseUrl ?? '',
+    );
     _ramGbController = TextEditingController(
       text: server?.availableRamGb?.toString() ?? '',
     );
@@ -122,6 +131,7 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> {
     _hostController.dispose();
     _portController.dispose();
     _apiKeyController.dispose();
+    _switcherController.dispose();
     _ramGbController.dispose();
     _vramGbController.dispose();
     super.dispose();
@@ -181,6 +191,7 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> {
       final isConnected = await apiService.testConnection(testServer);
       if (!mounted) return;
       setState(() {
+        _connectionVerified = isConnected;
         _testResult = isConnected
             ? AppLocalizations.of(context)?.connection_successful ??
                   'Connection successful'
@@ -268,6 +279,9 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> {
       availableVramGb: _selectedType == ServerType.lmStudio
           ? _parseOptionalGb(_vramGbController.text)
           : widget.editServer?.availableVramGb,
+      switcherBaseUrl: _switcherController.text.trim().isEmpty
+          ? null
+          : _switcherController.text.trim(),
     );
   }
 
@@ -288,6 +302,17 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> {
         await ref.read(serversProvider.notifier).updateServer(server);
       } else {
         await ref.read(serversProvider.notifier).addServer(server);
+        for (final row in _stagedManualModels) {
+          await ref.read(manualModelsNotifierProvider.notifier).add(
+            ManualModel(
+              serverId: server.id,
+              modelId: row.modelId,
+              displayName: row.displayName,
+              createdAt: row.createdAt,
+            ),
+          );
+        }
+        _stagedManualModels = const [];
       }
       // Guard every ref-touching statement post-await — the user can pop
       // this screen after the provider mutation succeeds.
@@ -695,6 +720,38 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> {
                 ],
               ),
             ),
+            if (_selectedType != ServerType.onDevice) ...[
+              const SizedBox(height: 12),
+              _buildSectionCard(
+                context,
+                title: l10n.model_switcher_url_label,
+                subtitle: l10n.model_switcher_url_hint,
+                child: TextFormField(
+                  controller: _switcherController,
+                  decoration: InputDecoration(
+                    labelText: l10n.model_switcher_url_label,
+                    hintText: l10n.model_switcher_url_hint,
+                  ),
+                  keyboardType: TextInputType.url,
+                ),
+              ),
+              if (_isEditing || _connectionVerified) ...[
+                const SizedBox(height: 12),
+                _buildSectionCard(
+                  context,
+                  title: l10n.settings_section_models,
+                  subtitle: l10n.model_manual_empty,
+                  child: ModelsSection(
+                    serverId: widget.editServer?.id ?? 'pending',
+                    serverType: _selectedType,
+                    isEditing: _isEditing,
+                    pendingRows: _stagedManualModels,
+                    onPendingChanged: (rows) =>
+                        setState(() => _stagedManualModels = rows),
+                  ),
+                ),
+              ],
+            ],
             if (_testResult != null) ...[
               const SizedBox(height: 12),
               _buildTestResultBanner(context),
