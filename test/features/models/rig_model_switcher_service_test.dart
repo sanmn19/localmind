@@ -22,44 +22,48 @@ Dio _dioWith(
 }
 
 void main() {
-  test('fetchRoster decodes name/label/served_model_name/enabled/active',
-      () async {
-    final service = RigModelSwitcherService(
-      _dioWith({
-        'models': [
-          {
-            'name': 'ds41-flash-1017',
-            'label': 'DeepSeek V4.1 Flash',
-            'served_model_name': 'DeepSeek-V4.1-Flash',
-            'enabled': true,
-            'active': false,
-          },
-        ],
-      }),
-    );
+  test(
+    'fetchRoster decodes name/label/served_model_name/enabled/active',
+    () async {
+      final service = RigModelSwitcherService(
+        _dioWith({
+          'models': [
+            {
+              'name': 'ds41-flash-1017',
+              'label': 'DeepSeek V4.1 Flash',
+              'served_model_name': 'DeepSeek-V4.1-Flash',
+              'enabled': true,
+              'active': false,
+            },
+          ],
+        }),
+      );
 
-    final roster = await service.fetchRoster(Uri.parse('http://rig:9000'));
+      final roster = await service.fetchRoster(Uri.parse('http://rig:9000'));
 
-    expect(roster.single.name, 'ds41-flash-1017');
-    expect(roster.single.label, 'DeepSeek V4.1 Flash');
-    expect(roster.single.servedModelName, 'DeepSeek-V4.1-Flash');
-    expect(roster.single.enabled, isTrue);
-    expect(roster.single.active, isFalse);
-  });
+      expect(roster.single.name, 'ds41-flash-1017');
+      expect(roster.single.label, 'DeepSeek V4.1 Flash');
+      expect(roster.single.servedModelName, 'DeepSeek-V4.1-Flash');
+      expect(roster.single.enabled, isTrue);
+      expect(roster.single.active, isFalse);
+    },
+  );
 
-  test('fetchRoster accepts a bare JSON array and defaults enabled/active',
-      () async {
-    final service = RigModelSwitcherService(
-      _dioWith([
-        {'name': 'n1', 'label': 'N1', 'served_model_name': 'm1'},
-      ]),
-    );
+  test(
+    'fetchRoster accepts a bare JSON array and defaults enabled/active',
+    () async {
+      final service = RigModelSwitcherService(
+        _dioWith([
+          {'name': 'n1', 'label': 'N1', 'served_model_name': 'm1'},
+        ]),
+      );
 
-    final roster = await service.fetchRoster(Uri.parse('http://rig:9000/'));
+      final roster = await service.fetchRoster(Uri.parse('http://rig:9000/'));
 
-    expect(roster.single.enabled, isTrue);
-    expect(roster.single.active, isFalse);
-  });
+      expect(roster.single.enabled, isTrue);
+      expect(roster.single.active, isFalse);
+    },
+  );
 
   test('fetchStatus decodes phase/progress/stage/attempt/log_tail', () async {
     final service = RigModelSwitcherService(
@@ -87,21 +91,26 @@ void main() {
     expect(status.isHealthy, isFalse);
   });
 
-  test('switchTo POSTs /v1/switch/{name} and cancel POSTs /v1/cancel',
-      () async {
-    final recorded = <RequestOptions>[];
-    final service = RigModelSwitcherService(
-      _dioWith({'ok': true}, recorded: recorded),
-    );
+  test(
+    'switchTo POSTs /v1/switch/{name} and cancel POSTs /v1/cancel',
+    () async {
+      final recorded = <RequestOptions>[];
+      final service = RigModelSwitcherService(
+        _dioWith({'ok': true}, recorded: recorded),
+      );
 
-    await service.switchTo(Uri.parse('http://rig:9000/'), 'ds41 flash');
-    await service.cancel(Uri.parse('http://rig:9000/'));
+      await service.switchTo(Uri.parse('http://rig:9000/'), 'ds41 flash');
+      await service.cancel(Uri.parse('http://rig:9000/'));
 
-    expect(recorded[0].method, 'POST');
-    expect(recorded[0].uri.toString(), 'http://rig:9000/v1/switch/ds41%20flash');
-    expect(recorded[1].method, 'POST');
-    expect(recorded[1].uri.toString(), 'http://rig:9000/v1/cancel');
-  });
+      expect(recorded[0].method, 'POST');
+      expect(
+        recorded[0].uri.toString(),
+        'http://rig:9000/v1/switch/ds41%20flash',
+      );
+      expect(recorded[1].method, 'POST');
+      expect(recorded[1].uri.toString(), 'http://rig:9000/v1/cancel');
+    },
+  );
 
   test('a non-2xx switch response throws RigSwitcherException', () async {
     final service = RigModelSwitcherService(

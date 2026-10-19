@@ -5,16 +5,13 @@ import '../data/models/rig_model_entry.dart';
 import '../data/rig_model_switcher_service.dart';
 
 final rigSwitcherServiceProvider = Provider<RigModelSwitcherApi>((ref) {
-  final dio = Dio(
-    BaseOptions(connectTimeout: const Duration(seconds: 10)),
-  );
+  final dio = Dio(BaseOptions(connectTimeout: const Duration(seconds: 10)));
   return RigModelSwitcherService(dio);
 });
 
 /// The switcher roster, or `null` when the switcher is unreachable. The merge
 /// calls this on every detection, so it is intentionally uncached.
-final rigRosterProvider =
-    FutureProvider.family<List<RigModelEntry>?, String>((
+final rigRosterProvider = FutureProvider.family<List<RigModelEntry>?, String>((
   ref,
   switcherUrl,
 ) async {

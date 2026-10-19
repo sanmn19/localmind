@@ -12,14 +12,13 @@ import 'package:localmind/features/models/providers/manual_model_providers.dart'
 import 'package:shared_preferences/shared_preferences.dart';
 
 ManualModel _manual(String serverId, String modelId) => ManualModel(
-      serverId: serverId,
-      modelId: modelId,
-      createdAt: DateTime(2026, 10, 19),
-    );
+  serverId: serverId,
+  modelId: modelId,
+  createdAt: DateTime(2026, 10, 19),
+);
 
-ManualModelRepository _repo() => ManualModelRepository(
-      InMemoryManualModelStore(),
-    )..add(_manual('s1', 'm1'));
+ManualModelRepository _repo() =>
+    ManualModelRepository(InMemoryManualModelStore())..add(_manual('s1', 'm1'));
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -39,7 +38,9 @@ void main() {
     );
     addTearDown(container.dispose);
 
-    container.read(selectedModelProvider.notifier).setModel(
+    container
+        .read(selectedModelProvider.notifier)
+        .setModel(
           ModelInfo(
             id: 'm1',
             name: 'M1',
@@ -47,10 +48,9 @@ void main() {
             serverId: 's1',
           ),
         );
-    await container.read(manualModelsNotifierProvider.notifier).remove(
-          's1',
-          'm1',
-        );
+    await container
+        .read(manualModelsNotifierProvider.notifier)
+        .remove('s1', 'm1');
 
     expect(container.read(selectedModelProvider), isNull);
   });
@@ -66,49 +66,49 @@ void main() {
     );
     addTearDown(container.dispose);
 
-    container.read(settingsProvider.notifier).setDefaultModel(
-          serverId: 's1',
-          modelId: 'm1',
-        );
-    await container.read(manualModelsNotifierProvider.notifier).remove(
-          's1',
-          'm1',
-        );
+    container
+        .read(settingsProvider.notifier)
+        .setDefaultModel(serverId: 's1', modelId: 'm1');
+    await container
+        .read(manualModelsNotifierProvider.notifier)
+        .remove('s1', 'm1');
 
     expect(container.read(settingsProvider).defaultModelId, isNull);
   });
 
-  test('removing another server model leaves selection and default intact',
-      () async {
-    final prefs = await SharedPreferences.getInstance();
-    final repo = _repo()..add(_manual('s2', 'm2'));
-    final container = ProviderContainer(
-      overrides: [
-        manualModelRepositoryProvider.overrideWithValue(repo),
-        sharedPreferencesProvider.overrideWithValue(prefs),
-      ],
-    );
-    addTearDown(container.dispose);
+  test(
+    'removing another server model leaves selection and default intact',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      final repo = _repo()..add(_manual('s2', 'm2'));
+      final container = ProviderContainer(
+        overrides: [
+          manualModelRepositoryProvider.overrideWithValue(repo),
+          sharedPreferencesProvider.overrideWithValue(prefs),
+        ],
+      );
+      addTearDown(container.dispose);
 
-    container.read(selectedModelProvider.notifier).setModel(
-          ModelInfo(
-            id: 'm1',
-            name: 'M1',
-            serverType: ServerType.openAICompatible,
-            serverId: 's1',
-          ),
-        );
-    container.read(settingsProvider.notifier).setDefaultModel(
-          serverId: 's1',
-          modelId: 'm1',
-        );
+      container
+          .read(selectedModelProvider.notifier)
+          .setModel(
+            ModelInfo(
+              id: 'm1',
+              name: 'M1',
+              serverType: ServerType.openAICompatible,
+              serverId: 's1',
+            ),
+          );
+      container
+          .read(settingsProvider.notifier)
+          .setDefaultModel(serverId: 's1', modelId: 'm1');
 
-    await container.read(manualModelsNotifierProvider.notifier).remove(
-          's2',
-          'm2',
-        );
+      await container
+          .read(manualModelsNotifierProvider.notifier)
+          .remove('s2', 'm2');
 
-    expect(container.read(selectedModelProvider)?.id, 'm1');
-    expect(container.read(settingsProvider).defaultModelId, 'm1');
-  });
+      expect(container.read(selectedModelProvider)?.id, 'm1');
+      expect(container.read(settingsProvider).defaultModelId, 'm1');
+    },
+  );
 }

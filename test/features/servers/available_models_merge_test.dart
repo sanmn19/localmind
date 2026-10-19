@@ -6,32 +6,31 @@ import 'package:localmind/features/models/data/models/rig_model_entry.dart';
 import 'package:localmind/features/models/utils/manual_model_merge.dart';
 
 ModelInfo _model(String id) => ModelInfo(
-      id: id,
-      name: id,
-      serverType: ServerType.openAICompatible,
-      serverId: 's1',
-    );
+  id: id,
+  name: id,
+  serverType: ServerType.openAICompatible,
+  serverId: 's1',
+);
 
 ManualModel _manual(String modelId, [String? displayName]) => ManualModel(
-      serverId: 's1',
-      modelId: modelId,
-      displayName: displayName,
-      createdAt: DateTime(2026, 10, 19),
-    );
+  serverId: 's1',
+  modelId: modelId,
+  displayName: displayName,
+  createdAt: DateTime(2026, 10, 19),
+);
 
 RigModelEntry _rigEntry(
   String name,
   String servedModelName, {
   bool enabled = true,
   bool active = false,
-}) =>
-    RigModelEntry(
-      name: name,
-      label: name,
-      servedModelName: servedModelName,
-      enabled: enabled,
-      active: active,
-    );
+}) => RigModelEntry(
+  name: name,
+  label: name,
+  servedModelName: servedModelName,
+  enabled: enabled,
+  active: active,
+);
 
 void main() {
   test('manual models merge after detected ones, deduped by id', () {
@@ -56,8 +55,12 @@ void main() {
       serverType: ServerType.openAICompatible,
       rosterConfigured: true,
       roster: [
-        _rigEntry('ds41-flash-1017', 'DeepSeek-V4.1-Flash',
-            enabled: true, active: false),
+        _rigEntry(
+          'ds41-flash-1017',
+          'DeepSeek-V4.1-Flash',
+          enabled: true,
+          active: false,
+        ),
       ],
     );
 
@@ -72,8 +75,12 @@ void main() {
       serverType: ServerType.openAICompatible,
       rosterConfigured: true,
       roster: [
-        _rigEntry('ds41-flash-1017', 'DeepSeek-V4.1-Flash',
-            enabled: true, active: true),
+        _rigEntry(
+          'ds41-flash-1017',
+          'DeepSeek-V4.1-Flash',
+          enabled: true,
+          active: true,
+        ),
       ],
     );
 

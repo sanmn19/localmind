@@ -13,8 +13,10 @@ final manualModelRepositoryProvider = Provider<ManualModelRepository>((ref) {
 });
 
 /// The persisted manual models of one provider.
-final manualModelsProvider =
-    FutureProvider.family<List<ManualModel>, String>((ref, serverId) async {
+final manualModelsProvider = FutureProvider.family<List<ManualModel>, String>((
+  ref,
+  serverId,
+) async {
   return ref.watch(manualModelRepositoryProvider).listForServer(serverId);
 });
 
@@ -32,8 +34,9 @@ class ManualModelsNotifier extends Notifier<int> {
   }
 
   Future<void> remove(String serverId, String modelId) async {
-    final removed =
-        ref.read(manualModelRepositoryProvider).remove(serverId, modelId);
+    final removed = ref
+        .read(manualModelRepositoryProvider)
+        .remove(serverId, modelId);
     if (!removed) return;
     // Never leave dangling pointers at a removed model.
     final selected = ref.read(selectedModelProvider);

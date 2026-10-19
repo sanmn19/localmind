@@ -74,8 +74,8 @@ class _ModelsSectionState extends ConsumerState<ModelsSection> {
           .remove(row.serverId, row.modelId);
     } else {
       setState(
-        () => _pending =
-            _pending.where((m) => m.modelId != row.modelId).toList(),
+        () =>
+            _pending = _pending.where((m) => m.modelId != row.modelId).toList(),
       );
       widget.onPendingChanged?.call(_pending);
     }
@@ -92,7 +92,7 @@ class _ModelsSectionState extends ConsumerState<ModelsSection> {
     final theme = Theme.of(context);
     final detected =
         ref.watch(availableModelsProvider(widget.serverId)).value ??
-            const <ModelInfo>[];
+        const <ModelInfo>[];
     final rows = _rows;
 
     return Column(
@@ -151,8 +151,9 @@ class _ModelsSectionState extends ConsumerState<ModelsSection> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color:
-                            theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.6,
+                        ),
                       ),
                     ),
               trailing: IconButton(
@@ -218,7 +219,9 @@ class _AddManualModelDialogState extends State<_AddManualModelDialog> {
               key: const ValueKey('manual_model_id_field'),
               controller: _idController,
               autofocus: true,
-              decoration: InputDecoration(labelText: l10n.model_manual_id_label),
+              decoration: InputDecoration(
+                labelText: l10n.model_manual_id_label,
+              ),
               validator: (value) {
                 final id = value?.trim() ?? '';
                 if (id.isEmpty) return l10n.model_manual_blank;
@@ -232,8 +235,9 @@ class _AddManualModelDialogState extends State<_AddManualModelDialog> {
             TextFormField(
               key: const ValueKey('manual_model_name_field'),
               controller: _nameController,
-              decoration:
-                  InputDecoration(labelText: l10n.model_manual_name_label),
+              decoration: InputDecoration(
+                labelText: l10n.model_manual_name_label,
+              ),
             ),
           ],
         ),

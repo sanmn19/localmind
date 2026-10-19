@@ -114,9 +114,7 @@ class RigLoadProgressSheet extends ConsumerWidget {
             if (status?.isFailed ?? false) ...[
               const SizedBox(height: 6),
               Text(
-                l10n.model_load_failed(
-                  status?.error ?? status?.message ?? '',
-                ),
+                l10n.model_load_failed(status?.error ?? status?.message ?? ''),
                 style: TextStyle(color: theme.colorScheme.error),
               ),
             ],

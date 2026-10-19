@@ -105,8 +105,9 @@ class RigLoadNotifier extends Notifier<RigLoadState?> {
   }) async {
     if (state?.active ?? false) return;
     try {
-      final status =
-          await ref.read(rigSwitcherServiceProvider).fetchStatus(base);
+      final status = await ref
+          .read(rigSwitcherServiceProvider)
+          .fetchStatus(base);
       if (!ref.mounted || !status.isInFlight) return;
       _base = base;
       state = RigLoadState(
@@ -141,8 +142,9 @@ class RigLoadNotifier extends Notifier<RigLoadState?> {
         return;
       }
       try {
-        final status =
-            await ref.read(rigSwitcherServiceProvider).fetchStatus(base);
+        final status = await ref
+            .read(rigSwitcherServiceProvider)
+            .fetchStatus(base);
         if (!ref.mounted) {
           timer.cancel();
           return;

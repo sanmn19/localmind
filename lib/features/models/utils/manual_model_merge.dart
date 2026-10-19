@@ -54,7 +54,9 @@ ModelAvailability _availabilityFor(
   if (!rosterConfigured) return ModelAvailability.unavailable;
   if (roster == null) return ModelAvailability.unknown;
 
-  final matches = roster.where((entry) => entry.servedModelName.trim() == modelId);
+  final matches = roster.where(
+    (entry) => entry.servedModelName.trim() == modelId,
+  );
   if (matches.any((entry) => entry.enabled && entry.active)) {
     return ModelAvailability.available;
   }

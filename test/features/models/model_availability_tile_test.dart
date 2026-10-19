@@ -21,16 +21,17 @@ Widget _wrap(Widget child) {
 }
 
 ModelInfo _model(ModelAvailability availability) => ModelInfo(
-      id: 'm1',
-      name: 'Model One',
-      serverType: ServerType.openAICompatible,
-      serverId: 's1',
-      availability: availability,
-    );
+  id: 'm1',
+  name: 'Model One',
+  serverType: ServerType.openAICompatible,
+  serverId: 's1',
+  availability: availability,
+);
 
 void main() {
-  testWidgets('unavailable tile is greyed with an Unavailable badge',
-      (tester) async {
+  testWidgets('unavailable tile is greyed with an Unavailable badge', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       _wrap(
         ModelTile(
@@ -48,8 +49,9 @@ void main() {
     expect(opacity.opacity, 0.45);
   });
 
-  testWidgets('available tile has no badge and is fully opaque',
-      (tester) async {
+  testWidgets('available tile has no badge and is fully opaque', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       _wrap(
         ModelTile(

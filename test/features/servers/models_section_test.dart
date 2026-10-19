@@ -3,6 +3,8 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:localmind/core/models/enums.dart';
+import 'package:localmind/core/providers/storage_providers.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:localmind/features/models/data/manual_model_repository.dart';
 import 'package:localmind/features/models/data/manual_model_store.dart';
 import 'package:localmind/features/models/data/models/manual_model.dart';
@@ -28,6 +30,8 @@ Widget _wrap(Widget child) {
 
 void main() {
   testWidgets('edit mode lists manual rows and removes one', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
     final repo = ManualModelRepository(InMemoryManualModelStore())
       ..add(
         ManualModel(
@@ -42,8 +46,10 @@ void main() {
       ProviderScope(
         overrides: [
           manualModelRepositoryProvider.overrideWithValue(repo),
-          availableModelsProvider('s1')
-              .overrideWith((ref) async => const <ModelInfo>[]),
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          availableModelsProvider(
+            's1',
+          ).overrideWith((ref) async => const <ModelInfo>[]),
         ],
         child: _wrap(
           const ModelsSection(
@@ -58,7 +64,9 @@ void main() {
 
     expect(find.text('My Model'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('remove_manual_model_manual-1')));
+    await tester.tap(
+      find.byKey(const ValueKey('remove_manual_model_manual-1')),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('My Model'), findsNothing);
@@ -73,8 +81,9 @@ void main() {
       ProviderScope(
         overrides: [
           manualModelRepositoryProvider.overrideWithValue(repo),
-          availableModelsProvider('pending')
-              .overrideWith((ref) async => const <ModelInfo>[]),
+          availableModelsProvider(
+            'pending',
+          ).overrideWith((ref) async => const <ModelInfo>[]),
         ],
         child: _wrap(
           ModelsSection(

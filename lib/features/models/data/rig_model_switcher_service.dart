@@ -35,7 +35,10 @@ class RigModelSwitcherService implements RigModelSwitcherApi {
 
   @override
   Future<List<RigModelEntry>> fetchRoster(Uri base) async {
-    final response = await _dio.get(_url(base, '/v1/list'), options: _options());
+    final response = await _dio.get(
+      _url(base, '/v1/list'),
+      options: _options(),
+    );
     _ensureSuccess(response, 'list');
     final data = response.data;
     final list = data is Map
@@ -46,8 +49,10 @@ class RigModelSwitcherService implements RigModelSwitcherApi {
 
   @override
   Future<RigSwitchStatus> fetchStatus(Uri base) async {
-    final response =
-        await _dio.get(_url(base, '/v1/status'), options: _options());
+    final response = await _dio.get(
+      _url(base, '/v1/status'),
+      options: _options(),
+    );
     _ensureSuccess(response, 'status');
     final data = response.data;
     if (data is! Map) {
@@ -60,7 +65,8 @@ class RigModelSwitcherService implements RigModelSwitcherApi {
       stage: data['stage'] as String?,
       attempt: (data['attempt'] as num?)?.toInt() ?? 0,
       maxAttempts: (data['max_attempts'] as num?)?.toInt() ?? 0,
-      logTail: (data['log_tail'] as List?)
+      logTail:
+          (data['log_tail'] as List?)
               ?.map((line) => line.toString())
               .toList() ??
           const [],
@@ -80,16 +86,18 @@ class RigModelSwitcherService implements RigModelSwitcherApi {
 
   @override
   Future<void> cancel(Uri base) async {
-    final response =
-        await _dio.post(_url(base, '/v1/cancel'), options: _options());
+    final response = await _dio.post(
+      _url(base, '/v1/cancel'),
+      options: _options(),
+    );
     _ensureSuccess(response, 'cancel');
   }
 
   Options _options() => Options(
-        receiveTimeout: _timeout,
-        sendTimeout: _timeout,
-        validateStatus: (status) => status != null && status < 500,
-      );
+    receiveTimeout: _timeout,
+    sendTimeout: _timeout,
+    validateStatus: (status) => status != null && status < 500,
+  );
 
   String _url(Uri base, String path) {
     final root = base.toString().replaceAll(RegExp(r'/+$'), '');
@@ -111,11 +119,10 @@ class RigModelSwitcherService implements RigModelSwitcherApi {
   }
 
   RigModelEntry _entryFrom(Map entry) => RigModelEntry(
-        name: (entry['name'] as String?)?.trim() ?? '',
-        label: (entry['label'] as String?)?.trim() ?? '',
-        servedModelName:
-            (entry['served_model_name'] as String?)?.trim() ?? '',
-        enabled: entry['enabled'] as bool? ?? true,
-        active: entry['active'] as bool? ?? false,
-      );
+    name: (entry['name'] as String?)?.trim() ?? '',
+    label: (entry['label'] as String?)?.trim() ?? '',
+    servedModelName: (entry['served_model_name'] as String?)?.trim() ?? '',
+    enabled: entry['enabled'] as bool? ?? true,
+    active: entry['active'] as bool? ?? false,
+  );
 }

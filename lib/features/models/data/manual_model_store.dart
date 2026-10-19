@@ -75,11 +75,11 @@ class ObjectBoxManualModelStore implements ManualModelStore {
   }
 
   ManualModel _toDomain(ManualModelEntity entity) => ManualModel(
-        serverId: entity.serverId,
-        modelId: entity.modelId,
-        displayName: entity.displayName,
-        createdAt: entity.createdAt,
-      );
+    serverId: entity.serverId,
+    modelId: entity.modelId,
+    displayName: entity.displayName,
+    createdAt: entity.createdAt,
+  );
 }
 
 class InMemoryManualModelStore implements ManualModelStore {

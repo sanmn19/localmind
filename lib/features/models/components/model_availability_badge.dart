@@ -32,10 +32,7 @@ class ModelAvailabilityBadge extends StatelessWidget {
         color: muted.withValues(alpha: isDark ? 0.18 : 0.10),
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Text(
-        label,
-        style: TextStyle(fontSize: 10, color: muted),
-      ),
+      child: Text(label, style: TextStyle(fontSize: 10, color: muted)),
     );
   }
 }
