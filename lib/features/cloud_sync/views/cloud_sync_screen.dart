@@ -348,7 +348,7 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
                                   ),
                             child: Text(l10n.cloud_sync_enable),
                           ),
-                        
+                        ] else ...[
                           FilledButton.icon(
                             onPressed: status.phase == CloudSyncPhase.syncing
                                 ? null
