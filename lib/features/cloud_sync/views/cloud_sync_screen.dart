@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -29,6 +31,7 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
   bool _pathStyle = true;
   bool _allowHttp = false;
   bool _working = false;
+  CloudSyncProviderKind _provider = CloudSyncProviderKind.s3;
 
   @override
   void initState() {
@@ -42,6 +45,7 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
     _prefix = TextEditingController(text: config?.prefix ?? 'localmind');
     _pathStyle = config?.pathStyle ?? true;
     _allowHttp = config?.allowInsecureHttp ?? false;
+    _provider = config?.provider ?? CloudSyncProviderKind.s3;
   }
 
   @override
@@ -58,7 +62,18 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
     super.dispose();
   }
 
+  String? _googleAccountEmail(CloudSyncStatus status) {
+    final message = status.message;
+    const prefix = 'Connected as ';
+    if (message == null || !message.startsWith(prefix)) return null;
+    final email = message.substring(prefix.length);
+    return email.endsWith('.')
+        ? email.substring(0, email.length - 1)
+        : email;
+  }
+
   S3SyncConfig get _config => S3SyncConfig(
+    provider: _provider,
     endpoint: _endpoint.text.trim(),
     bucket: _bucket.text.trim(),
     region: _region.text.trim(),
@@ -148,58 +163,142 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
                         CloudSyncStatusCard(status: status),
                         const SizedBox(height: 20),
                         if (!enabled) ...[
-                          TextFormField(
-                            controller: _endpoint,
-                            decoration: InputDecoration(
-                              labelText: l10n.cloud_sync_endpoint,
-                            ),
-                            keyboardType: TextInputType.url,
-                            validator: (_) => _config.validate(),
-                          ),
-                          fieldSpacing,
-                          TextFormField(
-                            controller: _bucket,
-                            decoration: InputDecoration(
-                              labelText: l10n.cloud_sync_bucket,
-                            ),
-                          ),
-                          fieldSpacing,
-                          TextFormField(
-                            controller: _region,
-                            decoration: InputDecoration(
-                              labelText: l10n.cloud_sync_region,
+                          SegmentedButton<CloudSyncProviderKind>(
+                            segments: [
+                              ButtonSegment(
+                                value: CloudSyncProviderKind.s3,
+                                label: Text(l10n.cloud_sync_provider_s3),
+                              ),
+                              if (!Platform.isIOS)
+                                ButtonSegment(
+                                  value: CloudSyncProviderKind.googleDrive,
+                                  label: Text(
+                                    l10n.cloud_sync_provider_google_drive,
+                                  ),
+                                ),
+                            ],
+                            selected: {_provider},
+                            onSelectionChanged: (selection) => setState(
+                              () => _provider = selection.first,
                             ),
                           ),
                           fieldSpacing,
-                          TextFormField(
-                            controller: _prefix,
-                            decoration: InputDecoration(
-                              labelText: l10n.cloud_sync_prefix,
+                          if (_provider ==
+                              CloudSyncProviderKind.googleDrive) ...[
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    status.message?.startsWith('Connected as') ==
+                                            true
+                                        ? status.message!
+                                        : l10n
+                                              .cloud_sync_provider_google_drive,
+                                  ),
+                                ),
+                                OutlinedButton(
+                                  onPressed: _working
+                                      ? null
+                                      : () => _run(
+                                          () => ref
+                                              .read(
+                                                cloudSyncControllerProvider
+                                                    .notifier,
+                                              )
+                                              .connectGoogle(),
+                                        ),
+                                  child: Text(l10n.cloud_sync_connect_google),
+                                ),
+                              ],
                             ),
-                          ),
-                          fieldSpacing,
-                          TextFormField(
-                            controller: _accessKey,
-                            decoration: InputDecoration(
-                              labelText: l10n.cloud_sync_access_key,
+                            fieldSpacing,
+                          ] else ...[
+                            TextFormField(
+                              controller: _endpoint,
+                              decoration: InputDecoration(
+                                labelText: l10n.cloud_sync_endpoint,
+                              ),
+                              keyboardType: TextInputType.url,
+                              validator: (_) => _config.validate(),
                             ),
-                          ),
-                          fieldSpacing,
-                          TextFormField(
-                            controller: _secretKey,
-                            obscureText: true,
-                            decoration: InputDecoration(
-                              labelText: l10n.cloud_sync_secret_key,
+                            fieldSpacing,
+                            TextFormField(
+                              controller: _bucket,
+                              decoration: InputDecoration(
+                                labelText: l10n.cloud_sync_bucket,
+                              ),
                             ),
-                          ),
-                          fieldSpacing,
-                          TextFormField(
-                            controller: _sessionToken,
-                            obscureText: true,
-                            decoration: InputDecoration(
-                              labelText: l10n.cloud_sync_session_token,
+                            fieldSpacing,
+                            TextFormField(
+                              controller: _region,
+                              decoration: InputDecoration(
+                                labelText: l10n.cloud_sync_region,
+                              ),
                             ),
-                          ),
+                            fieldSpacing,
+                            TextFormField(
+                              controller: _prefix,
+                              decoration: InputDecoration(
+                                labelText: l10n.cloud_sync_prefix,
+                              ),
+                            ),
+                            fieldSpacing,
+                            TextFormField(
+                              controller: _accessKey,
+                              decoration: InputDecoration(
+                                labelText: l10n.cloud_sync_access_key,
+                              ),
+                            ),
+                            fieldSpacing,
+                            TextFormField(
+                              controller: _secretKey,
+                              obscureText: true,
+                              decoration: InputDecoration(
+                                labelText: l10n.cloud_sync_secret_key,
+                              ),
+                            ),
+                            fieldSpacing,
+                            TextFormField(
+                              controller: _sessionToken,
+                              obscureText: true,
+                              decoration: InputDecoration(
+                                labelText: l10n.cloud_sync_session_token,
+                              ),
+                            ),
+                            fieldSpacing,
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(l10n.cloud_sync_path_style),
+                              value: _pathStyle,
+                              onChanged: (value) =>
+                                  setState(() => _pathStyle = value),
+                            ),
+                            SwitchListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(l10n.cloud_sync_allow_http),
+                              subtitle: Text(l10n.cloud_sync_http_warning),
+                              value: _allowHttp,
+                              onChanged: (value) =>
+                                  setState(() => _allowHttp = value),
+                            ),
+                            const SizedBox(height: 12),
+                            OutlinedButton(
+                              onPressed: _working
+                                  ? null
+                                  : () => _run(
+                                      () => ref
+                                          .read(
+                                            cloudSyncControllerProvider
+                                                .notifier,
+                                          )
+                                          .testConnection(
+                                            _config,
+                                            _credentials,
+                                          ),
+                                    ),
+                              child: Text(l10n.cloud_sync_test),
+                            ),
+                          ],
                           fieldSpacing,
                           TextFormField(
                             controller: _passphrase,
@@ -222,35 +321,6 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
                                 ? l10n.cloud_sync_passphrase_mismatch
                                 : null,
                           ),
-                          const SizedBox(height: 8),
-                          SwitchListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(l10n.cloud_sync_path_style),
-                            value: _pathStyle,
-                            onChanged: (value) =>
-                                setState(() => _pathStyle = value),
-                          ),
-                          SwitchListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(l10n.cloud_sync_allow_http),
-                            subtitle: Text(l10n.cloud_sync_http_warning),
-                            value: _allowHttp,
-                            onChanged: (value) =>
-                                setState(() => _allowHttp = value),
-                          ),
-                          const SizedBox(height: 12),
-                          OutlinedButton(
-                            onPressed: _working
-                                ? null
-                                : () => _run(
-                                    () => ref
-                                        .read(
-                                          cloudSyncControllerProvider.notifier,
-                                        )
-                                        .testConnection(_config, _credentials),
-                                  ),
-                            child: Text(l10n.cloud_sync_test),
-                          ),
                           const SizedBox(height: 12),
                           FilledButton(
                             onPressed: _working
@@ -262,13 +332,23 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
                                         )
                                         .configure(
                                           config: _config,
-                                          credentials: _credentials,
+                                          credentials:
+                                              _provider ==
+                                                  CloudSyncProviderKind.s3
+                                              ? _credentials
+                                              : null,
                                           passphrase: _passphrase.text,
+                                          googleAccount:
+                                              _provider ==
+                                                  CloudSyncProviderKind
+                                                      .googleDrive
+                                              ? _googleAccountEmail(status)
+                                              : null,
                                         ),
                                   ),
                             child: Text(l10n.cloud_sync_enable),
                           ),
-                        ] else ...[
+                        
                           FilledButton.icon(
                             onPressed: status.phase == CloudSyncPhase.syncing
                                 ? null
@@ -279,6 +359,17 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
                                       .syncNow(),
                             icon: const Icon(Icons.sync),
                             label: Text(l10n.cloud_sync_now),
+                          ),
+                          const SizedBox(height: 8),
+                          OutlinedButton(
+                            onPressed: status.phase == CloudSyncPhase.syncing
+                                ? null
+                                : () => ref
+                                      .read(
+                                        cloudSyncControllerProvider.notifier,
+                                      )
+                                      .backUpNow(),
+                            child: Text(l10n.cloud_sync_backup_now),
                           ),
                           const SizedBox(height: 8),
                           OutlinedButton(

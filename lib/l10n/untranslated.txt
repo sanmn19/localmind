@@ -152,7 +152,13 @@
     "model_availability_loadable",
     "model_availability_unavailable",
     "model_availability_unknown",
-    "model_load_confirm_streaming"
+    "model_load_confirm_streaming",
+    "cloud_sync_provider",
+    "cloud_sync_provider_s3",
+    "cloud_sync_provider_google_drive",
+    "cloud_sync_connect_google",
+    "cloud_sync_connected_as",
+    "cloud_sync_backup_now"
   ],
 
   "bn": [
@@ -312,7 +318,13 @@
     "model_availability_loadable",
     "model_availability_unavailable",
     "model_availability_unknown",
-    "model_load_confirm_streaming"
+    "model_load_confirm_streaming",
+    "cloud_sync_provider",
+    "cloud_sync_provider_s3",
+    "cloud_sync_provider_google_drive",
+    "cloud_sync_connect_google",
+    "cloud_sync_connected_as",
+    "cloud_sync_backup_now"
   ],
 
   "de": [
@@ -472,7 +484,13 @@
     "model_availability_loadable",
     "model_availability_unavailable",
     "model_availability_unknown",
-    "model_load_confirm_streaming"
+    "model_load_confirm_streaming",
+    "cloud_sync_provider",
+    "cloud_sync_provider_s3",
+    "cloud_sync_provider_google_drive",
+    "cloud_sync_connect_google",
+    "cloud_sync_connected_as",
+    "cloud_sync_backup_now"
   ],
 
   "es": [
@@ -632,7 +650,13 @@
     "model_availability_loadable",
     "model_availability_unavailable",
     "model_availability_unknown",
-    "model_load_confirm_streaming"
+    "model_load_confirm_streaming",
+    "cloud_sync_provider",
+    "cloud_sync_provider_s3",
+    "cloud_sync_provider_google_drive",
+    "cloud_sync_connect_google",
+    "cloud_sync_connected_as",
+    "cloud_sync_backup_now"
   ],
 
   "fr": [
@@ -792,7 +816,13 @@
     "model_availability_loadable",
     "model_availability_unavailable",
     "model_availability_unknown",
-    "model_load_confirm_streaming"
+    "model_load_confirm_streaming",
+    "cloud_sync_provider",
+    "cloud_sync_provider_s3",
+    "cloud_sync_provider_google_drive",
+    "cloud_sync_connect_google",
+    "cloud_sync_connected_as",
+    "cloud_sync_backup_now"
   ],
 
   "hi": [
@@ -952,7 +982,13 @@
     "model_availability_loadable",
     "model_availability_unavailable",
     "model_availability_unknown",
-    "model_load_confirm_streaming"
+    "model_load_confirm_streaming",
+    "cloud_sync_provider",
+    "cloud_sync_provider_s3",
+    "cloud_sync_provider_google_drive",
+    "cloud_sync_connect_google",
+    "cloud_sync_connected_as",
+    "cloud_sync_backup_now"
   ],
 
   "it": [
@@ -1112,7 +1148,13 @@
     "model_availability_loadable",
     "model_availability_unavailable",
     "model_availability_unknown",
-    "model_load_confirm_streaming"
+    "model_load_confirm_streaming",
+    "cloud_sync_provider",
+    "cloud_sync_provider_s3",
+    "cloud_sync_provider_google_drive",
+    "cloud_sync_connect_google",
+    "cloud_sync_connected_as",
+    "cloud_sync_backup_now"
   ],
 
   "ja": [
@@ -1272,7 +1314,13 @@
     "model_availability_loadable",
     "model_availability_unavailable",
     "model_availability_unknown",
-    "model_load_confirm_streaming"
+    "model_load_confirm_streaming",
+    "cloud_sync_provider",
+    "cloud_sync_provider_s3",
+    "cloud_sync_provider_google_drive",
+    "cloud_sync_connect_google",
+    "cloud_sync_connected_as",
+    "cloud_sync_backup_now"
   ],
 
   "ko": [
@@ -1418,7 +1466,13 @@
     "model_availability_loadable",
     "model_availability_unavailable",
     "model_availability_unknown",
-    "model_load_confirm_streaming"
+    "model_load_confirm_streaming",
+    "cloud_sync_provider",
+    "cloud_sync_provider_s3",
+    "cloud_sync_provider_google_drive",
+    "cloud_sync_connect_google",
+    "cloud_sync_connected_as",
+    "cloud_sync_backup_now"
   ],
 
   "pt": [
@@ -1564,7 +1618,13 @@
     "model_availability_loadable",
     "model_availability_unavailable",
     "model_availability_unknown",
-    "model_load_confirm_streaming"
+    "model_load_confirm_streaming",
+    "cloud_sync_provider",
+    "cloud_sync_provider_s3",
+    "cloud_sync_provider_google_drive",
+    "cloud_sync_connect_google",
+    "cloud_sync_connected_as",
+    "cloud_sync_backup_now"
   ],
 
   "ru": [
@@ -1724,7 +1784,13 @@
     "model_availability_loadable",
     "model_availability_unavailable",
     "model_availability_unknown",
-    "model_load_confirm_streaming"
+    "model_load_confirm_streaming",
+    "cloud_sync_provider",
+    "cloud_sync_provider_s3",
+    "cloud_sync_provider_google_drive",
+    "cloud_sync_connect_google",
+    "cloud_sync_connected_as",
+    "cloud_sync_backup_now"
   ],
 
   "tr": [
@@ -1884,7 +1950,13 @@
     "model_availability_loadable",
     "model_availability_unavailable",
     "model_availability_unknown",
-    "model_load_confirm_streaming"
+    "model_load_confirm_streaming",
+    "cloud_sync_provider",
+    "cloud_sync_provider_s3",
+    "cloud_sync_provider_google_drive",
+    "cloud_sync_connect_google",
+    "cloud_sync_connected_as",
+    "cloud_sync_backup_now"
   ],
 
   "zh": [
@@ -2044,7 +2116,13 @@
     "model_availability_loadable",
     "model_availability_unavailable",
     "model_availability_unknown",
-    "model_load_confirm_streaming"
+    "model_load_confirm_streaming",
+    "cloud_sync_provider",
+    "cloud_sync_provider_s3",
+    "cloud_sync_provider_google_drive",
+    "cloud_sync_connect_google",
+    "cloud_sync_connected_as",
+    "cloud_sync_backup_now"
   ],
 
   "zh_TW": [
@@ -2204,6 +2282,12 @@
     "model_availability_loadable",
     "model_availability_unavailable",
     "model_availability_unknown",
-    "model_load_confirm_streaming"
+    "model_load_confirm_streaming",
+    "cloud_sync_provider",
+    "cloud_sync_provider_s3",
+    "cloud_sync_provider_google_drive",
+    "cloud_sync_connect_google",
+    "cloud_sync_connected_as",
+    "cloud_sync_backup_now"
   ]
 }
