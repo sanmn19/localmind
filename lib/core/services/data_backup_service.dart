@@ -188,6 +188,18 @@ class DataBackupService {
         'status': server.status.name,
         'iconName': server.iconName,
         'pathPrefix': server.pathPrefix,
+        'switcherBaseUrl': server.switcherBaseUrl,
+      };
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> _exportManualModels(Store store) {
+    return store.box<ManualModelEntity>().getAll().map((entity) {
+      return {
+        'serverId': entity.serverId,
+        'modelId': entity.modelId,
+        'displayName': entity.displayName,
+        'createdAt': entity.createdAt.toIso8601String(),
       };
     }).toList();
   }
@@ -247,6 +259,7 @@ class DataBackupService {
       'savedMessages': _exportSavedMessages(store),
       'savedMessageFolders': _exportSavedMessageFolders(store),
       'servers': _exportServers(store),
+      'manualModels': _exportManualModels(store),
       'conversationFolders': _exportConversationFolders(store),
       'modelMetadata': modelMetadata,
     };
@@ -607,6 +620,7 @@ class DataBackupService {
             ),
             iconName: item['iconName'] as String?,
             pathPrefix: item['pathPrefix'] as String?,
+            switcherBaseUrl: item['switcherBaseUrl'] as String?,
           );
           final query = serverBox
               .query(ServerEntity_.id.equals(server.id))
@@ -616,6 +630,37 @@ class DataBackupService {
           final entity = ServerEntity.fromDomain(server);
           if (existing != null) entity.internalId = existing.internalId;
           serverBox.put(entity);
+        }
+      }
+
+      final manualModels = decoded['manualModels'];
+      if (manualModels is List) {
+        final manualBox = store.box<ManualModelEntity>();
+        for (final item in manualModels) {
+          if (item is! Map) continue;
+          final serverId = backupImportString(item['serverId']);
+          final modelId = backupImportString(item['modelId']);
+          final createdAt = backupImportDateTime(item['createdAt']);
+          if (serverId == null || modelId == null || createdAt == null) {
+            continue;
+          }
+          final query = manualBox
+              .query(
+                ManualModelEntity_.serverId
+                    .equals(serverId)
+                    .and(ManualModelEntity_.modelId.equals(modelId)),
+              )
+              .build();
+          final existing = query.findFirst();
+          query.close();
+          final entity = ManualModelEntity(
+            serverId: serverId,
+            modelId: modelId,
+            displayName: backupImportString(item['displayName']),
+            createdAt: createdAt,
+          );
+          if (existing != null) entity.internalId = existing.internalId;
+          manualBox.put(entity);
         }
       }
 

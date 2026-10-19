@@ -6615,6 +6615,144 @@ abstract class AppLocalizations {
   /// **'Grant in settings'**
   String get notifications_grant_action;
 
+  /// Ask Local card title on the MCP Tools screen
+  ///
+  /// In en, this message translates to:
+  /// **'Ask Local'**
+  String get ask_local_card_title;
+
+  /// Ask Local card description
+  ///
+  /// In en, this message translates to:
+  /// **'Ask about a selected text from any app: the screen is captured locally and answered in a floating card.'**
+  String get ask_local_card_desc;
+
+  /// Label shown when display-over-apps is granted
+  ///
+  /// In en, this message translates to:
+  /// **'Overlay access granted'**
+  String get ask_local_access_granted;
+
+  /// Label shown when display-over-apps is not granted
+  ///
+  /// In en, this message translates to:
+  /// **'Overlay access is off'**
+  String get ask_local_access_missing;
+
+  /// Button label deep-linking to the Android display-over-apps settings
+  ///
+  /// In en, this message translates to:
+  /// **'Grant in settings'**
+  String get ask_local_grant_action;
+
+  /// Typed boot-failure banner label inside the Ask Local overlay card
+  ///
+  /// In en, this message translates to:
+  /// **'Ask Local card failed to start'**
+  String get ask_local_boot_failed;
+
+  /// Empty-transcript placeholder inside the Ask Local card
+  ///
+  /// In en, this message translates to:
+  /// **'Ask about what\'s on screen'**
+  String get ask_local_card_empty_prompt;
+
+  /// Header status word while the Ask Local card is streaming
+  ///
+  /// In en, this message translates to:
+  /// **'streaming…'**
+  String get ask_local_card_streaming;
+
+  /// Header status word when no model is connected to the Ask Local card
+  ///
+  /// In en, this message translates to:
+  /// **'No model'**
+  String get ask_local_card_no_model;
+
+  /// Tooltip of the Ask Local card's re-capture button
+  ///
+  /// In en, this message translates to:
+  /// **'Re-capture screen'**
+  String get ask_local_card_recapture_tooltip;
+
+  /// Tooltip of the Ask Local card's close button
+  ///
+  /// In en, this message translates to:
+  /// **'Close card'**
+  String get ask_local_card_close_tooltip;
+
+  /// Covered-context strip label when no selection reached the Ask Local card
+  ///
+  /// In en, this message translates to:
+  /// **'No text selection carried over'**
+  String get ask_local_card_selection_missing;
+
+  /// In-card approval chip question for one pending tool call
+  ///
+  /// In en, this message translates to:
+  /// **'Run {tool}?'**
+  String ask_local_card_run_tool_question(String tool);
+
+  /// Tooltip of the Ask Local card's chip approve button
+  ///
+  /// In en, this message translates to:
+  /// **'Approve'**
+  String get ask_local_card_approve_tooltip;
+
+  /// Tooltip of the Ask Local card's chip deny button
+  ///
+  /// In en, this message translates to:
+  /// **'Deny'**
+  String get ask_local_card_deny_tooltip;
+
+  /// Hint text of the Ask Local card's typing field
+  ///
+  /// In en, this message translates to:
+  /// **'Ask LocalMind…'**
+  String get ask_local_card_input_hint;
+
+  /// Empty streamed assistant round label inside the Ask Local card
+  ///
+  /// In en, this message translates to:
+  /// **'Thinking…'**
+  String get ask_local_card_thinking;
+
+  /// Compact tool-activity row in the Ask Local card
+  ///
+  /// In en, this message translates to:
+  /// **'called {tool} · {verdict}'**
+  String ask_local_card_tool_called(String tool, String verdict);
+
+  /// Verdict label for a successful tool call in the Ask Local card
+  ///
+  /// In en, this message translates to:
+  /// **'done'**
+  String get ask_local_card_verdict_done;
+
+  /// Verdict label for a user-denied tool call in the Ask Local card
+  ///
+  /// In en, this message translates to:
+  /// **'denied'**
+  String get ask_local_card_verdict_denied;
+
+  /// Verdict label for a failed tool call in the Ask Local card
+  ///
+  /// In en, this message translates to:
+  /// **'failed'**
+  String get ask_local_card_verdict_failed;
+
+  /// Tool feedback row prefix in the Ask Local card
+  ///
+  /// In en, this message translates to:
+  /// **'result {output}'**
+  String ask_local_card_tool_result(String output);
+
+  /// Tool feedback row label when a tool produced no output
+  ///
+  /// In en, this message translates to:
+  /// **'no output'**
+  String get ask_local_card_tool_no_output;
+
   /// Background tasks page app bar title
   ///
   /// In en, this message translates to:
@@ -6680,6 +6818,150 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Background task'**
   String get background_pill_title;
+
+  /// Ask Local rig load confirmation dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Load model?'**
+  String get model_load_confirm_title;
+
+  /// Ask Local rig load confirmation body
+  ///
+  /// In en, this message translates to:
+  /// **'Loading {model} unloads the current model and can take 6-20 minutes.'**
+  String model_load_confirm_body(String model);
+
+  /// Confirm button of the rig load dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Load'**
+  String get model_load_action;
+
+  /// Title of the rig load progress sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Loading model'**
+  String get model_load_progress_title;
+
+  /// Button that cancels an in-flight rig switch
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel load'**
+  String get model_load_cancel;
+
+  /// Confirmation before cancelling a rig switch
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel the switch? The model stays unloaded.'**
+  String get model_load_cancel_confirm;
+
+  /// Retry button after a failed rig switch
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get model_load_retry;
+
+  /// Title of the target picker when several roster entries share a served id
+  ///
+  /// In en, this message translates to:
+  /// **'Pick the switcher target'**
+  String get model_pick_target_title;
+
+  /// Button that opens the manual model dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Add model'**
+  String get model_manual_add;
+
+  /// Tooltip of a manual model's remove button
+  ///
+  /// In en, this message translates to:
+  /// **'Remove model'**
+  String get model_manual_remove;
+
+  /// Manual model dialog: model id field label
+  ///
+  /// In en, this message translates to:
+  /// **'Model ID'**
+  String get model_manual_id_label;
+
+  /// Manual model dialog: optional display name label
+  ///
+  /// In en, this message translates to:
+  /// **'Display name (optional)'**
+  String get model_manual_name_label;
+
+  /// Manual model dialog: add button
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get model_manual_save;
+
+  /// Manual model dialog: duplicate id error
+  ///
+  /// In en, this message translates to:
+  /// **'That model is already in the list.'**
+  String get model_manual_duplicate;
+
+  /// Manual model dialog: blank id error
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a model ID.'**
+  String get model_manual_blank;
+
+  /// Manual models section: empty state
+  ///
+  /// In en, this message translates to:
+  /// **'No manual models yet.'**
+  String get model_manual_empty;
+
+  /// Provider form: model switcher base URL label
+  ///
+  /// In en, this message translates to:
+  /// **'Model switcher URL (optional)'**
+  String get model_switcher_url_label;
+
+  /// Provider form: model switcher base URL hint
+  ///
+  /// In en, this message translates to:
+  /// **'http://host:9000'**
+  String get model_switcher_url_hint;
+
+  /// Models section: refresh detection button
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get models_refresh;
+
+  /// Models section: detected model count
+  ///
+  /// In en, this message translates to:
+  /// **'{count} detected'**
+  String models_detected_count(int count);
+
+  /// Availability label: the model can be loaded through the switcher
+  ///
+  /// In en, this message translates to:
+  /// **'Load'**
+  String get model_availability_loadable;
+
+  /// Availability label: the provider does not serve the model right now
+  ///
+  /// In en, this message translates to:
+  /// **'Unavailable'**
+  String get model_availability_unavailable;
+
+  /// Availability label: detection or roster check failed
+  ///
+  /// In en, this message translates to:
+  /// **'Status unknown'**
+  String get model_availability_unknown;
+
+  /// Appended to the rig load confirmation while a reply is streaming
+  ///
+  /// In en, this message translates to:
+  /// **'A reply is streaming and will be stopped.'**
+  String get model_load_confirm_streaming;
 }
 
 class _AppLocalizationsDelegate

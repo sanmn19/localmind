@@ -14,11 +14,19 @@ class ThemedGptMarkdown extends StatelessWidget {
     required this.content,
     required this.isDark,
     required this.style,
+    this.onLinkTapOverride,
   });
 
   final String content;
   final bool isDark;
   final TextStyle style;
+
+  /// Overrides the default external-launch link tap. When provided, links
+  /// render styled but the provided callback runs INSTEAD of launchUrl —
+  /// overlay isolates (Ask Local card) pass a no-op so taps never reach
+  /// the unregistered url_launcher plugin (MissingPluginException) and
+  /// never open app surfaces from a floating card.
+  final void Function(String url, String? title)? onLinkTapOverride;
 
   static const _lightLinkColor = Color(0xFF1D4ED8);
   static const _darkLinkColor = Color(0xFF7AB4FF);
@@ -85,6 +93,11 @@ class ThemedGptMarkdown extends StatelessWidget {
         sourceTagBuilder: (context, content, _) =>
             Text('[$content]', style: style),
         onLinkTap: (url, title) {
+          final override = onLinkTapOverride;
+          if (override != null) {
+            override(url, title);
+            return;
+          }
           if (_isAudioUrl(url) && context.mounted) {
             showDialog(
               context: context,
@@ -178,12 +191,17 @@ class MarkdownBodyContent extends StatelessWidget {
     required this.isDark,
     this.selectable = true,
     this.contextMenuBuilder,
+    this.onLinkTapOverride,
   });
 
   final String content;
   final bool isDark;
   final bool selectable;
   final SelectableRegionContextMenuBuilder? contextMenuBuilder;
+
+  /// [ThemedGptMarkdown.onLinkTapOverride] pass-through (the overlay-card
+  /// no-op link seam; null = the house default behaviour).
+  final void Function(String url, String? title)? onLinkTapOverride;
 
   @override
   Widget build(BuildContext context) {
@@ -195,6 +213,7 @@ class MarkdownBodyContent extends StatelessWidget {
         fontSize: 15,
         height: 1.5,
       ),
+      onLinkTapOverride: onLinkTapOverride,
     );
 
     if (!selectable) {

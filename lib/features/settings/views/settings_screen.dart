@@ -21,6 +21,11 @@ import '../../chat/providers/chat_providers.dart';
 import '../../chat/utils/image_upload_utils.dart';
 import '../../conversations/providers/conversation_providers.dart';
 import '../../models/data/models/model_info.dart';
+import '../../models/data/models/rig_model_entry.dart';
+import '../../models/providers/rig_load_providers.dart';
+import '../../models/providers/rig_switcher_providers.dart';
+import '../../models/utils/default_model_pick.dart';
+import '../../models/views/rig_load_dialog.dart';
 import '../../on_device/providers/on_device_providers.dart';
 import '../../personas/providers/personas_providers.dart';
 import '../../servers/providers/server_providers.dart';
@@ -279,10 +284,60 @@ class _SettingsViewsState extends ConsumerState<SettingsViews> {
               ? settings.defaultModelId
               : null,
           items: models,
-          onChanged: (value) => notifier.setDefaultModel(
-            serverId: defaultServerId,
-            modelId: value,
-          ),
+          onChanged: (value) async {
+            final model =
+                availableModels.where((m) => m.id == value).firstOrNull;
+            final server = (ref.read(serversProvider).value ?? const [])
+                .where((s) => s.id == defaultServerId)
+                .firstOrNull;
+            final container = ref.container;
+            final raw = server?.switcherBaseUrl?.trim();
+            final base = raw == null ? null : Uri.tryParse(raw);
+            if (model != null && server != null && raw != null && base != null) {
+              final roster =
+                  await ref.read(rigRosterProvider(raw).future) ??
+                      const <RigModelEntry>[];
+              final pick = resolveDefaultModelPick(model, roster);
+              if (pick.load) {
+                if (!context.mounted) return;
+                if (pick.targets.isEmpty) {
+                  ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                    SnackBar(content: Text(l10n.model_availability_unknown)),
+                  );
+                  return;
+                }
+                final target = await confirmRigLoad(
+                  context,
+                  AppLocalizations.of(context)!,
+                  model,
+                  pick.targets,
+                  streaming: ref.read(isStreamingProvider),
+                );
+                if (target != null) {
+                  await container.read(rigLoadProvider.notifier).start(
+                    base,
+                    server.id,
+                    model,
+                    target,
+                    onLoaded: () {
+                      container.invalidate(
+                        availableModelsProvider(server.id),
+                      );
+                      container.invalidate(rigRosterProvider(raw));
+                    },
+                  );
+                  if (context.mounted) {
+                    showRigLoadProgress(context, ref);
+                  }
+                }
+                return;
+              }
+            }
+            notifier.setDefaultModel(
+              serverId: defaultServerId,
+              modelId: value,
+            );
+          },
           icon: HugeIcons.strokeRoundedSmartPhone01,
         ),
         _DropdownSetting(

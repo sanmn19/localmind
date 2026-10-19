@@ -6,6 +6,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Floating "Ask Local" card (TYPE_APPLICATION_OVERLAY); one-time
+         "Display over other apps" grant, verified per show via
+         Settings.canDrawOverlays. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
@@ -76,6 +80,25 @@
                 <data
                     android:host="widget"
                     android:scheme="localmind" />
+            </intent-filter>
+        </activity>
+        <!-- "Ask Local" text-selection target. Translucent + history-free:
+             the activity only extracts EXTRA_PROCESS_TEXT, stakes the
+             capture request, then finishes without text replacement. -->
+        <activity
+            android:name=".AskLocalTextActivity"
+            android:exported="true"
+            android:label="@string/ask_local_menu_label"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:noHistory="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:windowSoftInputMode="stateAlwaysHidden|adjustNothing"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.

@@ -22,7 +22,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(1, 6060443518060866028),
     name: 'ConversationEntity',
-    lastPropertyId: const obx_int.IdUid(28, 5491618122077238252),
+    lastPropertyId: const obx_int.IdUid(29, 2724687612514915050),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -192,6 +192,12 @@ final _entities = <obx_int.ModelEntity>[
         id: const obx_int.IdUid(28, 5491618122077238252),
         name: 'isBackground',
         type: 1,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(29, 2724687612514915050),
+        name: 'specialKind',
+        type: 9,
         flags: 0,
       ),
     ],
@@ -473,7 +479,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(4, 6971506781199819057),
     name: 'ServerEntity',
-    lastPropertyId: const obx_int.IdUid(15, 6058370228992885505),
+    lastPropertyId: const obx_int.IdUid(16, 7764442332437625176),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -565,6 +571,12 @@ final _entities = <obx_int.ModelEntity>[
         id: const obx_int.IdUid(15, 6058370228992885505),
         name: 'availableVramGb',
         type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(16, 7764442332437625176),
+        name: 'switcherBaseUrl',
+        type: 9,
         flags: 0,
       ),
     ],
@@ -879,6 +891,47 @@ final _entities = <obx_int.ModelEntity>[
     relations: <obx_int.ModelRelation>[],
     backlinks: <obx_int.ModelBacklink>[],
   ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(10, 7335998010881530624),
+    name: 'ManualModelEntity',
+    lastPropertyId: const obx_int.IdUid(5, 5963172498851303558),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 550470327773264788),
+        name: 'internalId',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 5650879860393993673),
+        name: 'serverId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(19, 9141168625428584864),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 761384913517343224),
+        name: 'modelId',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 6936401605411023267),
+        name: 'displayName',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 5963172498851303558),
+        name: 'createdAt',
+        type: 10,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
 ];
 
 /// Shortcut for [obx.Store.new] that passes [getObjectBoxModel] and for Flutter
@@ -924,8 +977,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
     // Typically, this is done with `dart run build_runner build`.
     generatorVersion: obx_int.GeneratorVersion.v2025_12_16,
     entities: _entities,
-    lastEntityId: const obx_int.IdUid(9, 4259778768971352693),
-    lastIndexId: const obx_int.IdUid(18, 9214790592331218716),
+    lastEntityId: const obx_int.IdUid(10, 7335998010881530624),
+    lastIndexId: const obx_int.IdUid(19, 9141168625428584864),
     lastRelationId: const obx_int.IdUid(0, 0),
     lastSequenceId: const obx_int.IdUid(0, 0),
     retiredEntityUids: const [],
@@ -986,7 +1039,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final forkSpanOffset = object.forkSpan == null
             ? null
             : fbb.writeString(object.forkSpan!);
-        fbb.startTable(29);
+        final specialKindOffset = object.specialKind == null
+            ? null
+            : fbb.writeString(object.specialKind!);
+        fbb.startTable(30);
         fbb.addInt64(0, object.internalId);
         fbb.addOffset(1, idOffset);
         fbb.addOffset(2, titleOffset);
@@ -1015,6 +1071,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addOffset(25, forkSpanOffset);
         fbb.addBool(26, object.isFork);
         fbb.addBool(27, object.isBackground);
+        fbb.addOffset(28, specialKindOffset);
         fbb.finish(fbb.endTable());
         return object.internalId;
       },
@@ -1141,6 +1198,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
           58,
           false,
         );
+        final specialKindParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 60);
         final object = ConversationEntity(
           internalId: internalIdParam,
           id: idParam,
@@ -1170,6 +1230,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           forkSpan: forkSpanParam,
           isFork: isForkParam,
           isBackground: isBackgroundParam,
+          specialKind: specialKindParam,
         );
         obx_int.InternalToManyAccess.setRelInfo<ConversationEntity>(
           object.messages,
@@ -1538,7 +1599,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final pathPrefixOffset = object.pathPrefix == null
             ? null
             : fbb.writeString(object.pathPrefix!);
-        fbb.startTable(16);
+        final switcherBaseUrlOffset = object.switcherBaseUrl == null
+            ? null
+            : fbb.writeString(object.switcherBaseUrl!);
+        fbb.startTable(17);
         fbb.addInt64(0, object.internalId);
         fbb.addOffset(1, idOffset);
         fbb.addOffset(2, nameOffset);
@@ -1554,6 +1618,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addOffset(12, pathPrefixOffset);
         fbb.addInt64(13, object.availableRamGb);
         fbb.addInt64(14, object.availableVramGb);
+        fbb.addOffset(15, switcherBaseUrlOffset);
         fbb.finish(fbb.endTable());
         return object.internalId;
       },
@@ -1624,6 +1689,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
           rootOffset,
           32,
         );
+        final switcherBaseUrlParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 34);
         final object = ServerEntity(
           internalId: internalIdParam,
           id: idParam,
@@ -1640,6 +1708,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           pathPrefix: pathPrefixParam,
           availableRamGb: availableRamGbParam,
           availableVramGb: availableVramGbParam,
+          switcherBaseUrl: switcherBaseUrlParam,
         );
 
         return object;
@@ -2044,6 +2113,61 @@ obx_int.ModelDefinition getObjectBoxModel() {
         return object;
       },
     ),
+    ManualModelEntity: obx_int.EntityDefinition<ManualModelEntity>(
+      model: _entities[9],
+      toOneRelations: (ManualModelEntity object) => [],
+      toManyRelations: (ManualModelEntity object) => {},
+      getId: (ManualModelEntity object) => object.internalId,
+      setId: (ManualModelEntity object, int id) {
+        object.internalId = id;
+      },
+      objectToFB: (ManualModelEntity object, fb.Builder fbb) {
+        final serverIdOffset = fbb.writeString(object.serverId);
+        final modelIdOffset = fbb.writeString(object.modelId);
+        final displayNameOffset = object.displayName == null
+            ? null
+            : fbb.writeString(object.displayName!);
+        fbb.startTable(6);
+        fbb.addInt64(0, object.internalId);
+        fbb.addOffset(1, serverIdOffset);
+        fbb.addOffset(2, modelIdOffset);
+        fbb.addOffset(3, displayNameOffset);
+        fbb.addInt64(4, object.createdAt.millisecondsSinceEpoch);
+        fbb.finish(fbb.endTable());
+        return object.internalId;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final internalIdParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final serverIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 6, '');
+        final modelIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 8, '');
+        final displayNameParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 10);
+        final createdAtParam = DateTime.fromMillisecondsSinceEpoch(
+          const fb.Int64Reader().vTableGet(buffer, rootOffset, 12, 0),
+        );
+        final object = ManualModelEntity(
+          internalId: internalIdParam,
+          serverId: serverIdParam,
+          modelId: modelIdParam,
+          displayName: displayNameParam,
+          createdAt: createdAtParam,
+        );
+
+        return object;
+      },
+    ),
   };
 
   return obx_int.ModelDefinition(model, bindings);
@@ -2188,6 +2312,11 @@ class ConversationEntity_ {
   /// See [ConversationEntity.isBackground].
   static final isBackground = obx.QueryBooleanProperty<ConversationEntity>(
     _entities[0].properties[27],
+  );
+
+  /// See [ConversationEntity.specialKind].
+  static final specialKind = obx.QueryStringProperty<ConversationEntity>(
+    _entities[0].properties[28],
   );
 
   /// see [ConversationEntity.messages]
@@ -2480,6 +2609,11 @@ class ServerEntity_ {
   static final availableVramGb = obx.QueryIntegerProperty<ServerEntity>(
     _entities[3].properties[14],
   );
+
+  /// See [ServerEntity.switcherBaseUrl].
+  static final switcherBaseUrl = obx.QueryStringProperty<ServerEntity>(
+    _entities[3].properties[15],
+  );
 }
 
 /// [ConversationFolderEntity] entity fields to define ObjectBox queries.
@@ -2697,5 +2831,33 @@ class BackgroundTaskEntity_ {
   /// See [BackgroundTaskEntity.ownerMessageId].
   static final ownerMessageId = obx.QueryStringProperty<BackgroundTaskEntity>(
     _entities[8].properties[12],
+  );
+}
+
+/// [ManualModelEntity] entity fields to define ObjectBox queries.
+class ManualModelEntity_ {
+  /// See [ManualModelEntity.internalId].
+  static final internalId = obx.QueryIntegerProperty<ManualModelEntity>(
+    _entities[9].properties[0],
+  );
+
+  /// See [ManualModelEntity.serverId].
+  static final serverId = obx.QueryStringProperty<ManualModelEntity>(
+    _entities[9].properties[1],
+  );
+
+  /// See [ManualModelEntity.modelId].
+  static final modelId = obx.QueryStringProperty<ManualModelEntity>(
+    _entities[9].properties[2],
+  );
+
+  /// See [ManualModelEntity.displayName].
+  static final displayName = obx.QueryStringProperty<ManualModelEntity>(
+    _entities[9].properties[3],
+  );
+
+  /// See [ManualModelEntity.createdAt].
+  static final createdAt = obx.QueryDateProperty<ManualModelEntity>(
+    _entities[9].properties[4],
   );
 }

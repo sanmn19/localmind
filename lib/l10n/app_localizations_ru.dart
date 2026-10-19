@@ -3613,6 +3613,83 @@ class AppLocalizationsRu extends AppLocalizations {
   String get notifications_grant_action => 'Grant in settings';
 
   @override
+  String get ask_local_card_title => 'Ask Local';
+
+  @override
+  String get ask_local_card_desc =>
+      'Ask about a selected text from any app: the screen is captured locally and answered in a floating card.';
+
+  @override
+  String get ask_local_access_granted => 'Overlay access granted';
+
+  @override
+  String get ask_local_access_missing => 'Overlay access is off';
+
+  @override
+  String get ask_local_grant_action => 'Grant in settings';
+
+  @override
+  String get ask_local_boot_failed => 'Ask Local card failed to start';
+
+  @override
+  String get ask_local_card_empty_prompt => 'Ask about what\'s on screen';
+
+  @override
+  String get ask_local_card_streaming => 'streaming…';
+
+  @override
+  String get ask_local_card_no_model => 'No model';
+
+  @override
+  String get ask_local_card_recapture_tooltip => 'Re-capture screen';
+
+  @override
+  String get ask_local_card_close_tooltip => 'Close card';
+
+  @override
+  String get ask_local_card_selection_missing =>
+      'No text selection carried over';
+
+  @override
+  String ask_local_card_run_tool_question(String tool) {
+    return 'Run $tool?';
+  }
+
+  @override
+  String get ask_local_card_approve_tooltip => 'Approve';
+
+  @override
+  String get ask_local_card_deny_tooltip => 'Deny';
+
+  @override
+  String get ask_local_card_input_hint => 'Ask LocalMind…';
+
+  @override
+  String get ask_local_card_thinking => 'Thinking…';
+
+  @override
+  String ask_local_card_tool_called(String tool, String verdict) {
+    return 'called $tool · $verdict';
+  }
+
+  @override
+  String get ask_local_card_verdict_done => 'done';
+
+  @override
+  String get ask_local_card_verdict_denied => 'denied';
+
+  @override
+  String get ask_local_card_verdict_failed => 'failed';
+
+  @override
+  String ask_local_card_tool_result(String output) {
+    return 'result $output';
+  }
+
+  @override
+  String get ask_local_card_tool_no_output => 'no output';
+
+  @override
   String get background_tasks_title => 'Background tasks';
 
   @override
@@ -3648,4 +3725,82 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get background_pill_title => 'Background task';
+
+  @override
+  String get model_load_confirm_title => 'Load model?';
+
+  @override
+  String model_load_confirm_body(String model) {
+    return 'Loading $model unloads the current model and can take 6-20 minutes.';
+  }
+
+  @override
+  String get model_load_action => 'Load';
+
+  @override
+  String get model_load_progress_title => 'Loading model';
+
+  @override
+  String get model_load_cancel => 'Cancel load';
+
+  @override
+  String get model_load_cancel_confirm =>
+      'Cancel the switch? The model stays unloaded.';
+
+  @override
+  String get model_load_retry => 'Retry';
+
+  @override
+  String get model_pick_target_title => 'Pick the switcher target';
+
+  @override
+  String get model_manual_add => 'Add model';
+
+  @override
+  String get model_manual_remove => 'Remove model';
+
+  @override
+  String get model_manual_id_label => 'Model ID';
+
+  @override
+  String get model_manual_name_label => 'Display name (optional)';
+
+  @override
+  String get model_manual_save => 'Add';
+
+  @override
+  String get model_manual_duplicate => 'That model is already in the list.';
+
+  @override
+  String get model_manual_blank => 'Enter a model ID.';
+
+  @override
+  String get model_manual_empty => 'No manual models yet.';
+
+  @override
+  String get model_switcher_url_label => 'Model switcher URL (optional)';
+
+  @override
+  String get model_switcher_url_hint => 'http://host:9000';
+
+  @override
+  String get models_refresh => 'Refresh';
+
+  @override
+  String models_detected_count(int count) {
+    return '$count detected';
+  }
+
+  @override
+  String get model_availability_loadable => 'Load';
+
+  @override
+  String get model_availability_unavailable => 'Unavailable';
+
+  @override
+  String get model_availability_unknown => 'Status unknown';
+
+  @override
+  String get model_load_confirm_streaming =>
+      'A reply is streaming and will be stopped.';
 }

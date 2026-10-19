@@ -27,6 +27,11 @@ class Conversation {
   final bool isFork;
   final bool isBackground;
 
+  /// Overlay/marker tag for special system conversations (e.g.
+  /// [askLocalConversationKind] for the Ask Local overlay chat). Null for
+  /// user chats.
+  final String? specialKind;
+
   Conversation({
     required this.id,
     required this.title,
@@ -55,6 +60,7 @@ class Conversation {
     this.forkSpan,
     this.isFork = false,
     this.isBackground = false,
+    this.specialKind,
   });
 
   Conversation copyWith({
@@ -97,6 +103,8 @@ class Conversation {
     bool clearForkSpan = false,
     bool? isFork,
     bool? isBackground,
+    String? specialKind,
+    bool clearSpecialKind = false,
   }) {
     return Conversation(
       id: id ?? this.id,
@@ -136,6 +144,8 @@ class Conversation {
       forkSpan: clearForkSpan ? null : (forkSpan ?? this.forkSpan),
       isFork: isFork ?? this.isFork,
       isBackground: isBackground ?? this.isBackground,
+      specialKind:
+          clearSpecialKind ? null : (specialKind ?? this.specialKind),
     );
   }
 }
