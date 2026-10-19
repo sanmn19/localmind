@@ -116,6 +116,25 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
     }
   }
 
+  /// Google connect does not need the form: the passphrase is entered when
+  /// enabling sync, after the account is connected.
+  Future<void> _connectGoogle() async {
+    setState(() => _working = true);
+    try {
+      await ref
+          .read(cloudSyncControllerProvider.notifier)
+          .connectGoogle();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(
+          context,
+        )?.showSnackBar(SnackBar(content: Text(error.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -197,16 +216,7 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
                                   ),
                                 ),
                                 OutlinedButton(
-                                  onPressed: _working
-                                      ? null
-                                      : () => _run(
-                                          () => ref
-                                              .read(
-                                                cloudSyncControllerProvider
-                                                    .notifier,
-                                              )
-                                              .connectGoogle(),
-                                        ),
+                                  onPressed: _working ? null : _connectGoogle,
                                   child: Text(l10n.cloud_sync_connect_google),
                                 ),
                               ],
