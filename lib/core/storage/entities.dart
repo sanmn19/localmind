@@ -820,3 +820,30 @@ class BackgroundTaskEntity {
     );
   }
 }
+
+/// A model the user attached to a provider by hand (the endpoint may not
+/// advertise it). Keyed by [serverId] + [modelId]; uniqueness is enforced in
+/// `ManualModelRepository`.
+@Entity()
+class ManualModelEntity {
+  @Id()
+  int internalId = 0;
+
+  @Index()
+  String serverId;
+
+  String modelId;
+
+  String? displayName;
+
+  @Property(type: PropertyType.date)
+  DateTime createdAt;
+
+  ManualModelEntity({
+    this.internalId = 0,
+    required this.serverId,
+    required this.modelId,
+    this.displayName,
+    required this.createdAt,
+  });
+}

@@ -16,6 +16,7 @@ class ObjectBoxStore {
   late final Box<ConversationFolderEntity> conversationFolderBox;
   late final Box<SavedMessageEntity> savedMessageBox;
   late final Box<SavedMessageFolderEntity> savedMessageFolderBox;
+  late final Box<ManualModelEntity> manualModelBox;
 
   ObjectBoxStore.fromStore(this.store) {
     serverBox = Box<ServerEntity>(store);
@@ -25,6 +26,7 @@ class ObjectBoxStore {
     conversationFolderBox = Box<ConversationFolderEntity>(store);
     savedMessageBox = Box<SavedMessageEntity>(store);
     savedMessageFolderBox = Box<SavedMessageFolderEntity>(store);
+    manualModelBox = Box<ManualModelEntity>(store);
   }
 
   /// Create an instance of ObjectBox storage.
