@@ -151,7 +151,8 @@
     "models_detected_count",
     "model_availability_loadable",
     "model_availability_unavailable",
-    "model_availability_unknown"
+    "model_availability_unknown",
+    "model_load_confirm_streaming"
   ],
 
   "bn": [
@@ -310,7 +311,8 @@
     "models_detected_count",
     "model_availability_loadable",
     "model_availability_unavailable",
-    "model_availability_unknown"
+    "model_availability_unknown",
+    "model_load_confirm_streaming"
   ],
 
   "de": [
@@ -469,7 +471,8 @@
     "models_detected_count",
     "model_availability_loadable",
     "model_availability_unavailable",
-    "model_availability_unknown"
+    "model_availability_unknown",
+    "model_load_confirm_streaming"
   ],
 
   "es": [
@@ -628,7 +631,8 @@
     "models_detected_count",
     "model_availability_loadable",
     "model_availability_unavailable",
-    "model_availability_unknown"
+    "model_availability_unknown",
+    "model_load_confirm_streaming"
   ],
 
   "fr": [
@@ -787,7 +791,8 @@
     "models_detected_count",
     "model_availability_loadable",
     "model_availability_unavailable",
-    "model_availability_unknown"
+    "model_availability_unknown",
+    "model_load_confirm_streaming"
   ],
 
   "hi": [
@@ -946,7 +951,8 @@
     "models_detected_count",
     "model_availability_loadable",
     "model_availability_unavailable",
-    "model_availability_unknown"
+    "model_availability_unknown",
+    "model_load_confirm_streaming"
   ],
 
   "it": [
@@ -1105,7 +1111,8 @@
     "models_detected_count",
     "model_availability_loadable",
     "model_availability_unavailable",
-    "model_availability_unknown"
+    "model_availability_unknown",
+    "model_load_confirm_streaming"
   ],
 
   "ja": [
@@ -1264,7 +1271,8 @@
     "models_detected_count",
     "model_availability_loadable",
     "model_availability_unavailable",
-    "model_availability_unknown"
+    "model_availability_unknown",
+    "model_load_confirm_streaming"
   ],
 
   "ko": [
@@ -1409,7 +1417,8 @@
     "models_detected_count",
     "model_availability_loadable",
     "model_availability_unavailable",
-    "model_availability_unknown"
+    "model_availability_unknown",
+    "model_load_confirm_streaming"
   ],
 
   "pt": [
@@ -1554,7 +1563,8 @@
     "models_detected_count",
     "model_availability_loadable",
     "model_availability_unavailable",
-    "model_availability_unknown"
+    "model_availability_unknown",
+    "model_load_confirm_streaming"
   ],
 
   "ru": [
@@ -1713,7 +1723,8 @@
     "models_detected_count",
     "model_availability_loadable",
     "model_availability_unavailable",
-    "model_availability_unknown"
+    "model_availability_unknown",
+    "model_load_confirm_streaming"
   ],
 
   "tr": [
@@ -1872,7 +1883,8 @@
     "models_detected_count",
     "model_availability_loadable",
     "model_availability_unavailable",
-    "model_availability_unknown"
+    "model_availability_unknown",
+    "model_load_confirm_streaming"
   ],
 
   "zh": [
@@ -2031,7 +2043,8 @@
     "models_detected_count",
     "model_availability_loadable",
     "model_availability_unavailable",
-    "model_availability_unknown"
+    "model_availability_unknown",
+    "model_load_confirm_streaming"
   ],
 
   "zh_TW": [
@@ -2190,6 +2203,7 @@
     "models_detected_count",
     "model_availability_loadable",
     "model_availability_unavailable",
-    "model_availability_unknown"
+    "model_availability_unknown",
+    "model_load_confirm_streaming"
   ]
 }

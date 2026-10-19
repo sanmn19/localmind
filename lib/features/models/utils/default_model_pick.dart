@@ -1,4 +1,4 @@
-import '../../../../core/models/enums.dart';
+import '../../../core/models/enums.dart';
 import '../data/models/model_info.dart';
 import '../data/models/rig_model_entry.dart';
 

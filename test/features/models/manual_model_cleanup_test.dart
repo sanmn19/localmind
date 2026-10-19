@@ -76,6 +76,33 @@ void main() {
     expect(container.read(settingsProvider).defaultModelId, isNull);
   });
 
+  test('clearForServer drops the rows and clears the selection', () async {
+    final prefs = await SharedPreferences.getInstance();
+    final repo = _repo();
+    final container = ProviderContainer(
+      overrides: [
+        manualModelRepositoryProvider.overrideWithValue(repo),
+        sharedPreferencesProvider.overrideWithValue(prefs),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(selectedModelProvider.notifier).setModel(
+          ModelInfo(
+            id: 'm1',
+            name: 'M1',
+            serverType: ServerType.openAICompatible,
+            serverId: 's1',
+          ),
+        );
+    await container
+        .read(manualModelsNotifierProvider.notifier)
+        .clearForServer('s1');
+
+    expect(repo.listForServer('s1'), isEmpty);
+    expect(container.read(selectedModelProvider), isNull);
+  });
+
   test(
     'removing another server model leaves selection and default intact',
     () async {

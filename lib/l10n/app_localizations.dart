@@ -6956,6 +6956,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Status unknown'**
   String get model_availability_unknown;
+
+  /// Appended to the rig load confirmation while a reply is streaming
+  ///
+  /// In en, this message translates to:
+  /// **'A reply is streaming and will be stopped.'**
+  String get model_load_confirm_streaming;
 }
 
 class _AppLocalizationsDelegate

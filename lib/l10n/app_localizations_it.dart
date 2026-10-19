@@ -3802,4 +3802,8 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get model_availability_unknown => 'Status unknown';
+
+  @override
+  String get model_load_confirm_streaming =>
+      'A reply is streaming and will be stopped.';
 }

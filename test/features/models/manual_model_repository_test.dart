@@ -42,6 +42,14 @@ void main() {
     expect(repo.add(_model('s1', '   ')), isFalse);
   });
 
+  test('model ids are case-sensitive: m1 and M1 are distinct', () {
+    final repo = ManualModelRepository(InMemoryManualModelStore());
+
+    expect(repo.add(_model('s1', 'm1')), isTrue);
+    expect(repo.add(_model('s1', 'M1')), isTrue);
+    expect(repo.listForServer('s1'), hasLength(2));
+  });
+
   test('display names are trimmed and blank ones become null', () {
     final repo = ManualModelRepository(InMemoryManualModelStore())
       ..add(_model('s1', 'm1', '  My Model  '))

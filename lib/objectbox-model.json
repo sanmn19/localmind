@@ -388,7 +388,7 @@
     },
     {
       "id": "4:6971506781199819057",
-      "lastPropertyId": "15:6058370228992885505",
+      "lastPropertyId": "16:7764442332437625176",
       "name": "ServerEntity",
       "properties": [
         {
@@ -468,6 +468,11 @@
           "id": "15:6058370228992885505",
           "name": "availableVramGb",
           "type": 6
+        },
+        {
+          "id": "16:7764442332437625176",
+          "name": "switcherBaseUrl",
+          "type": 9
         }
       ],
       "relations": []
@@ -745,10 +750,46 @@
         }
       ],
       "relations": []
+    },
+    {
+      "id": "10:7335998010881530624",
+      "lastPropertyId": "5:5963172498851303558",
+      "name": "ManualModelEntity",
+      "properties": [
+        {
+          "id": "1:550470327773264788",
+          "name": "internalId",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:5650879860393993673",
+          "name": "serverId",
+          "indexId": "19:9141168625428584864",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "3:761384913517343224",
+          "name": "modelId",
+          "type": 9
+        },
+        {
+          "id": "4:6936401605411023267",
+          "name": "displayName",
+          "type": 9
+        },
+        {
+          "id": "5:5963172498851303558",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
     }
   ],
-  "lastEntityId": "9:4259778768971352693",
-  "lastIndexId": "18:9214790592331218716",
+  "lastEntityId": "10:7335998010881530624",
+  "lastIndexId": "19:9141168625428584864",
   "lastRelationId": "0:0",
   "lastSequenceId": "0:0",
   "modelVersion": 5,

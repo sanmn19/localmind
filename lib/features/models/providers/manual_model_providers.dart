@@ -2,8 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/storage_providers.dart';
 import '../../chat/providers/model_selection_providers.dart';
+import '../../servers/providers/server_providers.dart';
 import '../../../core/providers/app_providers.dart';
 import '../data/manual_model_repository.dart';
+import 'rig_load_providers.dart';
 import '../data/manual_model_store.dart';
 import '../data/models/manual_model.dart';
 
@@ -29,6 +31,7 @@ class ManualModelsNotifier extends Notifier<int> {
 
   Future<void> add(ManualModel model) async {
     ref.read(manualModelRepositoryProvider).add(model);
+    invalidateAvailableModelsCache(model.serverId);
     ref.invalidate(manualModelsProvider(model.serverId));
     state++;
   }
@@ -52,7 +55,27 @@ class ManualModelsNotifier extends Notifier<int> {
           .read(settingsProvider.notifier)
           .setDefaultModel(serverId: serverId, modelId: null);
     }
+    invalidateAvailableModelsCache(serverId);
     ref.invalidate(manualModelsProvider(serverId));
+    state++;
+  }
+
+  /// Provider deletion: drop the rows and any dangling pointers.
+  Future<void> clearForServer(String serverId) async {
+    ref.read(manualModelRepositoryProvider).removeAllForServer(serverId);
+    ref.invalidate(manualModelsProvider(serverId));
+    invalidateAvailableModelsCache(serverId);
+    final selected = ref.read(selectedModelProvider);
+    if (selected != null && selected.serverId == serverId) {
+      ref.read(selectedModelProvider.notifier).clear();
+    }
+    final settings = ref.read(settingsProvider);
+    if (settings.defaultModelServerId == serverId) {
+      ref
+          .read(settingsProvider.notifier)
+          .setDefaultModel(serverId: serverId, modelId: null);
+    }
+    ref.read(rigLoadProvider.notifier).resetForServer(serverId);
     state++;
   }
 }

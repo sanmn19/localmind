@@ -2,10 +2,13 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/models/enums.dart';
+
 import '../data/models/model_info.dart';
 import '../data/models/rig_model_entry.dart';
 import '../data/models/rig_switch_status.dart';
 import 'rig_switcher_providers.dart';
+import '../../servers/providers/server_providers.dart';
 
 class RigLoadState {
   const RigLoadState({
@@ -46,6 +49,11 @@ class RigLoadNotifier extends Notifier<RigLoadState?> {
 
   Timer? _timer;
   Uri? _base;
+  String? _serverId;
+  String? _modelId;
+  RigModelEntry? _target;
+  void Function()? _onLoaded;
+  String? _switcherUrl;
 
   @override
   RigLoadState? build() {
@@ -67,6 +75,11 @@ class RigLoadNotifier extends Notifier<RigLoadState?> {
     if (current != null && current.active) return;
 
     _base = base;
+    _switcherUrl = base.toString();
+    _serverId = serverId;
+    _modelId = model.id;
+    _target = target;
+    _onLoaded = onLoaded;
     state = RigLoadState(
       serverId: serverId,
       modelId: model.id,
@@ -110,6 +123,7 @@ class RigLoadNotifier extends Notifier<RigLoadState?> {
           .fetchStatus(base);
       if (!ref.mounted || !status.isInFlight) return;
       _base = base;
+      _serverId = serverId;
       state = RigLoadState(
         serverId: serverId,
         modelId: status.target ?? '',
@@ -120,6 +134,38 @@ class RigLoadNotifier extends Notifier<RigLoadState?> {
     } catch (_) {
       // No switcher reachable: nothing to resume.
     }
+  }
+
+  /// Retries the last failed switch with the same target.
+  Future<void> retry() async {
+    final base = _base;
+    final serverId = _serverId;
+    final modelId = _modelId;
+    final target = _target;
+    if (base == null || serverId == null || modelId == null || target == null) {
+      return;
+    }
+    state = null;
+    await start(
+      base,
+      serverId,
+      ModelInfo(
+        id: modelId,
+        name: modelId,
+        serverType: ServerType.openAICompatible,
+        serverId: serverId,
+      ),
+      target,
+      onLoaded: _onLoaded,
+    );
+  }
+
+  /// Provider deletion: stop polling its switch (never calls `/v1/cancel`).
+  void resetForServer(String serverId) {
+    if (state?.serverId != serverId) return;
+    _timer?.cancel();
+    _timer = null;
+    state = null;
   }
 
   /// Explicit user cancellation (the only path that calls `/v1/cancel`).
@@ -155,9 +201,22 @@ class RigLoadNotifier extends Notifier<RigLoadState?> {
           return;
         }
         if (status.isHealthy) {
+          // The rig can report the PREVIOUS model's healthy state while the
+          // switch is still queued; only this load's target counts.
+          final superseded = status.target != null &&
+              status.target != _target?.name;
           timer.cancel();
+          if (superseded) {
+            state = null;
+            return;
+          }
+          ref.invalidate(availableModelsProvider(latest.serverId));
+          final switcherUrl = _switcherUrl;
+          if (switcherUrl != null) {
+            ref.invalidate(rigRosterProvider(switcherUrl));
+          }
           state = null;
-          onLoaded?.call();
+          (onLoaded ?? _onLoaded)?.call();
         } else if (status.isFailed) {
           timer.cancel();
           state = current.copyWith(status: status, active: false);

@@ -11,8 +11,9 @@ Future<RigModelEntry?> confirmRigLoad(
   BuildContext context,
   AppLocalizations l10n,
   ModelInfo model,
-  List<RigModelEntry> targets,
-) async {
+  List<RigModelEntry> targets, {
+  bool streaming = false,
+}) async {
   RigModelEntry? target;
   if (targets.length > 1) {
     target = await showDialog<RigModelEntry>(
@@ -23,7 +24,11 @@ Future<RigModelEntry?> confirmRigLoad(
           for (final entry in targets)
             SimpleDialogOption(
               onPressed: () => Navigator.pop(dialogContext, entry),
-              child: Text(entry.label.isNotEmpty ? entry.label : entry.name),
+              child: Text(
+                entry.label.isNotEmpty
+                    ? '${entry.label} · ${entry.name}'
+                    : entry.name,
+              ),
             ),
         ],
       ),
@@ -37,7 +42,12 @@ Future<RigModelEntry?> confirmRigLoad(
     context: context,
     builder: (dialogContext) => AlertDialog(
       title: Text(l10n.model_load_confirm_title),
-      content: Text(l10n.model_load_confirm_body(model.displayName)),
+      content: Text(
+        streaming
+            ? '${l10n.model_load_confirm_body(model.displayName)} '
+                '${l10n.model_load_confirm_streaming}'
+            : l10n.model_load_confirm_body(model.displayName),
+      ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(dialogContext, false),
@@ -69,6 +79,11 @@ class RigLoadProgressSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
+    ref.listen(rigLoadProvider, (previous, next) {
+      if (previous != null && next == null && context.mounted) {
+        Navigator.pop(context);
+      }
+    });
     final state = ref.watch(rigLoadProvider);
     final theme = Theme.of(context);
     final status = state?.status;
@@ -129,7 +144,8 @@ class RigLoadProgressSheet extends ConsumerWidget {
                 if (state != null && status?.isFailed == true) ...[
                   const SizedBox(width: 8),
                   FilledButton(
-                    onPressed: () => ref.invalidate(rigLoadProvider),
+                    onPressed: () =>
+                        ref.read(rigLoadProvider.notifier).retry(),
                     child: Text(l10n.model_load_retry),
                   ),
                 ],

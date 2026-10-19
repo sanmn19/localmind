@@ -11,6 +11,7 @@ import 'package:localmind/features/chat/providers/chat_providers.dart';
 import 'package:localmind/features/on_device/components/on_device_picker_section.dart';
 import 'package:localmind/features/on_device/providers/on_device_providers.dart';
 import 'package:localmind/features/models/providers/rig_load_providers.dart';
+import 'package:localmind/features/models/providers/rig_switcher_providers.dart';
 import 'package:localmind/features/servers/providers/server_providers.dart';
 import 'package:localmind/features/lm_studio_catalog/views/lm_studio_download_widgets.dart';
 import 'package:localmind/core/providers/app_providers.dart';
@@ -43,7 +44,15 @@ class _ModelPickerSheetState extends ConsumerState<ModelPickerSheet> {
       final raw = server?.switcherBaseUrl?.trim();
       final base = raw == null ? null : Uri.tryParse(raw);
       if (server != null && base != null) {
-        ref.read(rigLoadProvider.notifier).resumeIfInFlight(base, server.id);
+        final container = ref.container;
+        container.read(rigLoadProvider.notifier).resumeIfInFlight(
+          base,
+          server.id,
+          onLoaded: () {
+            container.invalidate(availableModelsProvider(server.id));
+            container.invalidate(rigRosterProvider(server.switcherBaseUrl!));
+          },
+        );
       }
     });
   }
@@ -93,6 +102,7 @@ class _ModelPickerSheetState extends ConsumerState<ModelPickerSheet> {
       }
     });
 
+    final rigLoad = ref.watch(rigLoadProvider);
     final serversAsync = ref.watch(serversProvider);
     final servers = serversAsync.value ?? [];
     final currentServer = servers
@@ -165,9 +175,14 @@ class _ModelPickerSheetState extends ConsumerState<ModelPickerSheet> {
                       : null,
                   onRefresh: activeServer != null
                       ? () {
+                          invalidateAvailableModelsCache(activeServer.id);
                           ref.invalidate(
                             availableModelsProvider(activeServer.id),
                           );
+                          final switcherUrl = activeServer.switcherBaseUrl;
+                          if (switcherUrl != null) {
+                            ref.invalidate(rigRosterProvider(switcherUrl));
+                          }
                           ref.invalidate(loadedModelsProvider(activeServer));
                         }
                       : null,
@@ -175,6 +190,32 @@ class _ModelPickerSheetState extends ConsumerState<ModelPickerSheet> {
                       ? () => _unloadAllModels(context, ref, activeServer)
                       : null,
                 ),
+                if (rigLoad != null) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    key: const ValueKey('rig_load_banner'),
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${rigLoad.status.phase} · ${rigLoad.status.progress}%',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark
+                                ? AppColors.darkMutedText
+                                : AppColors.lightMutedText,
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 120,
+                        child: LinearProgressIndicator(
+                          minHeight: 3,
+                          value: rigLoad.status.progress / 100,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 12),
                 Row(
                   children: [

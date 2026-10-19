@@ -331,8 +331,9 @@ class ServersNotifier extends AsyncNotifier<List<Server>> {
 
   Future<void> deleteServer(String serverId) async {
     if (!ref.mounted) return;
-    ref.read(manualModelRepositoryProvider).removeAllForServer(serverId);
-    ref.invalidate(manualModelsProvider(serverId));
+    await ref
+        .read(manualModelsNotifierProvider.notifier)
+        .clearForServer(serverId);
     final db = ref.read(databaseProvider);
     final query = db.serverBox.query(ServerEntity_.id.equals(serverId)).build();
     db.serverBox.removeMany(query.findIds());

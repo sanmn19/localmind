@@ -402,6 +402,7 @@ class _ModelListState extends ConsumerState<ModelList> {
               note: modelMeta?.note,
               onLongPress: () => _showModelOptions(context, model),
               onTap: () async {
+                final container = ref.container;
                 final activeServer = ref.read(activeServerProvider);
                 if (activeServer == null) return;
 
@@ -426,7 +427,13 @@ class _ModelListState extends ConsumerState<ModelList> {
                     if (targets.isNotEmpty) {
                       if (!context.mounted) return;
                       final target =
-                          await confirmRigLoad(context, l10n, model, targets);
+                          await confirmRigLoad(
+                            context,
+                            l10n,
+                            model,
+                            targets,
+                            streaming: ref.read(isStreamingProvider),
+                          );
                       if (target != null && context.mounted) {
                         await ref.read(rigLoadProvider.notifier).start(
                           base,
@@ -434,10 +441,16 @@ class _ModelListState extends ConsumerState<ModelList> {
                           model,
                           target,
                           onLoaded: () {
-                            ref.invalidate(
+                            container.invalidate(
                               availableModelsProvider(activeServer.id),
                             );
-                            ref
+                            final switcherUrl = activeServer.switcherBaseUrl;
+                            if (switcherUrl != null) {
+                              container.invalidate(
+                                rigRosterProvider(switcherUrl),
+                              );
+                            }
+                            container
                                 .read(selectedModelProvider.notifier)
                                 .setModel(model);
                           },

@@ -135,6 +135,53 @@ void main() {
     },
   );
 
+  test('a healthy status for a different target does not complete the load',
+      () async {
+    final fake = _FakeSwitcher()
+      ..status = const RigSwitchStatus(
+        phase: 'healthy',
+        progress: 100,
+        target: 'some-other-model',
+      );
+    final container = ProviderContainer(
+      overrides: [rigSwitcherServiceProvider.overrideWithValue(fake)],
+    );
+    addTearDown(container.dispose);
+
+    var loaded = false;
+    await container.read(rigLoadProvider.notifier).start(
+          Uri.parse('http://rig:9000'),
+          's1',
+          _model(),
+          _target(),
+          onLoaded: () => loaded = true,
+        );
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+
+    expect(loaded, isFalse);
+    expect(container.read(rigLoadProvider), isNull);
+  });
+
+  test('retry restarts the stored switch', () async {
+    final fake = _FakeSwitcher()
+      ..status = const RigSwitchStatus(phase: 'failed', progress: 0, error: 'boom');
+    final container = ProviderContainer(
+      overrides: [rigSwitcherServiceProvider.overrideWithValue(fake)],
+    );
+    addTearDown(container.dispose);
+
+    await container.read(rigLoadProvider.notifier).start(
+          Uri.parse('http://rig:9000'),
+          's1',
+          _model(),
+          _target(),
+        );
+    await _waitFor(() => container.read(rigLoadProvider)?.active == false);
+    await container.read(rigLoadProvider.notifier).retry();
+
+    expect(fake.switched, hasLength(2));
+  });
+
   test('start is a no-op while a switch is in flight', () async {
     final fake = _FakeSwitcher();
     final container = ProviderContainer(

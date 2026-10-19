@@ -3825,5 +3825,7 @@
   "model_availability_unavailable": "Unavailable",
   "@model_availability_unavailable": {"description": "Availability label: the provider does not serve the model right now"},
   "model_availability_unknown": "Status unknown",
-  "@model_availability_unknown": {"description": "Availability label: detection or roster check failed"}
+  "@model_availability_unknown": {"description": "Availability label: detection or roster check failed"},
+  "model_load_confirm_streaming": "A reply is streaming and will be stopped.",
+  "@model_load_confirm_streaming": {"description": "Appended to the rig load confirmation while a reply is streaming"}
 }
