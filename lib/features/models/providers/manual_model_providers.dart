@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/storage_providers.dart';
+import '../../chat/providers/model_selection_providers.dart';
+import '../../../core/providers/app_providers.dart';
 import '../data/manual_model_repository.dart';
 import '../data/manual_model_store.dart';
 import '../data/models/manual_model.dart';
@@ -30,7 +32,23 @@ class ManualModelsNotifier extends Notifier<int> {
   }
 
   Future<void> remove(String serverId, String modelId) async {
-    ref.read(manualModelRepositoryProvider).remove(serverId, modelId);
+    final removed =
+        ref.read(manualModelRepositoryProvider).remove(serverId, modelId);
+    if (!removed) return;
+    // Never leave dangling pointers at a removed model.
+    final selected = ref.read(selectedModelProvider);
+    if (selected != null &&
+        selected.serverId == serverId &&
+        selected.id == modelId) {
+      ref.read(selectedModelProvider.notifier).clear();
+    }
+    final settings = ref.read(settingsProvider);
+    if (settings.defaultModelServerId == serverId &&
+        settings.defaultModelId == modelId) {
+      ref
+          .read(settingsProvider.notifier)
+          .setDefaultModel(serverId: serverId, modelId: null);
+    }
     ref.invalidate(manualModelsProvider(serverId));
     state++;
   }
