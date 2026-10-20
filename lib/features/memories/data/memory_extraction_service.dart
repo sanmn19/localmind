@@ -77,7 +77,12 @@ only matters in this conversation. Return [] when nothing is worth saving.
     final transcript = _transcript(messages);
     if (transcript.isEmpty) return const [];
 
+    // Providers differ: LM Studio honours params.systemPrompt, while the
+    // OpenAI-compatible client ignores it. Keep the rules in the user turn too
+    // so every provider sees them.
     final buffer = StringBuffer()
+      ..writeln(_systemPrompt.trim())
+      ..writeln()
       ..writeln('Conversation:')
       ..writeln(transcript);
     if (existingTitles.isNotEmpty) {
