@@ -601,10 +601,12 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
       index: index,
     );
     if (previous == null) {
-      throw const CloudSyncFailure(
-        CloudSyncFailureKind.corruptedData,
-        'A local attachment is unavailable and has no prior cloud reference.',
+      // The file is gone and the cloud never had it: dropping the reference is
+      // the only honest option — failing the whole sync forever would be worse.
+      warnings.add(
+        'Skipped an attachment that is no longer available locally.',
       );
+      return;
     }
     refs.add(previous);
     warnings.add('Preserved an unavailable attachment from cloud history.');
