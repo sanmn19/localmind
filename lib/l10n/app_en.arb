@@ -3866,6 +3866,8 @@
   "@memory_kind_entity": {"description": "Memory kind: entity"},
   "memory_kind_event": "Event",
   "@memory_kind_event": {"description": "Memory kind: event"},
+  "memory_kind_inferred": "Inferred",
+  "@memory_kind_inferred": {"description": "Memory kind: inferred"},
   "memory_importance": "Importance",
   "@memory_importance": {"description": "Memories screen: importance label"},
   "memory_title_label": "Title",

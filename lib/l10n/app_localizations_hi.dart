@@ -3856,6 +3856,9 @@ class AppLocalizationsHi extends AppLocalizations {
   String get memory_kind_event => 'Event';
 
   @override
+  String get memory_kind_inferred => 'Inferred';
+
+  @override
   String get memory_importance => 'Importance';
 
   @override

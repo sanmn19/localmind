@@ -335,6 +335,7 @@ String _kindLabel(AppLocalizations l10n, MemoryKind kind) => switch (kind) {
   MemoryKind.preference => l10n.memory_kind_preference,
   MemoryKind.entity => l10n.memory_kind_entity,
   MemoryKind.event => l10n.memory_kind_event,
+  MemoryKind.inferred => l10n.memory_kind_inferred,
 };
 
 class _MemorySheet extends StatelessWidget {

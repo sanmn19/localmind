@@ -268,6 +268,10 @@ class DataBackupService {
             'sourceMessageId': memory.sourceMessageId,
             'supersededById': memory.supersededById,
             'archived': memory.archived,
+            'tags': memory.tags,
+            'shortSummary': memory.shortSummary,
+            'expiresAt': memory.expiresAt?.toIso8601String(),
+            'sourceApp': memory.sourceApp,
           },
       ],
       'memoryRelations': [
@@ -323,6 +327,7 @@ class DataBackupService {
         final content = backupImportString(raw['content']);
         final createdAt = backupImportDateTime(raw['createdAt']);
         final updatedAt = backupImportDateTime(raw['updatedAt']);
+        final rawTags = raw['tags'];
         if (id == null ||
             title == null ||
             content == null ||
@@ -351,6 +356,12 @@ class DataBackupService {
             sourceMessageId: backupImportString(raw['sourceMessageId']),
             supersededById: backupImportString(raw['supersededById']),
             archived: raw['archived'] as bool? ?? false,
+            tags: rawTags is List
+                ? rawTags.whereType<String>().toList()
+                : const [],
+            shortSummary: backupImportString(raw['shortSummary']) ?? '',
+            expiresAt: backupImportDateTime(raw['expiresAt']),
+            sourceApp: backupImportString(raw['sourceApp']),
           ),
         );
       }

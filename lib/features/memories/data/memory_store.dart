@@ -197,6 +197,10 @@ class ObjectBoxMemoryStore implements MemoryStore {
         sourceMessageId: entity.sourceMessageId,
         supersededById: entity.supersededById,
         archived: entity.archived,
+        tags: List<String>.from(entity.tags),
+        shortSummary: entity.shortSummary,
+        expiresAt: entity.expiresAt,
+        sourceApp: entity.sourceApp,
       );
 
   MemoryEntity _toEntity(Memory memory) => MemoryEntity(
@@ -214,6 +218,10 @@ class ObjectBoxMemoryStore implements MemoryStore {
         sourceMessageId: memory.sourceMessageId,
         supersededById: memory.supersededById,
         archived: memory.archived,
+        tags: memory.tags,
+        shortSummary: memory.shortSummary,
+        expiresAt: memory.expiresAt,
+        sourceApp: memory.sourceApp,
       );
 
   MemoryRelation _relationToDomain(MemoryRelationEntity entity) =>

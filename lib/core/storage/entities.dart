@@ -892,6 +892,15 @@ class MemoryEntity {
 
   bool archived;
 
+  List<String> tags;
+
+  String shortSummary;
+
+  @Property(type: PropertyType.date)
+  DateTime? expiresAt;
+
+  String? sourceApp;
+
   MemoryEntity({
     this.internalId = 0,
     required this.id,
@@ -908,6 +917,10 @@ class MemoryEntity {
     this.sourceMessageId,
     this.supersededById,
     this.archived = false,
+    this.tags = const [],
+    this.shortSummary = '',
+    this.expiresAt,
+    this.sourceApp,
   });
 }
 

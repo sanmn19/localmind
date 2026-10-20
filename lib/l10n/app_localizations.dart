@@ -7083,6 +7083,12 @@ abstract class AppLocalizations {
   /// **'Event'**
   String get memory_kind_event;
 
+  /// Memory kind: inferred
+  ///
+  /// In en, this message translates to:
+  /// **'Inferred'**
+  String get memory_kind_inferred;
+
   /// Memories screen: importance label
   ///
   /// In en, this message translates to:

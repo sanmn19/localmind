@@ -8,6 +8,7 @@ import 'package:localmind/core/storage/entities.dart';
 import 'package:localmind/core/models/enums.dart';
 import 'package:localmind/features/chat/data/models/message.dart';
 import 'package:localmind/features/conversations/data/models/conversation.dart';
+import 'package:localmind/features/memories/data/models/memory.dart';
 import 'package:localmind/features/personas/data/models/persona.dart';
 import 'package:localmind/objectbox.g.dart';
 
@@ -202,6 +203,64 @@ void main() {
     expect(payload['settings'], isNot(contains('futureSecret')));
   });
 
+  test('memory tags, summary, expiry and source app survive export/import',
+      () async {
+    final memory = MemoryEntity(
+      id: 'memory-1',
+      kindIndex: MemoryKind.inferred.index,
+      title: 'Standup',
+      content: 'Standup moved to 10:00.',
+      createdAt: DateTime.utc(2026, 10, 20),
+      updatedAt: DateTime.utc(2026, 10, 20),
+      tags: const ['work', 'standup'],
+      shortSummary: 'Standup at 10:00',
+      expiresAt: DateTime.utc(2026, 10, 21),
+      sourceApp: 'com.whatsapp',
+    );
+    final memoryBox = _MemoryBox([memory]);
+    final store = _FakeStore({
+      MemoryEntity: memoryBox,
+      MemoryRelationEntity: _FakeBox<MemoryRelationEntity>(const []),
+      MemoryEmbeddingEntity: _FakeBox<MemoryEmbeddingEntity>(const []),
+    });
+    final directory = await Directory.systemTemp.createTemp(
+      'backup-memory-test',
+    );
+    addTearDown(() async {
+      if (await directory.exists()) await directory.delete(recursive: true);
+    });
+    final service = DataBackupService(
+      documentsDirectory: () async => directory,
+    );
+
+    final exported = await service.exportSkillsAndMemories(store);
+    final row =
+        (exported['memories'] as List).single as Map<String, dynamic>;
+    expect(row['kind'], 'inferred');
+    expect(row['tags'], ['work', 'standup']);
+    expect(row['shortSummary'], 'Standup at 10:00');
+    expect(row['expiresAt'], '2026-10-21T00:00:00.000Z');
+    expect(row['sourceApp'], 'com.whatsapp');
+
+    final importedBox = _MemoryBox();
+    await service.importSkillsAndMemories(
+      _FakeStore({
+        MemoryEntity: importedBox,
+        MemoryRelationEntity: _FakeBox<MemoryRelationEntity>(const []),
+        MemoryEmbeddingEntity: _FakeBox<MemoryEmbeddingEntity>(const []),
+      }),
+      exported,
+    );
+
+    final restored = importedBox.items.single;
+    expect(restored.id, 'memory-1');
+    expect(restored.kindIndex, MemoryKind.inferred.index);
+    expect(restored.tags, ['work', 'standup']);
+    expect(restored.shortSummary, 'Standup at 10:00');
+    expect(restored.expiresAt, DateTime.utc(2026, 10, 21));
+    expect(restored.sourceApp, 'com.whatsapp');
+  });
+
   test(
     'cloud import rejects incomplete replacement payloads before mutation',
     () {
@@ -237,4 +296,51 @@ class _FakeBox<T> extends Fake implements Box<T> {
 
   @override
   List<T> getAll() => List<T>.from(_items);
+}
+
+class _MemoryBox extends Fake implements Box<MemoryEntity> {
+  _MemoryBox([Iterable<MemoryEntity> items = const []]) {
+    this.items.addAll(items);
+  }
+
+  final List<MemoryEntity> items = [];
+
+  @override
+  List<MemoryEntity> getAll() => List<MemoryEntity>.from(items);
+
+  @override
+  QueryBuilder<MemoryEntity> query([Condition<MemoryEntity>? qc]) =>
+      _FakeQueryBuilder(items);
+
+  @override
+  int put(MemoryEntity entity, {PutMode mode = PutMode.put}) {
+    final index = items.indexWhere((item) => item.id == entity.id);
+    if (index >= 0) {
+      items[index] = entity;
+    } else {
+      items.add(entity);
+    }
+    return items.length;
+  }
+}
+
+class _FakeQueryBuilder<T> extends Fake implements QueryBuilder<T> {
+  _FakeQueryBuilder(this._items);
+
+  final List<T> _items;
+
+  @override
+  Query<T> build() => _FakeQuery(_items);
+}
+
+class _FakeQuery<T> extends Fake implements Query<T> {
+  _FakeQuery(this._items);
+
+  final List<T> _items;
+
+  @override
+  T? findFirst() => _items.isEmpty ? null : _items.first;
+
+  @override
+  void close() {}
 }

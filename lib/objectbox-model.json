@@ -830,7 +830,7 @@
     },
     {
       "id": "12:1157530772597595285",
-      "lastPropertyId": "15:6525833735150016625",
+      "lastPropertyId": "19:2641398600035886234",
       "name": "MemoryEntity",
       "properties": [
         {
@@ -909,6 +909,26 @@
         {
           "id": "15:6525833735150016625",
           "name": "scopeConversationId",
+          "type": 9
+        },
+        {
+          "id": "16:2128569499334731958",
+          "name": "tags",
+          "type": 30
+        },
+        {
+          "id": "17:5707979345040627879",
+          "name": "shortSummary",
+          "type": 9
+        },
+        {
+          "id": "18:423563684729519270",
+          "name": "expiresAt",
+          "type": 10
+        },
+        {
+          "id": "19:2641398600035886234",
+          "name": "sourceApp",
           "type": 9
         }
       ],

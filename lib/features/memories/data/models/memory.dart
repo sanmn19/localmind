@@ -1,4 +1,4 @@
-enum MemoryKind { fact, preference, entity, event }
+enum MemoryKind { fact, preference, entity, event, inferred }
 
 class Memory {
   const Memory({
@@ -16,6 +16,10 @@ class Memory {
     this.sourceMessageId,
     this.supersededById,
     this.archived = false,
+    this.tags = const [],
+    this.shortSummary = '',
+    this.expiresAt,
+    this.sourceApp,
   });
 
   final String id;
@@ -39,6 +43,18 @@ class Memory {
   final String? supersededById;
   final bool archived;
 
+  /// Free-form lowercase tags used for retrieval and filtering.
+  final List<String> tags;
+
+  /// One-line form injected for inferred memories.
+  final String shortSummary;
+
+  /// Null means permanent; otherwise the memory stops being relevant here.
+  final DateTime? expiresAt;
+
+  /// Package that produced an inferred memory (e.g. `com.whatsapp`).
+  final String? sourceApp;
+
   Memory copyWith({
     String? title,
     String? content,
@@ -49,6 +65,11 @@ class Memory {
     int? useCount,
     String? supersededById,
     bool? archived,
+    List<String>? tags,
+    String? shortSummary,
+    DateTime? expiresAt,
+    bool clearExpiresAt = false,
+    String? sourceApp,
   }) {
     return Memory(
       id: id,
@@ -65,6 +86,10 @@ class Memory {
       sourceMessageId: sourceMessageId,
       supersededById: supersededById ?? this.supersededById,
       archived: archived ?? this.archived,
+      tags: tags ?? this.tags,
+      shortSummary: shortSummary ?? this.shortSummary,
+      expiresAt: clearExpiresAt ? null : (expiresAt ?? this.expiresAt),
+      sourceApp: sourceApp ?? this.sourceApp,
     );
   }
 }
