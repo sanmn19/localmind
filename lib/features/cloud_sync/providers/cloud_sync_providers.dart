@@ -137,9 +137,10 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
     required String passphrase,
     String? googleAccount,
   }) async {
+    final account = (googleAccount ?? config.googleAccount)?.trim() ?? '';
     final validation = config.provider == CloudSyncProviderKind.s3
         ? config.validate()
-        : (config.googleAccount?.trim().isEmpty ?? true)
+        : account.isEmpty
         ? 'Connect a Google account first.'
         : null;
     if (validation != null) {
@@ -147,7 +148,7 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
     }
     final enabledConfig = config.copyWith(
       enabled: true,
-      googleAccount: googleAccount ?? config.googleAccount,
+      googleAccount: account.isEmpty ? null : account,
     );
     final remoteRepository = _storageFor(enabledConfig, credentials);
     state = state.copyWith(
