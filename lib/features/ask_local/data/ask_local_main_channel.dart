@@ -131,12 +131,15 @@ resolveAskLocalCardBootstrap(ProviderContainer container) async {
 
   String? conversationId;
   try {
+    // "New chat per popup": every handoff creates its OWN conversation;
+    // history keeps the previous asks as separate threads. The envelope
+    // pins the fresh id so the card never re-ensures a stale shared row.
     final conversation = await container
         .read(askLocalConversationServiceProvider)
-        .ensure();
+        .create();
     conversationId = conversation.id;
   } catch (error) {
-    Log.error('Ask Local conversation ensure failed: $error');
+    Log.error('Ask Local conversation create failed: $error');
   }
 
   return AskLocalCardBootstrapPayload(
@@ -225,9 +228,15 @@ class AskLocalMainChannel {
   ) async {
     switch (call.method) {
       case AskLocalRequestPayload.askLocalRequestArrivedMethod:
+        // ignore: avoid_print
+        print('DBG askLocalRequestArrived: args=${call.arguments}');
         final payload = AskLocalRequestPayload.fromMap(call.arguments);
+        // ignore: avoid_print
+        print('DBG askLocalRequestArrived: decoded=${payload != null}');
         if (payload == null) return true;
         final opened = await _openWithEnvelope(payload, container);
+        // ignore: avoid_print
+        print('DBG askLocalRequestArrived: opened=$opened');
         // Truthy ack clears Kotlin's stash; null keeps it for the pull.
         return opened ? true : null;
       case AskLocalCardBootstrapKeys.executeToolMainMethod:

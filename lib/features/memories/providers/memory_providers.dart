@@ -22,6 +22,10 @@ final memoriesProvider = FutureProvider<List<Memory>>((ref) async {
   return ref.watch(memoryRepositoryProvider).list();
 });
 
+final memoryRelationsProvider = FutureProvider<List<MemoryRelation>>((ref) async {
+  return ref.watch(memoryStoreProvider).listRelations();
+});
+
 final memoriesNotifierProvider =
     NotifierProvider<MemoriesNotifier, int>(MemoriesNotifier.new);
 

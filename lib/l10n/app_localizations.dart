@@ -7016,6 +7016,120 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Facts you ask LocalMind to remember are injected as context, never as instructions.'**
   String get memories_enabled_desc;
+
+  /// Memories screen: add button/dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Add memory'**
+  String get memory_add;
+
+  /// Memories screen: edit sheet title
+  ///
+  /// In en, this message translates to:
+  /// **'Edit memory'**
+  String get memory_edit;
+
+  /// Memories screen: delete action
+  ///
+  /// In en, this message translates to:
+  /// **'Delete memory'**
+  String get memory_delete;
+
+  /// Memories screen: archive action
+  ///
+  /// In en, this message translates to:
+  /// **'Archive memory'**
+  String get memory_archive;
+
+  /// Memories screen: kind field label
+  ///
+  /// In en, this message translates to:
+  /// **'Kind'**
+  String get memory_kind;
+
+  /// Memory kind: fact
+  ///
+  /// In en, this message translates to:
+  /// **'Fact'**
+  String get memory_kind_fact;
+
+  /// Memory kind: preference
+  ///
+  /// In en, this message translates to:
+  /// **'Preference'**
+  String get memory_kind_preference;
+
+  /// Memory kind: entity
+  ///
+  /// In en, this message translates to:
+  /// **'Entity'**
+  String get memory_kind_entity;
+
+  /// Memory kind: event
+  ///
+  /// In en, this message translates to:
+  /// **'Event'**
+  String get memory_kind_event;
+
+  /// Memories screen: importance label
+  ///
+  /// In en, this message translates to:
+  /// **'Importance'**
+  String get memory_importance;
+
+  /// Memory editor: title field
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get memory_title_label;
+
+  /// Memory editor: content field
+  ///
+  /// In en, this message translates to:
+  /// **'What should LocalMind remember?'**
+  String get memory_content_label;
+
+  /// Memory editor: save button
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get memory_save;
+
+  /// Memory editor: empty field error
+  ///
+  /// In en, this message translates to:
+  /// **'This field is required'**
+  String get memory_required;
+
+  /// Memories screen: search field hint
+  ///
+  /// In en, this message translates to:
+  /// **'Search memories'**
+  String get memory_search_hint;
+
+  /// Memories screen: switch to the relational graph
+  ///
+  /// In en, this message translates to:
+  /// **'Graph view'**
+  String get memory_graph_view;
+
+  /// Memories screen: switch to the list
+  ///
+  /// In en, this message translates to:
+  /// **'List view'**
+  String get memory_list_view;
+
+  /// Chat message action: remember this message
+  ///
+  /// In en, this message translates to:
+  /// **'Remember this'**
+  String get remember_this;
+
+  /// Snackbar after remembering
+  ///
+  /// In en, this message translates to:
+  /// **'Saved to memories'**
+  String get memory_saved;
 }
 
 class _AppLocalizationsDelegate

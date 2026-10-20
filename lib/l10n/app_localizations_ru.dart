@@ -3833,4 +3833,61 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get memories_enabled_desc =>
       'Facts you ask LocalMind to remember are injected as context, never as instructions.';
+
+  @override
+  String get memory_add => 'Add memory';
+
+  @override
+  String get memory_edit => 'Edit memory';
+
+  @override
+  String get memory_delete => 'Delete memory';
+
+  @override
+  String get memory_archive => 'Archive memory';
+
+  @override
+  String get memory_kind => 'Kind';
+
+  @override
+  String get memory_kind_fact => 'Fact';
+
+  @override
+  String get memory_kind_preference => 'Preference';
+
+  @override
+  String get memory_kind_entity => 'Entity';
+
+  @override
+  String get memory_kind_event => 'Event';
+
+  @override
+  String get memory_importance => 'Importance';
+
+  @override
+  String get memory_title_label => 'Title';
+
+  @override
+  String get memory_content_label => 'What should LocalMind remember?';
+
+  @override
+  String get memory_save => 'Save';
+
+  @override
+  String get memory_required => 'This field is required';
+
+  @override
+  String get memory_search_hint => 'Search memories';
+
+  @override
+  String get memory_graph_view => 'Graph view';
+
+  @override
+  String get memory_list_view => 'List view';
+
+  @override
+  String get remember_this => 'Remember this';
+
+  @override
+  String get memory_saved => 'Saved to memories';
 }

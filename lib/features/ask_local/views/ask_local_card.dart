@@ -55,23 +55,29 @@ class AskLocalCard extends ConsumerStatefulWidget {
 }
 
 class _AskLocalCardState extends ConsumerState<AskLocalCard> {
-  final TextEditingController _inputController = TextEditingController();
+
   final ScrollController _transcriptScroll = ScrollController();
   final GlobalKey _contentKey = GlobalKey();
+  final GlobalKey _transcriptMeasureKey = GlobalKey();
+  final GlobalKey _pinnedTopKey = GlobalKey();
+  final GlobalKey _pinnedBottomKey = GlobalKey();
   double _lastRequestedHeight = 0;
 
   @override
   void dispose() {
-    _inputController.dispose();
     _transcriptScroll.dispose();
     super.dispose();
   }
 
   void _submit(AskLocalCardState state) {
-    final question = _inputController.text.trim();
-    if (question.isEmpty || state.isStreaming) return;
-    _inputController.clear();
-    unawaited(ref.read(askLocalCardNotifierProvider.notifier).send(question));
+    // Empty send is legal: the selection + screenshot are already context.
+    if (state.isStreaming) return;
+    unawaited(ref.read(askLocalCardNotifierProvider.notifier).send(''));
+  }
+
+  void _openInput() {
+    final env = ref.read(askLocalCardEnvProvider);
+    unawaited(env.openCardInput?.call());
   }
 
   @override
@@ -89,17 +95,48 @@ class _AskLocalCardState extends ConsumerState<AskLocalCard> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _header(theme, state, locale),
-        if (state.hasTarget) _contextStrip(theme, state, locale),
-        if (state.failure != null)
-          _failureBanner(state.failure!, theme),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(4, 0, 4, 0),
-          child: _transcript(theme, state, displayRows),
+        // Pinned top chrome: never scrolls away.
+        KeyedSubtree(
+          key: _pinnedTopKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _header(theme, state, locale),
+              if (state.hasTarget) _contextStrip(theme, state, locale),
+              if (state.failure != null)
+                _failureBanner(state.failure!, theme),
+            ],
+          ),
         ),
-        if (state.pendingApproval != null)
-          _approvalChipRow(state, theme, locale),
-        _inputRow(theme, state, locale),
+        // The transcript is the ONLY scrollable region; reverse keeps
+        // the newest row anchored to the bottom of the window.
+        Flexible(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(4, 0, 4, 0),
+            child: SingleChildScrollView(
+              reverse: true,
+              controller: _transcriptScroll,
+              child: KeyedSubtree(
+                key: _transcriptMeasureKey,
+                child: _transcript(theme, state, displayRows),
+              ),
+            ),
+          ),
+        ),
+        // Pinned bottom chrome: input + approval chips stay reachable.
+        KeyedSubtree(
+          key: _pinnedBottomKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (state.pendingApproval != null)
+                _approvalChipRow(state, theme, locale),
+              _inputRow(theme, state, locale),
+            ],
+          ),
+        ),
       ],
     );
 
@@ -125,10 +162,7 @@ class _AskLocalCardState extends ConsumerState<AskLocalCard> {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
-          child: SingleChildScrollView(
-            reverse: true,
-            child: content,
-          ),
+          child: content,
         ),
       ),
     );
@@ -180,7 +214,14 @@ class _AskLocalCardState extends ConsumerState<AskLocalCard> {
     AskLocalCardState state,
     AppLocalizations locale,
   ) {
-    return Padding(
+    return GestureDetector(
+      key: const ValueKey('ask_local_card_drag_handle'),
+      onPanUpdate: (details) {
+        final env = ref.read(askLocalCardEnvProvider);
+        unawaited(env.dragCard?.call(details.delta.dx, details.delta.dy));
+      },
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 6, 0),
       child: Row(
         key: const ValueKey('ask_local_card_header'),
@@ -231,6 +272,7 @@ class _AskLocalCardState extends ConsumerState<AskLocalCard> {
             onPressed: _closeCard,
           ),
         ],
+      ),
       ),
     );
   }
@@ -402,43 +444,30 @@ class _AskLocalCardState extends ConsumerState<AskLocalCard> {
     AskLocalCardState state,
     AppLocalizations locale,
   ) {
-    final canSend = !state.isStreaming &&
-        _inputController.text.trim().isNotEmpty;
     return Padding(
       key: const ValueKey('ask_local_input_row'),
       padding: const EdgeInsets.fromLTRB(10, 4, 10, 10),
       child: Row(
         children: [
           Expanded(
-            child: TextField(
+            child: GestureDetector(
               key: const ValueKey('ask_local_card_input'),
-              controller: _inputController,
-              enabled: !state.isStreaming,
-              maxLines: 1,
-              textInputAction: TextInputAction.send,
-              onSubmitted: (_) => _submit(state),
-              onChanged: (_) => setState(() {}),
-              style: TextStyle(
-                fontSize: 13,
-                color: theme.colorScheme.onSurface,
-              ),
-              decoration: InputDecoration(
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(
+              onTap: _openInput,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
                   horizontal: 10,
-                  vertical: 8,
+                  vertical: 12,
                 ),
-                filled: true,
-                fillColor:
-                    theme.colorScheme.onSurface.withValues(alpha: 0.05),
-                border: OutlineInputBorder(
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide.none,
                 ),
-                hintText: locale.ask_local_card_input_hint,
-                hintStyle: TextStyle(
-                  fontSize: 13,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.38),
+                child: Text(
+                  locale.ask_local_card_input_hint,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.38),
+                  ),
                 ),
               ),
             ),
@@ -448,7 +477,7 @@ class _AskLocalCardState extends ConsumerState<AskLocalCard> {
             key: const ValueKey('ask_local_card_send'),
             color: theme.colorScheme.primary,
             icon: const Icon(Icons.send_rounded),
-            onPressed: canSend ? () => _submit(state) : null,
+            onPressed: state.isStreaming ? null : () => _submit(state),
             visualDensity: VisualDensity.compact,
           ),
         ],
@@ -457,10 +486,27 @@ class _AskLocalCardState extends ConsumerState<AskLocalCard> {
   }
 
   void _requestResize() {
-    final renderObject = _contentKey.currentContext?.findRenderObject();
-    if (renderObject is! RenderBox || !renderObject.hasSize) return;
-    final height = renderObject.size.height;
-    if ((height - _lastRequestedHeight).abs() < 1) return;
+    // Pinned chrome lays out at its natural size even when the window is
+    // too small (RenderFlex lays out children regardless of clipping);
+    // the transcript Column lives INSIDE the scroll view where height
+    // constraints are unbounded, so its box is the natural content
+    // height. Sum = the chrome the window must always show + whatever
+    // the exchange needs, clamped by the host to the 38% ceiling.
+    double heightOf(GlobalKey key) {
+      final ctx = key.currentContext;
+      final box = ctx?.findRenderObject();
+      if (box is! RenderBox || !box.hasSize) return 0;
+      return box.size.height;
+    }
+
+    final top = heightOf(_pinnedTopKey);
+    final transcript = heightOf(_transcriptMeasureKey);
+    final bottom = heightOf(_pinnedBottomKey);
+    if (top == 0 || bottom == 0) return; // not laid out yet
+    final height = top + transcript + bottom + 8;
+    // ignore: avoid_print
+    print('DBG card resize: top=$top transcript=$transcript bottom=$bottom -> $height (last=$_lastRequestedHeight)');
+    if ((height - _lastRequestedHeight).abs() < 2) return;
     _lastRequestedHeight = height;
     final env = ref.read(askLocalCardEnvProvider);
     unawaited(env.resizeCard?.call(height));
@@ -546,6 +592,7 @@ class _CardRow extends StatelessWidget {
               reasoningContent: reasoning,
               isStreaming: isStreamingRow,
               hasMainContent: content.trim().isNotEmpty,
+              startCollapsed: true,
             ),
           if (toolCalls != null && toolCalls.isNotEmpty)
             ..._toolActivityRows(toolCalls, theme, locale),

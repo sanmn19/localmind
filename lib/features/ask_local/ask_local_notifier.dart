@@ -122,6 +122,8 @@ class AskLocalCardEnv {
     this.attachmentsDirOf,
     this.closeCard,
     this.resizeCard,
+    this.openCardInput,
+    this.dragCard,
   });
 
   final AskLocalConversationService conversationService;
@@ -141,6 +143,15 @@ class AskLocalCardEnv {
   final Future<bool> Function()? closeCard;
 
   final Future<bool> Function(double contentHeightDp)? resizeCard;
+
+  /// Opens the host's transparent input activity (in-card typing happens
+  /// there — a real activity window hosts the IME). Null under tests
+  /// without a window host.
+  final Future<bool> Function()? openCardInput;
+
+  /// Header-drag deltas for the movable surface (dp); null under tests
+  /// without a window host.
+  final Future<bool> Function(double dx, double dy)? dragCard;
 }
 
 final askLocalCardEnvProvider = Provider<AskLocalCardEnv>((ref) {
@@ -202,8 +213,16 @@ class AskLocalCardNotifier extends Notifier<AskLocalCardState> {
   /// delivery id (main engine requestId, else the staging composite) is an
   /// ignore; a NEW id cancels any in-flight exchange (approvals settle
   /// denied) and opens the fresh round.
-  Future<void> applyDelivery(AskLocalCardDelivery delivery) async {
-    if (delivery.deliveryId == _lastDeliveryId) return;
+  Future<void> applyDelivery(
+    AskLocalCardDelivery delivery, {
+    bool forceReanchor = false,
+  }) async {
+    // Dedupe: the same delivery re-pushed while live is an exact no-op —
+    // EXCEPT a forced re-anchor (window re-mount after minimize), which
+    // must rebuild + resize the fresh view even for the same id.
+    // ignore: avoid_print
+    print('DBG card apply: force=$forceReanchor id=${delivery.deliveryId} last=$_lastDeliveryId');
+    if (!forceReanchor && delivery.deliveryId == _lastDeliveryId) return;
     _lastDeliveryId = delivery.deliveryId;
     if (state.isStreaming) {
       cancel();
@@ -220,8 +239,10 @@ class AskLocalCardNotifier extends Notifier<AskLocalCardState> {
       modelLabel: delivery.bootstrap?.modelId ?? 'No model',
     );
     try {
-      final conversation =
-          await ref.read(askLocalCardEnvProvider).conversationService.ensure();
+      final conversation = await ref
+          .read(askLocalCardEnvProvider)
+          .conversationService
+          .resolve(delivery.bootstrap?.conversationId);
       final rows = await loadRows(conversation.id);
       if (ref.mounted && identical(_lastDeliveryId, delivery.deliveryId)) {
         state = state.copyWith(history: rows);
@@ -279,7 +300,9 @@ class AskLocalCardNotifier extends Notifier<AskLocalCardState> {
 
   Future<void> send(String question) async {
     final trimmed = question.trim();
-    if (trimmed.isEmpty || state.isStreaming) return;
+    // An empty question is legal: the selection + screenshot ARE the
+    // context — "send without typing anything" runs a context-only ask.
+    if (state.isStreaming) return;
 
     final delivery = state.delivery;
     if (delivery == null) return;
@@ -302,10 +325,12 @@ class AskLocalCardNotifier extends Notifier<AskLocalCardState> {
 
     final Conversation conversation;
     try {
-      conversation =
-          await ref.read(askLocalCardEnvProvider).conversationService.ensure();
+      conversation = await ref
+          .read(askLocalCardEnvProvider)
+          .conversationService
+          .resolve(bootstrap.conversationId);
     } catch (error) {
-      Log.error('Ask Local ensure() failed: $error');
+      Log.error('Ask Local conversation resolve failed: $error');
       _failExchange(finished, 'Could not reach the Ask Local conversation storage.');
       return;
     }
@@ -334,9 +359,11 @@ class AskLocalCardNotifier extends Notifier<AskLocalCardState> {
 
     final selectedText = delivery.payload.selectedText.trim();
     final excerpt = clipScreenExcerpt(selectedText);
-    final content = excerpt.isEmpty
-        ? trimmed
-        : 'From screen: "$excerpt"\n\n$trimmed';
+    final content = trimmed.isEmpty
+        ? (excerpt.isEmpty ? 'What is on my screen?' : 'From screen: "$excerpt"')
+        : (excerpt.isEmpty
+            ? trimmed
+            : 'From screen: "$excerpt"\n\n$trimmed');
     final userRow = Message(
       id: generateUuidV4(),
       conversationId: conversation.id,
