@@ -1802,6 +1802,9 @@ class ChatNotifier extends Notifier<ChatState> {
   /// background.
   /// Per-conversation throttle for the hidden auto-memory call. Extraction
   /// is a bonus, never a reason to spend a model call on every turn.
+  /// Per-chain budget for feeding plain tool failures back to the model.
+  final _toolFailureFeedback = ToolFailureFeedbackBudget();
+
   final Map<String, DateTime> _lastMemoryExtraction = {};
   Future<void>? _memoryExtractionInFlight;
 
@@ -2372,6 +2375,7 @@ class ChatNotifier extends Notifier<ChatState> {
   Future<void> _sendFollowupWithToolResults({
     required Message previousAssistant,
     required List<ToolEvent> toolEvents,
+    Set<String> failureFeedbackEventIds = const {},
     String? attachedScreenshotId,
     required Server server,
     required ModelInfo? selectedModel,
@@ -2393,7 +2397,9 @@ class ChatNotifier extends Notifier<ChatState> {
         .where(
           (e) =>
               e.status == ToolEventStatus.completed ||
-              isWebBudgetSkipFailure(e),
+              isWebBudgetSkipFailure(e) ||
+              (e.status == ToolEventStatus.failed &&
+                  failureFeedbackEventIds.contains(e.eventId)),
         )
         .toList();
     if (feedback.isEmpty) return;
@@ -2406,7 +2412,7 @@ class ChatNotifier extends Notifier<ChatState> {
       final uniqueSuffix = event.eventId.isNotEmpty
           ? event.eventId
           : '${event.toolName}_${event.timestamp.microsecondsSinceEpoch}';
-      return 'call_${uniqueSuffix}_completed';
+      return 'call_${uniqueSuffix}_${event.status.name}';
     }
 
     final toolCallEntries = feedback
@@ -2605,6 +2611,7 @@ class ChatNotifier extends Notifier<ChatState> {
         }
       }
 
+      final failureFeedbackEventIds = <String>{};
       if (clientExecuted.isNotEmpty && ref.mounted) {
         final registry = ref.read(toolRegistryProvider);
         final adapter = createAdapterForServerType(server.type);
@@ -2626,7 +2633,10 @@ class ChatNotifier extends Notifier<ChatState> {
         // anonymous keyless vendors. Non-local-web names pass through.
         final chainKey = WebToolBudget.chainKeyFor(finalMessage);
         final budget = ref.read(webToolBudgetProvider);
-        if (isChainStart) budget.reset(chainKey);
+        if (isChainStart) {
+          budget.reset(chainKey);
+          _toolFailureFeedback.reset(chainKey);
+        }
 
         final ownedTools = {
           for (final tool in await registry.listTools()) tool.name: tool,
@@ -2712,6 +2722,18 @@ class ChatNotifier extends Notifier<ChatState> {
           toolEvents.addAll(loopResult.events);
         }
 
+        // Plain failures (network errors, timeouts) are fed back too, so the
+        // model can retry or choose an alternate source instead of the turn
+        // ending on the failed tool row. Bounded per tool per chain so a
+        // broken tool cannot loop forever.
+        for (final event in toolEvents) {
+          if (event.status != ToolEventStatus.failed) continue;
+          if (isWebBudgetSkipFailure(event)) continue;
+          if (!_toolFailureFeedback.allow(chainKey, event.toolName)) continue;
+          _toolFailureFeedback.record(chainKey, event.toolName);
+          failureFeedbackEventIds.add(event.eventId);
+        }
+
         // Skipped overdraws surface as failed tool events so the tool rows
         // stay readable AND the failure text flows to the model through
         // the same tool-message feedback path.
@@ -2779,10 +2801,13 @@ class ChatNotifier extends Notifier<ChatState> {
           .toList();
       final budgetSkips = toolEvents.where(isWebBudgetSkipFailure).toList();
       if (ref.mounted &&
-          (completedResults.isNotEmpty || budgetSkips.isNotEmpty)) {
+          (completedResults.isNotEmpty ||
+              budgetSkips.isNotEmpty ||
+              failureFeedbackEventIds.isNotEmpty)) {
         await _sendFollowupWithToolResults(
           previousAssistant: finalMessage,
           toolEvents: toolEvents,
+          failureFeedbackEventIds: failureFeedbackEventIds,
           attachedScreenshotId: attachedScreenshotRow?.id,
           server: server,
           selectedModel: selectedModel,
