@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:localmind/core/routes/app_routes.dart';
+import 'package:localmind/core/theme/colors.dart';
 import 'package:localmind/features/memories/data/models/memory.dart';
 import 'package:localmind/features/memories/providers/memory_providers.dart';
 import 'package:localmind/l10n/app_localizations.dart';
@@ -20,6 +21,19 @@ class _MemoriesScreenState extends ConsumerState<MemoriesScreen> {
   final _search = TextEditingController();
   bool _graph = false;
   String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    // Repair rows duplicated by the old import path before the first list read.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      try {
+        ref.read(memoryStoreProvider).dedupeById();
+      } catch (_) {}
+      ref.invalidate(memoriesProvider);
+    });
+  }
 
   @override
   void dispose() {
@@ -75,7 +89,6 @@ class _MemoriesScreenState extends ConsumerState<MemoriesScreen> {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final rows = _filtered;
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -120,7 +133,42 @@ class _MemoriesScreenState extends ConsumerState<MemoriesScreen> {
             ),
           ),
           Expanded(
-            child: _graph
+            child: _body(theme, isDark),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _body(ThemeData theme, bool isDark) {
+    final async = ref.watch(memoriesProvider);
+    return async.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            'Could not load memories: $error',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: theme.colorScheme.error),
+          ),
+        ),
+      ),
+      data: (_) {
+        final rows = _filtered;
+        if (rows.isEmpty) {
+          return Center(
+            child: Text(
+              'No memories yet.',
+              style: TextStyle(
+                color: isDark
+                    ? AppColors.darkMutedText
+                    : AppColors.lightMutedText,
+              ),
+            ),
+          );
+        }
+        return _graph
                 ? Padding(
                     padding: const EdgeInsets.all(16),
                     child: MemoryGraphView(
@@ -152,10 +200,8 @@ class _MemoriesScreenState extends ConsumerState<MemoriesScreen> {
                         onTap: () => _open(memory),
                       );
                     },
-                  ),
-          ),
-        ],
-      ),
+                  );
+      },
     );
   }
 }
