@@ -2,12 +2,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../../core/providers/app_providers.dart';
+import '../../../core/services/google_sign_in_session.dart';
 import '../../../core/providers/storage_providers.dart';
 import '../../../core/services/data_backup_service.dart';
 import '../../conversations/providers/conversation_providers.dart';
@@ -16,7 +18,11 @@ import '../../saved_messages/providers/saved_message_providers.dart';
 import '../../settings/data/models/app_settings.dart';
 import '../data/models/cloud_sync_models.dart';
 import '../data/repositories/cloud_sync_local_repository.dart';
+import '../data/repositories/google_drive_cloud_sync_repository.dart';
 import '../data/repositories/s3_cloud_sync_repository.dart';
+import '../data/storage/cloud_sync_storage.dart';
+import '../services/cloud_backup_rotation_service.dart';
+import '../services/google_drive_api.dart';
 import '../services/cloud_sync_crypto_service.dart';
 import '../services/cloud_sync_merge_service.dart';
 import '../services/cloud_attachment_reference_resolver.dart';
@@ -51,6 +57,7 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
   bool _applyingRemote = false;
   int _retryIndex = 0;
   int _operationGeneration = 0;
+  bool _forceBackup = false;
 
   bool get isApplyingRemote => _applyingRemote;
 
@@ -79,6 +86,43 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
 
   S3SyncConfig? get config => _local.loadConfig();
 
+  GoogleSignInSession get _googleSession =>
+      ref.read(googleSignInSessionProvider);
+
+  CloudSyncStorage _storageFor(
+    S3SyncConfig config,
+    CloudSyncCredentials? credentials,
+  ) {
+    if (config.provider == CloudSyncProviderKind.googleDrive) {
+      return GoogleDriveCloudSyncRepository(
+        api: GoogleDriveApi(
+          Dio(),
+          ({bool interactive = false}) =>
+              _googleSession.accessToken(interactive: interactive),
+        ),
+      );
+    }
+    if (credentials == null) {
+      throw const CloudSyncFailure(
+        CloudSyncFailureKind.credentials,
+        'S3 credentials are missing.',
+      );
+    }
+    return S3CloudSyncRepository(config: config, credentials: credentials);
+  }
+
+  Future<Directory> _rotationRoot(CloudSyncProviderKind provider) async {
+    final support = await getApplicationSupportDirectory();
+    return Directory(
+      p.join(support.path, 'cloud-backups', provider.name),
+    );
+  }
+
+  Future<CloudSyncStorage> testConnectionStorage(
+    S3SyncConfig config,
+    CloudSyncCredentials? credentials,
+  ) async => _storageFor(config, credentials);
+
   Future<void> testConnection(
     S3SyncConfig config,
     CloudSyncCredentials credentials,
@@ -89,21 +133,29 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
 
   Future<void> configure({
     required S3SyncConfig config,
-    required CloudSyncCredentials credentials,
+    CloudSyncCredentials? credentials,
     required String passphrase,
+    String? googleAccount,
   }) async {
-    final validation = config.validate();
+    final account = (googleAccount ?? config.googleAccount)?.trim() ?? '';
+    final validation = config.provider == CloudSyncProviderKind.s3
+        ? config.validate()
+        : account.isEmpty
+        ? 'Connect a Google account first.'
+        : null;
     if (validation != null) {
       throw CloudSyncFailure(CloudSyncFailureKind.validation, validation);
     }
-    final enabledConfig = config.copyWith(enabled: true);
-    final remoteRepository = S3CloudSyncRepository(
-      config: enabledConfig,
-      credentials: credentials,
+    final enabledConfig = config.copyWith(
+      enabled: true,
+      googleAccount: account.isEmpty ? null : account,
     );
+    final remoteRepository = _storageFor(enabledConfig, credentials);
     state = state.copyWith(
       phase: CloudSyncPhase.syncing,
-      message: 'Testing S3 connection…',
+      message: config.provider == CloudSyncProviderKind.googleDrive
+          ? 'Testing Google Drive…'
+          : 'Testing S3 connection…',
     );
     try {
       await remoteRepository.testConnection();
@@ -117,6 +169,7 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
       }
       await _local.saveConfig(enabledConfig);
       await _local.saveSecrets(
+        provider: config.provider,
         credentials: credentials,
         masterKey: masterKey,
         salt: salt,
@@ -151,13 +204,17 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
     }
     final config = _local.loadConfig();
     if (config == null || !config.enabled) return;
-    final credentials = await _local.loadCredentials();
+    final credentials = config.provider == CloudSyncProviderKind.s3
+        ? await _local.loadCredentials()
+        : null;
     if (!ref.mounted) return;
-    final masterKey = await _local.loadMasterKey();
+    final masterKey = await _local.loadMasterKey(config.provider);
     if (!ref.mounted) return;
-    final salt = await _local.loadSalt();
+    final salt = await _local.loadSalt(config.provider);
     if (!ref.mounted) return;
-    if (credentials == null || masterKey == null || salt == null) {
+    if ((config.provider == CloudSyncProviderKind.s3 && credentials == null) ||
+        masterKey == null ||
+        salt == null) {
       if (ref.mounted) {
         state = state.copyWith(
           phase: CloudSyncPhase.locked,
@@ -227,15 +284,12 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
 
   Future<List<String>> _performSync(
     S3SyncConfig config,
-    CloudSyncCredentials credentials,
+    CloudSyncCredentials? credentials,
     List<int> masterKey,
     List<int> salt,
     int generation,
   ) async {
-    final repository = S3CloudSyncRepository(
-      config: config,
-      credentials: credentials,
-    );
+    final repository = _storageFor(config, credentials);
     final journal = await _local.loadJournal();
     if (!ref.mounted) {
       throw const CloudSyncFailure(
@@ -270,6 +324,20 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
 
     for (var attempt = 0; attempt < 3; attempt++) {
       _ensureActive(generation);
+      if (config.provider == CloudSyncProviderKind.googleDrive &&
+          repository is GoogleDriveCloudSyncRepository) {
+        final now = DateTime.now().toUtc();
+        final lease = await repository.readLease();
+        if (repository.isLeaseHeldByOther(lease, deviceId, now)) {
+          throw const CloudSyncFailure(
+            CloudSyncFailureKind.conflict,
+            'Another device is syncing. Try again when it finishes.',
+          );
+        }
+        await repository.writeLease(
+          CloudSyncLease(deviceId: deviceId, heartbeatAt: now),
+        );
+      }
       final remoteObject = await repository.readState();
       _ensureActive(generation);
       if (remoteObject != null && remoteObject.etag == null) {
@@ -303,12 +371,33 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
         var etag = remoteObject?.etag;
         if (remoteHash != mergedStateHash || remote == null) {
           _ensureActive(generation);
+          if (remoteObject != null) {
+            final now = DateTime.now().toUtc();
+            final lastBackup = DateTime.tryParse(
+              journal['lastBackupAt'] as String? ?? '',
+            );
+            if (_forceBackup ||
+                lastBackup == null ||
+                now.difference(lastBackup) >=
+                    CloudBackupRotationService.minimumInterval) {
+              _forceBackup = false;
+              final root = await _rotationRoot(config.provider);
+              await CloudBackupRotationService(localRoot: root)
+                  .rotateBeforeWrite(
+                    storage: repository,
+                    existingState: remoteObject.bytes,
+                    now: now,
+                  );
+              journal['lastBackupAt'] = now.toIso8601String();
+            }
+          }
           final encrypted = await _crypto.encryptState(
             utf8.encode(result.snapshot.encode()),
             masterKey: masterKey,
             salt: salt,
           );
-          etag = await repository.writeState(
+          etag = await repository.writeObject(
+            repository.stateKey,
             encrypted,
             expectedEtag: remoteObject?.etag,
             createOnly: remoteObject == null,
@@ -420,7 +509,7 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
 
   Future<void> _prepareAttachments(
     Map<String, dynamic> payload,
-    S3CloudSyncRepository repository,
+    CloudSyncStorage repository,
     List<int> masterKey,
     List<int> salt,
     List<String> warnings,
@@ -512,10 +601,12 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
       index: index,
     );
     if (previous == null) {
-      throw const CloudSyncFailure(
-        CloudSyncFailureKind.corruptedData,
-        'A local attachment is unavailable and has no prior cloud reference.',
+      // The file is gone and the cloud never had it: dropping the reference is
+      // the only honest option — failing the whole sync forever would be worse.
+      warnings.add(
+        'Skipped an attachment that is no longer available locally.',
       );
+      return;
     }
     refs.add(previous);
     warnings.add('Preserved an unavailable attachment from cloud history.');
@@ -523,7 +614,7 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
 
   Future<void> _applySnapshot(
     CloudSyncSnapshot snapshot,
-    S3CloudSyncRepository repository,
+    CloudSyncStorage repository,
     List<int> masterKey,
     List<String> warnings,
     int generation,
@@ -596,7 +687,7 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
 
   Future<void> _materializeAttachments(
     Map<String, dynamic> payload,
-    S3CloudSyncRepository repository,
+    CloudSyncStorage repository,
     List<int> masterKey,
   ) async {
     final appDir = await getApplicationDocumentsDirectory();
@@ -644,11 +735,51 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
     }
   }
 
+  /// Restores the saved Google session after a restart (silent, no prompt).
+  Future<void> restoreGoogle() async {
+    final config = _local.loadConfig();
+    if (config?.provider != CloudSyncProviderKind.googleDrive) return;
+    final account = await _googleSession.restore();
+    if (!ref.mounted || account == null) return;
+    state = state.copyWith(
+      phase: CloudSyncPhase.ready,
+      message: 'Connected as ${account.email}.',
+    );
+  }
+
+  Future<void> connectGoogle() async {
+    final account = await _googleSession.connect();
+    // Grant the Drive scope now, while the user is in the foreground: the
+    // authorization is cached and later syncs refresh it silently.
+    await _googleSession.accessToken(interactive: true);
+    if (!ref.mounted) return;
+    state = state.copyWith(
+      phase: CloudSyncPhase.ready,
+      message: 'Connected as ${account.email}.',
+    );
+  }
+
+  Future<void> disconnectGoogle() async {
+    _operationGeneration++;
+    _debounce?.cancel();
+    _retryTimer?.cancel();
+    await _googleSession.disconnect();
+    await _local.disconnect(provider: CloudSyncProviderKind.googleDrive);
+    if (!ref.mounted) return;
+    state = const CloudSyncStatus();
+  }
+
+  /// Forces the next upload to rotate a backup even inside the hourly window.
+  Future<void> backUpNow() async {
+    _forceBackup = true;
+    await syncNow(rethrowErrors: true);
+  }
+
   Future<void> disconnect() async {
     _operationGeneration++;
     _debounce?.cancel();
     _retryTimer?.cancel();
-    await _local.disconnect();
+    await _local.disconnect(provider: config?.provider);
     state = const CloudSyncStatus();
   }
 }
