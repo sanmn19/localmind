@@ -8,11 +8,16 @@ class MemoryRepository {
 
   final MemoryStore _store;
 
-  /// Every live memory (not archived, not superseded).
-  List<Memory> list() => _store
-      .list()
-      .where((m) => !m.archived && m.supersededById == null)
-      .toList();
+  /// Every live memory (not archived, not superseded, not expired).
+  List<Memory> list() {
+    final now = DateTime.now();
+    return _store
+        .list()
+        .where(
+          (m) => !m.archived && m.supersededById == null && !_isExpired(m, now),
+        )
+        .toList();
+  }
 
   Memory remember({
     required String title,
@@ -21,6 +26,10 @@ class MemoryRepository {
     int importance = 50,
     String? scopeConversationId,
     String? excludeMemoryId,
+    List<String> tags = const [],
+    String shortSummary = '',
+    DateTime? expiresAt,
+    String? sourceApp,
   }) {
     final trimmedTitle = title.trim();
     final trimmedContent = content.trim();
@@ -29,12 +38,20 @@ class MemoryRepository {
     }
     final normalizedTitle = trimmedTitle.toLowerCase();
     final normalizedContent = trimmedContent.toLowerCase();
+    final normalizedTags = _normalizeTags(tags);
+    final trimmedSummary = shortSummary.trim();
     for (final existing in _store.list()) {
       if (existing.id == excludeMemoryId) continue;
       if (existing.archived || existing.supersededById != null) continue;
       if (existing.title.trim().toLowerCase() == normalizedTitle &&
           existing.content.trim().toLowerCase() == normalizedContent) {
-        final updated = existing.copyWith(updatedAt: DateTime.now());
+        final updated = existing.copyWith(
+          updatedAt: DateTime.now(),
+          tags: _mergeTags(existing.tags, normalizedTags),
+          shortSummary: _mergeSummary(existing.shortSummary, trimmedSummary),
+          expiresAt: expiresAt,
+          sourceApp: sourceApp ?? existing.sourceApp,
+        );
         _store.put(updated);
         return updated;
       }
@@ -50,6 +67,10 @@ class MemoryRepository {
         content: trimmedContent,
         importance: importance.clamp(0, 100),
         updatedAt: DateTime.now(),
+        tags: _mergeTags(existing.tags, normalizedTags),
+        shortSummary: _mergeSummary(existing.shortSummary, trimmedSummary),
+        expiresAt: expiresAt,
+        sourceApp: sourceApp ?? existing.sourceApp,
       );
       _store.put(updated);
       return updated;
@@ -64,9 +85,23 @@ class MemoryRepository {
       createdAt: now,
       updatedAt: now,
       scopeConversationId: scopeConversationId,
+      tags: normalizedTags,
+      shortSummary: trimmedSummary,
+      expiresAt: expiresAt,
+      sourceApp: sourceApp,
     );
     _store.put(memory);
     return memory;
+  }
+
+  /// Archives every live memory whose expiry has passed.
+  void pruneExpired({DateTime? now}) {
+    final cutoff = now ?? DateTime.now();
+    for (final memory in _store.list()) {
+      if (memory.archived || memory.supersededById != null) continue;
+      if (!_isExpired(memory, cutoff)) continue;
+      _store.put(memory.copyWith(archived: true));
+    }
   }
 
   /// Stores a replacement and marks [oldId] superseded by it.
@@ -91,6 +126,10 @@ class MemoryRepository {
       importance: importance ?? old.importance,
       scopeConversationId: old.scopeConversationId,
       excludeMemoryId: oldId,
+      tags: old.tags,
+      shortSummary: old.shortSummary,
+      expiresAt: old.expiresAt,
+      sourceApp: old.sourceApp,
     );
     _store.put(old.copyWith(supersededById: replacement.id));
     return replacement;
@@ -154,6 +193,36 @@ class MemoryRepository {
         ),
       );
     }
+  }
+
+  static const _maxTags = 8;
+
+  /// Lowercases, trims, drops blanks and duplicates, and caps at [_maxTags].
+  static List<String> _normalizeTags(Iterable<String> tags) {
+    final normalized = <String>[];
+    for (final tag in tags) {
+      final value = tag.trim().toLowerCase();
+      if (value.isEmpty || normalized.contains(value)) continue;
+      normalized.add(value);
+      if (normalized.length == _maxTags) break;
+    }
+    return normalized;
+  }
+
+  /// Existing tags win on order; incoming tags are appended after normalization.
+  static List<String> _mergeTags(
+    Iterable<String> existing,
+    Iterable<String> incoming,
+  ) => _normalizeTags([...existing, ...incoming]);
+
+  /// Keeps the stored summary unless the caller supplied a new one.
+  static String _mergeSummary(String existing, String incoming) =>
+      incoming.isEmpty ? existing : incoming;
+
+  /// A memory expires once its expiry instant is reached; null means permanent.
+  static bool _isExpired(Memory memory, DateTime now) {
+    final expiresAt = memory.expiresAt;
+    return expiresAt != null && !expiresAt.isAfter(now);
   }
 
   static const _titleStopWords = {

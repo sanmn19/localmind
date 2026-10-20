@@ -112,4 +112,120 @@ void main() {
     expect(touched.useCount, 1);
     expect(touched.lastUsedAt, isNotNull);
   });
+
+  test('remember normalizes tags and stores expiry', () {
+    final repo = MemoryRepository(InMemoryMemoryStore());
+    final memory = repo.remember(
+      title: 'Standup',
+      content: 'Standup moved to 10:00.',
+      kind: MemoryKind.inferred,
+      tags: const [' Work ', 'work', 'Standup'],
+      shortSummary: 'Standup at 10:00',
+      expiresAt: DateTime(2026, 10, 21),
+      sourceApp: 'com.whatsapp',
+    );
+    expect(memory.tags, ['work', 'standup']);
+    expect(memory.shortSummary, 'Standup at 10:00');
+    expect(memory.expiresAt, DateTime(2026, 10, 21));
+    expect(memory.sourceApp, 'com.whatsapp');
+  });
+
+  test('list and pruneExpired exclude an expired inferred memory', () {
+    final repo = MemoryRepository(InMemoryMemoryStore());
+    repo.remember(
+      title: 'Deadline',
+      content: 'Ship on Monday',
+      kind: MemoryKind.inferred,
+      expiresAt: DateTime(2026, 10, 19),
+    );
+    expect(repo.list(), isEmpty);
+    repo.pruneExpired(now: DateTime(2026, 10, 20));
+    expect(repo.list(), isEmpty);
+  });
+
+  test('a near-duplicate inferred memory updates tags and expiry', () {
+    final repo = MemoryRepository(InMemoryMemoryStore());
+    final first = repo.remember(
+      title: 'Standup time',
+      content: '10:00',
+      kind: MemoryKind.inferred,
+      tags: const ['work'],
+    );
+    final second = repo.remember(
+      title: 'Standup time',
+      content: '10:30',
+      kind: MemoryKind.inferred,
+      tags: const ['work', 'standup'],
+      expiresAt: DateTime(2026, 10, 21),
+    );
+    expect(second.id, first.id);
+    expect(second.tags, ['work', 'standup']);
+    expect(second.expiresAt, DateTime(2026, 10, 21));
+  });
+
+  test('correct preserves tags, summary, expiry, and source app', () {
+    final repo = MemoryRepository(InMemoryMemoryStore());
+    final old = repo.remember(
+      title: 'Standup',
+      content: '10:00',
+      kind: MemoryKind.inferred,
+      tags: const ['work'],
+      shortSummary: 'Standup at 10:00',
+      expiresAt: DateTime(2026, 10, 21),
+      sourceApp: 'com.whatsapp',
+    );
+    final fixed = repo.correct(old.id, title: 'Standup', content: '10:30');
+
+    expect(fixed.tags, ['work']);
+    expect(fixed.shortSummary, 'Standup at 10:00');
+    expect(fixed.expiresAt, DateTime(2026, 10, 21));
+    expect(fixed.sourceApp, 'com.whatsapp');
+  });
+
+  test('remember caps tags at eight and drops blanks', () {
+    final repo = MemoryRepository(InMemoryMemoryStore());
+    final memory = repo.remember(
+      title: 'Tags',
+      content: 'Many tags',
+      tags: const [
+        '',
+        '  ',
+        'One',
+        'two',
+        'three',
+        'four',
+        'five',
+        'six',
+        'seven',
+        'eight',
+        'nine',
+      ],
+    );
+
+    expect(memory.tags, [
+      'one',
+      'two',
+      'three',
+      'four',
+      'five',
+      'six',
+      'seven',
+      'eight',
+    ]);
+  });
+
+  test('pruneExpired archives the expired row', () {
+    final store = InMemoryMemoryStore();
+    final repo = MemoryRepository(store);
+    repo.remember(
+      title: 'Deadline',
+      content: 'Ship on Monday',
+      kind: MemoryKind.inferred,
+      expiresAt: DateTime(2026, 10, 19),
+    );
+
+    repo.pruneExpired(now: DateTime(2026, 10, 20));
+
+    expect(store.list().single.archived, isTrue);
+  });
 }
