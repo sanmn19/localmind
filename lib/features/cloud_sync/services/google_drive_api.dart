@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 
 /// Minimal Drive v3 REST client (JSON metadata + media upload/download).
@@ -57,8 +59,19 @@ class GoogleDriveApi {
     final Response<Map<String, dynamic>> response;
     if (fileId == null) {
       final form = FormData();
-      form.fields.add(
-        MapEntry('metadata', '{"name":"$name","parents":["$parentId"]}'),
+      // Drive requires the metadata part to be JSON; Dio's form fields are
+      // text/plain, which Drive rejects with a 400.
+      form.files.add(
+        MapEntry(
+          'metadata',
+          MultipartFile.fromString(
+            jsonEncode({
+              'name': name,
+              'parents': [parentId],
+            }),
+            contentType: DioMediaType('application', 'json'),
+          ),
+        ),
       );
       form.files.add(
         MapEntry(
@@ -143,10 +156,14 @@ class GoogleDriveApi {
   void _ensureSuccess(Response response) {
     final status = response.statusCode ?? 0;
     if (status >= 200 && status < 300) return;
+    final data = response.data;
+    final apiMessage = data is Map && data['error'] is Map
+        ? (data['error'] as Map)['message']?.toString()
+        : null;
     final detail = switch (status) {
       401 || 403 => 'Google Drive authorization expired.',
       404 => 'The Drive backup folder or file was not found.',
-      _ => 'Drive request failed ($status).',
+      _ => 'Drive request failed ($status${apiMessage == null ? '' : ': $apiMessage'}).',
     };
     throw DioException(
       requestOptions: response.requestOptions,
