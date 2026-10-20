@@ -7017,6 +7017,18 @@ abstract class AppLocalizations {
   /// **'Facts you ask LocalMind to remember are injected as context, never as instructions.'**
   String get memories_enabled_desc;
 
+  /// No description provided for @auto_memory_enabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-remember'**
+  String get auto_memory_enabled;
+
+  /// No description provided for @auto_memory_enabled_desc.
+  ///
+  /// In en, this message translates to:
+  /// **'After each reply, a hidden prompt asks the model whether anything in the conversation is worth remembering. Facts are saved silently; only explicit memory writes ask for approval.'**
+  String get auto_memory_enabled_desc;
+
   /// Memories screen: add button/dialog title
   ///
   /// In en, this message translates to:

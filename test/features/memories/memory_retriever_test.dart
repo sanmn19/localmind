@@ -101,6 +101,32 @@ void main() {
     expect(rows.map((m) => m.id), contains(b.id));
   });
 
+  test('conversation-scoped memories stay in their conversation', () async {
+    final store = InMemoryMemoryStore();
+    final repo = MemoryRepository(store);
+    final global = repo.remember(title: 'Coffee', content: 'Oat milk');
+    final chat = repo.remember(
+      title: 'Trip plan',
+      content: 'Oslo in May',
+      scopeConversationId: 'c1',
+    );
+
+    final retriever = _retriever(
+      repo,
+      store,
+      const NoopEmbeddingGateway(),
+    );
+    final inChat = await retriever.retrieve('Oslo in May', conversationId: 'c1');
+    final otherChat = await retriever.retrieve(
+      'Coffee',
+      conversationId: 'c2',
+    );
+
+    expect(inChat.map((m) => m.id), contains(chat.id));
+    expect(otherChat.map((m) => m.id), contains(global.id));
+    expect(otherChat.map((m) => m.id), isNot(contains(chat.id)));
+  });
+
   test('the budget caps the rows', () async {
     final store = InMemoryMemoryStore();
     final repo = MemoryRepository(store);

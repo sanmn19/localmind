@@ -19,6 +19,8 @@ class MemoryRepository {
     required String content,
     MemoryKind kind = MemoryKind.fact,
     int importance = 50,
+    String? scopeConversationId,
+    String? excludeMemoryId,
   }) {
     final trimmedTitle = title.trim();
     final trimmedContent = content.trim();
@@ -28,6 +30,7 @@ class MemoryRepository {
     final normalizedTitle = trimmedTitle.toLowerCase();
     final normalizedContent = trimmedContent.toLowerCase();
     for (final existing in _store.list()) {
+      if (existing.id == excludeMemoryId) continue;
       if (existing.archived || existing.supersededById != null) continue;
       if (existing.title.trim().toLowerCase() == normalizedTitle &&
           existing.content.trim().toLowerCase() == normalizedContent) {
@@ -35,6 +38,21 @@ class MemoryRepository {
         _store.put(updated);
         return updated;
       }
+    }
+    // The extractor is allowed to rephrase a title, so also merge on a high
+    // title-token overlap. Without this, auto-remember slowly accumulates
+    // near-duplicates of the same fact.
+    for (final existing in _store.list()) {
+      if (existing.id == excludeMemoryId) continue;
+      if (existing.archived || existing.supersededById != null) continue;
+      if (_titleSimilarity(existing.title, trimmedTitle) < 0.8) continue;
+      final updated = existing.copyWith(
+        content: trimmedContent,
+        importance: importance.clamp(0, 100),
+        updatedAt: DateTime.now(),
+      );
+      _store.put(updated);
+      return updated;
     }
     final now = DateTime.now();
     final memory = Memory(
@@ -45,6 +63,7 @@ class MemoryRepository {
       importance: importance.clamp(0, 100),
       createdAt: now,
       updatedAt: now,
+      scopeConversationId: scopeConversationId,
     );
     _store.put(memory);
     return memory;
@@ -70,6 +89,8 @@ class MemoryRepository {
       content: content,
       kind: kind ?? old.kind,
       importance: importance ?? old.importance,
+      scopeConversationId: old.scopeConversationId,
+      excludeMemoryId: oldId,
     );
     _store.put(old.copyWith(supersededById: replacement.id));
     return replacement;
@@ -133,5 +154,25 @@ class MemoryRepository {
         ),
       );
     }
+  }
+
+  static const _titleStopWords = {
+    'a', 'an', 'and', 'the', 'my', 'our', 'your', 'user', 'users',
+    'is', 'are', 'of', 'to', 'for', 'in', 'on', 'with', 'prefers',
+  };
+
+  static Set<String> _titleTokens(String title) => title
+      .toLowerCase()
+      .split(RegExp(r'[^a-z0-9]+'))
+      .where((token) => token.isNotEmpty && !_titleStopWords.contains(token))
+      .toSet();
+
+  static double _titleSimilarity(String a, String b) {
+    final left = _titleTokens(a);
+    final right = _titleTokens(b);
+    if (left.isEmpty || right.isEmpty) return 0;
+    final intersection = left.intersection(right).length;
+    final union = left.union(right).length;
+    return union == 0 ? 0 : intersection / union;
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/storage_providers.dart';
+import '../data/memory_extraction_service.dart';
 import '../data/memory_repository.dart';
 import '../data/memory_store.dart';
 import '../data/models/memory.dart';
@@ -26,6 +27,10 @@ final memoryRelationsProvider = FutureProvider<List<MemoryRelation>>((ref) async
   return ref.watch(memoryStoreProvider).listRelations();
 });
 
+final memoryExtractionServiceProvider = Provider<MemoryExtractionService>(
+  (ref) => MemoryExtractionService(),
+);
+
 final memoriesNotifierProvider =
     NotifierProvider<MemoriesNotifier, int>(MemoriesNotifier.new);
 
@@ -44,6 +49,7 @@ class MemoriesNotifier extends Notifier<int> {
     required String content,
     MemoryKind kind = MemoryKind.fact,
     int importance = 50,
+    String? scopeConversationId,
   }) async {
     final memory = ref
         .read(memoryRepositoryProvider)
@@ -52,6 +58,7 @@ class MemoriesNotifier extends Notifier<int> {
           content: content,
           kind: kind,
           importance: importance,
+          scopeConversationId: scopeConversationId,
         );
     ref.invalidate(memoriesProvider);
     state++;

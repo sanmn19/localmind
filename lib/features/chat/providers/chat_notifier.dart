@@ -381,6 +381,10 @@ class ChatNotifier extends Notifier<ChatState> {
         );
     if (!ref.mounted) return;
     _recomputeConversationTotal(conversationId, messages: timeline);
+    _maybeAutoExtractMemories(
+      conversationId: conversationId,
+      timeline: timeline,
+    );
 
     final lastUserMessage = timeline
         .where((m) => m.role == MessageRole.user)
@@ -1428,7 +1432,10 @@ class ChatNotifier extends Notifier<ChatState> {
 
   /// Retrieves the memories relevant to the latest user turn and renders the
   /// `# Memories` section. Best-effort: a failure never blocks the request.
-  Future<String?> _buildMemoriesSection(List<Message> timeline) async {
+  Future<String?> _buildMemoriesSection(
+    List<Message> timeline, {
+    String? conversationId,
+  }) async {
     try {
       String? query;
       for (final message in timeline.reversed) {
@@ -1438,7 +1445,13 @@ class ChatNotifier extends Notifier<ChatState> {
         }
       }
       if (query == null || query.trim().isEmpty) return null;
-      final memories = await ref.read(memoryRetrieverProvider).retrieve(query);
+      final memories = await ref
+          .read(memoryRetrieverProvider)
+          .retrieve(
+            query,
+            conversationId:
+                conversationId ?? timeline.lastOrNull?.conversationId,
+          );
       if (memories.isEmpty) return null;
       for (final memory in memories) {
         ref.read(memoryRepositoryProvider).touch(memory.id);
@@ -1787,6 +1800,82 @@ class ChatNotifier extends Notifier<ChatState> {
   /// Titles a chat after its first reply. Defaults to the open chat; pass
   /// [conversationId] and its [timeline] for a reply that finished in the
   /// background.
+  /// Per-conversation throttle for the hidden auto-memory call. Extraction
+  /// is a bonus, never a reason to spend a model call on every turn.
+  final Map<String, DateTime> _lastMemoryExtraction = {};
+  Future<void>? _memoryExtractionInFlight;
+
+  /// Asks the same provider, in the background, whether the completed turn
+  /// contains anything worth remembering. Silent: the call is not added to the
+  /// transcript and failures only log.
+  void _maybeAutoExtractMemories({
+    required String conversationId,
+    required List<Message> timeline,
+  }) {
+    final settings = ref.read(settingsProvider);
+    if (!settings.memoriesEnabled || !settings.autoMemoryEnabled) return;
+    if (timeline.length < 2) return;
+    if (_memoryExtractionInFlight != null) return;
+    final lastRun = _lastMemoryExtraction[conversationId];
+    if (lastRun != null &&
+        DateTime.now().difference(lastRun) < const Duration(seconds: 90)) {
+      return;
+    }
+
+    final conversation = ref
+        .read(conv.conversationsProvider)
+        .value
+        ?.where((candidate) => candidate.id == conversationId)
+        .firstOrNull;
+    if (conversation == null || conversation.isTemporary) return;
+
+    final server = _resolveServerForTitle(conversation);
+    final modelId = _resolveModelIdForTitle(conversation);
+    if (server == null || modelId == null) return;
+    final chatService = _resolveChatServiceForTitle(server);
+    if (chatService == null) return;
+
+    final existingTitles = ref
+        .read(memoryRepositoryProvider)
+        .list()
+        .map((memory) => memory.title)
+        .toList();
+
+    _lastMemoryExtraction[conversationId] = DateTime.now();
+    _memoryExtractionInFlight = () async {
+      try {
+        final extracted = await ref
+            .read(memoryExtractionServiceProvider)
+            .extract(
+              chatService: chatService,
+              server: server,
+              modelId: modelId,
+              params: ref.read(chatParamsProvider),
+              messages: timeline,
+              existingTitles: existingTitles,
+            );
+        if (!ref.mounted || extracted.isEmpty) return;
+        final repository = ref.read(memoryRepositoryProvider);
+        for (final item in extracted) {
+          repository.remember(
+            title: item.title,
+            content: item.content,
+            kind: item.kind,
+            importance: item.importance,
+            scopeConversationId: item.conversationScoped
+                ? conversationId
+                : null,
+          );
+        }
+        ref.invalidate(memoriesProvider);
+      } catch (error) {
+        Log.warning('Auto memory extraction failed: $error');
+      } finally {
+        _memoryExtractionInFlight = null;
+      }
+    }();
+  }
+
   Future<void>? _maybeAutoGenerateTitleAfterFirstReply({
     String? conversationId,
     List<Message>? timeline,

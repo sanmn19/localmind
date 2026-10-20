@@ -25,8 +25,15 @@ class MemoryRetriever {
     String query, {
     int topK = defaultTopK,
     int budget = defaultBudget,
+    String? conversationId,
   }) async {
-    final live = repository.list();
+    final live = repository.list()
+        .where(
+          (memory) =>
+              memory.scopeConversationId == null ||
+              memory.scopeConversationId == conversationId,
+        )
+        .toList();
     if (live.isEmpty) return const [];
 
     final byId = {for (final memory in live) memory.id: memory};

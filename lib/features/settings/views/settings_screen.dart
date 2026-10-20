@@ -172,6 +172,12 @@ class _SettingsViewsState extends ConsumerState<SettingsViews> {
           value: settings.memoriesEnabled,
           onChanged: notifier.setMemoriesEnabled,
         ),
+        _ToggleSetting(
+          label: l10n.auto_memory_enabled,
+          description: l10n.auto_memory_enabled_desc,
+          value: settings.autoMemoryEnabled,
+          onChanged: notifier.setAutoMemoryEnabled,
+        ),
       ],
     );
 

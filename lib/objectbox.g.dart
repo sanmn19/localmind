@@ -982,7 +982,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(12, 1157530772597595285),
     name: 'MemoryEntity',
-    lastPropertyId: const obx_int.IdUid(14, 991201696784785310),
+    lastPropertyId: const obx_int.IdUid(15, 6525833735150016625),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -1068,6 +1068,12 @@ final _entities = <obx_int.ModelEntity>[
         id: const obx_int.IdUid(14, 991201696784785310),
         name: 'archived',
         type: 1,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(15, 6525833735150016625),
+        name: 'scopeConversationId',
+        type: 9,
         flags: 0,
       ),
     ],
@@ -2444,7 +2450,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final supersededByIdOffset = object.supersededById == null
             ? null
             : fbb.writeString(object.supersededById!);
-        fbb.startTable(15);
+        final scopeConversationIdOffset = object.scopeConversationId == null
+            ? null
+            : fbb.writeString(object.scopeConversationId!);
+        fbb.startTable(16);
         fbb.addInt64(0, object.internalId);
         fbb.addOffset(1, idOffset);
         fbb.addInt64(2, object.kindIndex);
@@ -2459,6 +2468,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addOffset(11, sourceMessageIdOffset);
         fbb.addOffset(12, supersededByIdOffset);
         fbb.addBool(13, object.archived);
+        fbb.addOffset(14, scopeConversationIdOffset);
         fbb.finish(fbb.endTable());
         return object.internalId;
       },
@@ -2512,6 +2522,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
           22,
           0,
         );
+        final scopeConversationIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 32);
         final sourceConversationIdParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGetNullable(buffer, rootOffset, 24);
@@ -2538,6 +2551,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           updatedAt: updatedAtParam,
           lastUsedAt: lastUsedAtParam,
           useCount: useCountParam,
+          scopeConversationId: scopeConversationIdParam,
           sourceConversationId: sourceConversationIdParam,
           sourceMessageId: sourceMessageIdParam,
           supersededById: supersededByIdParam,
@@ -3403,6 +3417,11 @@ class MemoryEntity_ {
   /// See [MemoryEntity.archived].
   static final archived = obx.QueryBooleanProperty<MemoryEntity>(
     _entities[11].properties[13],
+  );
+
+  /// See [MemoryEntity.scopeConversationId].
+  static final scopeConversationId = obx.QueryStringProperty<MemoryEntity>(
+    _entities[11].properties[14],
   );
 }
 

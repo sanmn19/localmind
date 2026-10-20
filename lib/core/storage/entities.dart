@@ -882,6 +882,8 @@ class MemoryEntity {
 
   int useCount;
 
+  String? scopeConversationId;
+
   String? sourceConversationId;
 
   String? sourceMessageId;
@@ -901,6 +903,7 @@ class MemoryEntity {
     required this.updatedAt,
     this.lastUsedAt,
     this.useCount = 0,
+    this.scopeConversationId,
     this.sourceConversationId,
     this.sourceMessageId,
     this.supersededById,

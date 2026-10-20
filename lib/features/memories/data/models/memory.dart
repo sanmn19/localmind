@@ -11,6 +11,7 @@ class Memory {
     required this.updatedAt,
     this.lastUsedAt,
     this.useCount = 0,
+    this.scopeConversationId,
     this.sourceConversationId,
     this.sourceMessageId,
     this.supersededById,
@@ -28,6 +29,9 @@ class Memory {
   final DateTime updatedAt;
   final DateTime? lastUsedAt;
   final int useCount;
+  /// Null means the memory is global; otherwise it only applies to this
+  /// conversation.
+  final String? scopeConversationId;
   final String? sourceConversationId;
   final String? sourceMessageId;
 
@@ -56,6 +60,7 @@ class Memory {
       updatedAt: updatedAt ?? this.updatedAt,
       lastUsedAt: lastUsedAt ?? this.lastUsedAt,
       useCount: useCount ?? this.useCount,
+      scopeConversationId: scopeConversationId,
       sourceConversationId: sourceConversationId,
       sourceMessageId: sourceMessageId,
       supersededById: supersededById ?? this.supersededById,

@@ -830,7 +830,7 @@
     },
     {
       "id": "12:1157530772597595285",
-      "lastPropertyId": "14:991201696784785310",
+      "lastPropertyId": "15:6525833735150016625",
       "name": "MemoryEntity",
       "properties": [
         {
@@ -905,6 +905,11 @@
           "id": "14:991201696784785310",
           "name": "archived",
           "type": 1
+        },
+        {
+          "id": "15:6525833735150016625",
+          "name": "scopeConversationId",
+          "type": 9
         }
       ],
       "relations": []

@@ -69,6 +69,8 @@ class DataBackupService {
     'keepPersonaOnNewChat',
     'roleSwapButtonEnabled',
     'showSystemMessagesInChat',
+    'memoriesEnabled',
+    'autoMemoryEnabled',
   };
 
   Map<String, dynamic> _messageToMap(Message message) => {
@@ -261,6 +263,7 @@ class DataBackupService {
             'importance': memory.importance,
             'createdAt': memory.createdAt.toIso8601String(),
             'updatedAt': memory.updatedAt.toIso8601String(),
+            'scopeConversationId': memory.scopeConversationId,
             'sourceConversationId': memory.sourceConversationId,
             'sourceMessageId': memory.sourceMessageId,
             'supersededById': memory.supersededById,
@@ -339,6 +342,9 @@ class DataBackupService {
             importance: (raw['importance'] as num?)?.toInt() ?? 50,
             createdAt: createdAt,
             updatedAt: updatedAt,
+            scopeConversationId: backupImportString(
+              raw['scopeConversationId'],
+            ),
             sourceConversationId: backupImportString(
               raw['sourceConversationId'],
             ),

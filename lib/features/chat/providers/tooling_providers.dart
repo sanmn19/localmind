@@ -147,11 +147,13 @@ Future<bool> shouldAutoApproveTool(
   }
 
   if (await registry.isLocalTool(toolName, {memoriesMcpServerUrl})) {
-    // Remembering is a passive write (a fact, not an action) and auto-runs
-    // while the memories toggle is on. Forgetting always crosses the
-    // approval dialog, like skills.delete.
-    if (toolName == 'memories.forget') return false;
-    return memoriesEnabled;
+    // Reads (list/search) ride the standard local-server bypass; writes
+    // (remember/forget) ALWAYS cross the approval dialog, whatever the
+    // toggle says — the user must see a fact being stored.
+    if (toolName == 'memories.list' || toolName == 'memories.search') {
+      return memoriesEnabled;
+    }
+    return false;
   }
 
   if (await registry.isLocalTool(toolName, {skillsMcpServerUrl})) {

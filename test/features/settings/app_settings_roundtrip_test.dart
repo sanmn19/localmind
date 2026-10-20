@@ -30,6 +30,15 @@ void main() {
     expect(restored.webSearchApiKey, 'k123');
   });
 
+  test('auto-remember defaults off and survives toMap/fromMap', () {
+    expect(AppSettings().autoMemoryEnabled, isFalse);
+    final restored = AppSettings.fromMap(
+      AppSettings().copyWith(autoMemoryEnabled: true).toMap(),
+    );
+    expect(restored.autoMemoryEnabled, isTrue);
+    expect(AppSettings.fromMap({}).autoMemoryEnabled, isFalse);
+  });
+
   test('fromMap tolerates missing web fields (upgrade path)', () {
     final restored = AppSettings.fromMap({'themeMode': 2});
     expect(restored.webToolsEnabled, isFalse);

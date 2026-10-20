@@ -3722,6 +3722,13 @@ class AppLocalizationsZh extends AppLocalizations {
       'Facts you ask LocalMind to remember are injected as context, never as instructions.';
 
   @override
+  String get auto_memory_enabled => 'Auto-remember';
+
+  @override
+  String get auto_memory_enabled_desc =>
+      'After each reply, a hidden prompt asks the model whether anything in the conversation is worth remembering. Facts are saved silently; only explicit memory writes ask for approval.';
+
+  @override
   String get memory_add => 'Add memory';
 
   @override

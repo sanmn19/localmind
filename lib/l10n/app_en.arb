@@ -3845,6 +3845,8 @@
   "memories_enabled": "Remember facts",
   "@memories_enabled": {"description": "Settings toggle for the memories feature"},
   "memories_enabled_desc": "Facts you ask LocalMind to remember are injected as context, never as instructions.",
+  "auto_memory_enabled": "Auto-remember",
+  "auto_memory_enabled_desc": "After each reply, a hidden prompt asks the model whether anything in the conversation is worth remembering. Facts are saved silently; only explicit memory writes ask for approval.",
   "@memories_enabled_desc": {"description": "Settings toggle description"},
   "memory_add": "Add memory",
   "@memory_add": {"description": "Memories screen: add button/dialog title"},
