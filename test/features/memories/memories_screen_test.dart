@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:localmind/features/memories/data/memory_repository.dart';
 import 'package:localmind/features/memories/data/memory_store.dart';
+import 'package:localmind/features/memories/data/models/memory.dart';
 import 'package:localmind/features/memories/providers/memory_providers.dart';
 import 'package:localmind/features/memories/views/components/memory_graph_view.dart';
 import 'package:localmind/features/memories/views/memories_screen.dart';
@@ -56,6 +57,39 @@ void main() {
 
     expect(find.text('Coffee'), findsOneWidget);
     expect(store.list().single.content, 'Oat milk flat white');
+  });
+
+  testWidgets('the manual editor does not offer the inferred kind',
+      (tester) async {
+    final store = InMemoryMemoryStore();
+    final container = ProviderContainer(
+      overrides: [memoryStoreProvider.overrideWithValue(store)],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: _wrap(const MemoriesScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('memory_add')));
+    await tester.pumpAndSettle();
+
+    final dropdown = tester.widget<DropdownButton<MemoryKind>>(
+      find.byType(DropdownButton<MemoryKind>),
+    );
+    expect(
+      dropdown.items!.map((item) => item.value).toSet(),
+      {
+        MemoryKind.fact,
+        MemoryKind.preference,
+        MemoryKind.entity,
+        MemoryKind.event,
+      },
+    );
   });
 
   testWidgets('the graph view renders a node per memory', (tester) async {

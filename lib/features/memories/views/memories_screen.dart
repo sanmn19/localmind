@@ -286,7 +286,9 @@ class _MemoryEditorDialogState extends State<_MemoryEditorDialog> {
               initialValue: _kind,
               decoration: InputDecoration(labelText: l10n.memory_kind),
               items: [
-                for (final kind in MemoryKind.values)
+                for (final kind in MemoryKind.values.where(
+                  (kind) => kind != MemoryKind.inferred,
+                ))
                   DropdownMenuItem(
                     value: kind,
                     child: Text(_kindLabel(l10n, kind)),
