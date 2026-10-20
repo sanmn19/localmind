@@ -735,6 +735,9 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
 
   Future<void> connectGoogle() async {
     final account = await _googleSession.connect();
+    // Grant the Drive scope now, while the user is in the foreground: the
+    // authorization is cached and later syncs refresh it silently.
+    await _googleSession.accessToken(interactive: true);
     if (!ref.mounted) return;
     state = state.copyWith(
       phase: CloudSyncPhase.ready,
