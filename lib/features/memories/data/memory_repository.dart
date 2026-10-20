@@ -40,16 +40,19 @@ class MemoryRepository {
     final normalizedContent = trimmedContent.toLowerCase();
     final normalizedTags = _normalizeTags(tags);
     final trimmedSummary = shortSummary.trim();
+    final now = DateTime.now();
     for (final existing in _store.list()) {
       if (existing.id == excludeMemoryId) continue;
       if (existing.archived || existing.supersededById != null) continue;
+      if (_isExpired(existing, now)) continue;
       if (existing.title.trim().toLowerCase() == normalizedTitle &&
           existing.content.trim().toLowerCase() == normalizedContent) {
         final updated = existing.copyWith(
-          updatedAt: DateTime.now(),
+          updatedAt: now,
           tags: _mergeTags(existing.tags, normalizedTags),
           shortSummary: _mergeSummary(existing.shortSummary, trimmedSummary),
           expiresAt: expiresAt,
+          clearExpiresAt: expiresAt == null,
           sourceApp: sourceApp ?? existing.sourceApp,
         );
         _store.put(updated);
@@ -62,20 +65,21 @@ class MemoryRepository {
     for (final existing in _store.list()) {
       if (existing.id == excludeMemoryId) continue;
       if (existing.archived || existing.supersededById != null) continue;
+      if (_isExpired(existing, now)) continue;
       if (_titleSimilarity(existing.title, trimmedTitle) < 0.8) continue;
       final updated = existing.copyWith(
         content: trimmedContent,
         importance: importance.clamp(0, 100),
-        updatedAt: DateTime.now(),
+        updatedAt: now,
         tags: _mergeTags(existing.tags, normalizedTags),
         shortSummary: _mergeSummary(existing.shortSummary, trimmedSummary),
         expiresAt: expiresAt,
+        clearExpiresAt: expiresAt == null,
         sourceApp: sourceApp ?? existing.sourceApp,
       );
       _store.put(updated);
       return updated;
     }
-    final now = DateTime.now();
     final memory = Memory(
       id: generateUuidV4(),
       kind: kind,
@@ -219,10 +223,10 @@ class MemoryRepository {
   static String _mergeSummary(String existing, String incoming) =>
       incoming.isEmpty ? existing : incoming;
 
-  /// A memory expires once its expiry instant is reached; null means permanent.
+  /// A memory expires only after its expiry instant; null means permanent.
   static bool _isExpired(Memory memory, DateTime now) {
     final expiresAt = memory.expiresAt;
-    return expiresAt != null && !expiresAt.isAfter(now);
+    return expiresAt != null && now.isAfter(expiresAt);
   }
 
   static const _titleStopWords = {

@@ -228,4 +228,64 @@ void main() {
 
     expect(store.list().single.archived, isTrue);
   });
+
+  test('an expired row cannot absorb a new near-duplicate', () {
+    final repo = MemoryRepository(InMemoryMemoryStore());
+    final expired = repo.remember(
+      title: 'Standup time',
+      content: '10:00',
+      kind: MemoryKind.inferred,
+      expiresAt: DateTime(2026, 10, 19),
+    );
+
+    final fresh = repo.remember(
+      title: 'Standup time',
+      content: '10:30',
+      kind: MemoryKind.inferred,
+    );
+
+    expect(fresh.id, isNot(expired.id));
+    expect(repo.list().single.id, fresh.id);
+  });
+
+  test('an expiry equal to now is still live, one second earlier is expired', () {
+    final store = InMemoryMemoryStore();
+    final repo = MemoryRepository(store);
+    final boundary = repo.remember(
+      title: 'Boundary',
+      content: 'still live',
+      kind: MemoryKind.inferred,
+      expiresAt: DateTime(2026, 10, 20, 12),
+    );
+    final past = repo.remember(
+      title: 'Before boundary',
+      content: 'expired',
+      kind: MemoryKind.inferred,
+      expiresAt: DateTime(2026, 10, 20, 11, 59, 59),
+    );
+
+    repo.pruneExpired(now: DateTime(2026, 10, 20, 12));
+
+    final byId = {for (final memory in store.list()) memory.id: memory};
+    expect(byId[boundary.id]!.archived, isFalse);
+    expect(byId[past.id]!.archived, isTrue);
+  });
+
+  test('a null expiry on a near-duplicate clears the old expiry', () {
+    final repo = MemoryRepository(InMemoryMemoryStore());
+    final first = repo.remember(
+      title: 'Standup time',
+      content: '10:00',
+      kind: MemoryKind.inferred,
+      expiresAt: DateTime(2030),
+    );
+    final second = repo.remember(
+      title: 'Standup time',
+      content: '10:30',
+      kind: MemoryKind.inferred,
+    );
+
+    expect(second.id, first.id);
+    expect(second.expiresAt, isNull);
+  });
 }
