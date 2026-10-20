@@ -450,6 +450,13 @@ class _StubConnectionStatus extends server_providers.ConnectionStatusNotifier {
 }
 
 class _FakeConversationService implements AskLocalConversationService {
+  @override
+  Future<Conversation> create() async => conversation;
+
+  @override
+  Future<Conversation> resolve(String? conversationId) async => conversation;
+
+
   static final Conversation conversation = Conversation(
     id: 'ask-local-conv',
     title: askLocalConversationTitle,

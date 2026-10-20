@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
@@ -13,9 +14,20 @@ import '../../features/chat/data/tools/tool_event.dart';
 import '../../features/conversations/data/models/conversation.dart';
 import '../../features/personas/data/models/persona.dart';
 import '../../features/servers/data/models/server.dart';
+import '../../features/skills/data/skills_store.dart';
+import '../../features/memories/data/models/memory.dart';
+import '../../features/memories/data/memory_store.dart';
 import '../../objectbox.g.dart';
 
 class DataBackupService {
+  DataBackupService({
+    Future<Directory> Function()? documentsDirectory,
+  }) : _documentsDirectory =
+           documentsDirectory ?? getApplicationDocumentsDirectory;
+
+  /// Skills live beside the database in the app documents directory; tests
+  /// inject a temporary directory because path_provider needs a binding.
+  final Future<Directory> Function() _documentsDirectory;
   static const _synchronizedSettingKeys = {
     'temperature',
     'topP',
@@ -215,6 +227,151 @@ class DataBackupService {
     }
   }
 
+  /// Skills (name → description/body) and the memory graph (memories +
+  /// relations; embeddings are recomputed on import). Absent sections are no-ops.
+  Future<Map<String, dynamic>> exportSkillsAndMemories(Store store) async {
+    final documents = await _documentsDirectory();
+    final skills = SkillsStore(
+      DirectorySkillFileHost(Future.value(documents)),
+    );
+    final entries = await skills.refresh();
+    final memoryStore = ObjectBoxMemoryStore(
+      memories: store.box<MemoryEntity>(),
+      relations: store.box<MemoryRelationEntity>(),
+      embeddings: store.box<MemoryEmbeddingEntity>(),
+    );
+    final memories = memoryStore.list();
+    final relations = memoryStore.listRelations();
+    return {
+      'skills': [
+        for (final entry in entries)
+          {
+            'name': entry.name,
+            'description': entry.description,
+            'body': entry.body,
+          },
+      ],
+      'memories': [
+        for (final memory in memories)
+          {
+            'id': memory.id,
+            'kind': memory.kind.name,
+            'title': memory.title,
+            'content': memory.content,
+            'importance': memory.importance,
+            'createdAt': memory.createdAt.toIso8601String(),
+            'updatedAt': memory.updatedAt.toIso8601String(),
+            'sourceConversationId': memory.sourceConversationId,
+            'sourceMessageId': memory.sourceMessageId,
+            'supersededById': memory.supersededById,
+            'archived': memory.archived,
+          },
+      ],
+      'memoryRelations': [
+        for (final relation in relations)
+          {
+            'id': relation.id,
+            'fromMemoryId': relation.fromMemoryId,
+            'toMemoryId': relation.toMemoryId,
+            'label': relation.label,
+            'createdAt': relation.createdAt.toIso8601String(),
+          },
+      ],
+    };
+  }
+
+  Future<void> importSkillsAndMemories(
+    Store store,
+    Map<String, dynamic> decoded,
+  ) async {
+    final rawSkills = decoded['skills'];
+    if (rawSkills is List) {
+      final documents = await _documentsDirectory();
+      final skills = SkillsStore(
+        DirectorySkillFileHost(Future.value(documents)),
+      );
+      final existing = await skills.refresh();
+      for (final raw in rawSkills.whereType<Map>()) {
+        final name = backupImportString(raw['name']);
+        final body = raw['body'];
+        if (name == null || body is! String) continue;
+        if (existing.any((entry) => entry.name == name)) {
+          await skills.delete(name);
+        }
+        await skills.add(
+          SkillEntry(
+            name: name,
+            description: backupImportString(raw['description']) ?? '',
+            body: body,
+          ),
+        );
+      }
+    }
+    final memoryStore = ObjectBoxMemoryStore(
+      memories: store.box<MemoryEntity>(),
+      relations: store.box<MemoryRelationEntity>(),
+      embeddings: store.box<MemoryEmbeddingEntity>(),
+    );
+    final rawMemories = decoded['memories'];
+    if (rawMemories is List) {
+      for (final raw in rawMemories.whereType<Map>()) {
+        final id = backupImportString(raw['id']);
+        final title = backupImportString(raw['title']);
+        final content = backupImportString(raw['content']);
+        final createdAt = backupImportDateTime(raw['createdAt']);
+        final updatedAt = backupImportDateTime(raw['updatedAt']);
+        if (id == null ||
+            title == null ||
+            content == null ||
+            createdAt == null ||
+            updatedAt == null) {
+          continue;
+        }
+        memoryStore.put(
+          Memory(
+            id: id,
+            kind: MemoryKind.values.firstWhere(
+              (kind) => kind.name == raw['kind'],
+              orElse: () => MemoryKind.fact,
+            ),
+            title: title,
+            content: content,
+            importance: (raw['importance'] as num?)?.toInt() ?? 50,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            sourceConversationId: backupImportString(
+              raw['sourceConversationId'],
+            ),
+            sourceMessageId: backupImportString(raw['sourceMessageId']),
+            supersededById: backupImportString(raw['supersededById']),
+            archived: raw['archived'] as bool? ?? false,
+          ),
+        );
+      }
+    }
+    final rawRelations = decoded['memoryRelations'];
+    if (rawRelations is List) {
+      for (final raw in rawRelations.whereType<Map>()) {
+        final id = backupImportString(raw['id']);
+        final from = backupImportString(raw['fromMemoryId']);
+        final to = backupImportString(raw['toMemoryId']);
+        final createdAt = backupImportDateTime(raw['createdAt']);
+        if (id == null || from == null || to == null || createdAt == null) {
+          continue;
+        }
+        memoryStore.putRelation(
+          MemoryRelation(
+            id: id,
+            fromMemoryId: from,
+            toMemoryId: to,
+            label: backupImportString(raw['label']) ?? '',
+            createdAt: createdAt,
+          ),
+        );
+      }
+    }
+  }
+
   Map<String, dynamic> exportAll(Store store, {SharedPreferences? prefs}) {
     final convBox = store.box<ConversationEntity>();
     final messageBox = store.box<MessageEntity>();
@@ -265,8 +422,12 @@ class DataBackupService {
     };
   }
 
-  Map<String, dynamic> exportCloudSync(Store store, String settingsJson) {
+  Future<Map<String, dynamic>> exportCloudSync(
+    Store store,
+    String settingsJson,
+  ) async {
     final all = exportAll(store);
+    all.addAll(await exportSkillsAndMemories(store));
     final persistentConversations = (all['conversations'] as List)
         .where((item) => (item as Map)['isTemporary'] != true)
         .cast<Map<String, dynamic>>()
@@ -494,11 +655,12 @@ class DataBackupService {
     return ArchiveFile(name, bytes.length, bytes);
   }
 
-  List<int> exportAllZip(
+  Future<List<int>> exportAllZip(
     Store store,
     String settingsJson, {
     SharedPreferences? prefs,
-  }) {
+  }) async {
+    final extras = await exportSkillsAndMemories(store);
     final archive = Archive()
       ..addFile(
         _jsonArchiveFile(
@@ -512,14 +674,32 @@ class DataBackupService {
           'settings.json',
           exportSettingsAsJson(settingsJson, store: store, prefs: prefs),
         ),
+      )
+      ..addFile(
+        _jsonArchiveFile(
+          'skills.json',
+          const JsonEncoder.withIndent('  ').convert(extras['skills']),
+        ),
+      )
+      ..addFile(
+        _jsonArchiveFile(
+          'memories.json',
+          const JsonEncoder.withIndent('  ').convert({
+            'memories': extras['memories'],
+            'memoryRelations': extras['memoryRelations'],
+          }),
+        ),
       );
     return ZipEncoder().encode(archive);
   }
 
-  String exportAllAsJson(Store store, {SharedPreferences? prefs}) {
-    return const JsonEncoder.withIndent(
-      '  ',
-    ).convert(exportAll(store, prefs: prefs));
+  Future<String> exportAllAsJson(
+    Store store, {
+    SharedPreferences? prefs,
+  }) async {
+    final all = exportAll(store, prefs: prefs);
+    all.addAll(await exportSkillsAndMemories(store));
+    return const JsonEncoder.withIndent('  ').convert(all);
   }
 
   Future<void> importFromJson(
@@ -531,6 +711,7 @@ class DataBackupService {
     if (decoded is! Map<String, dynamic>) {
       throw FormatException('Invalid backup format');
     }
+    await importSkillsAndMemories(store, decoded);
 
     // Imported attachment paths are restored verbatim onto Message records
     // and later opened directly as files (image/text preview), so a

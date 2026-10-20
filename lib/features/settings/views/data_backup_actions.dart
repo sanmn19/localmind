@@ -21,6 +21,8 @@ import '../../conversations/providers/conversation_providers.dart';
 import '../../personas/providers/personas_providers.dart';
 import '../../saved_messages/providers/saved_message_providers.dart';
 import '../../servers/providers/server_providers.dart';
+import '../../memories/providers/memory_providers.dart';
+import '../../skills/data/skills_provider.dart';
 
 class DataBackupActions extends ConsumerWidget {
   const DataBackupActions({super.key});
@@ -74,7 +76,7 @@ class DataBackupActions extends ConsumerWidget {
       final settings = ref.read(settingsProvider);
       final prefs = ref.read(sharedPreferencesProvider);
       final service = DataBackupService();
-      final bytes = service.exportAllZip(
+      final bytes = await service.exportAllZip(
         db.store,
         settings.toJson(),
         prefs: prefs,
@@ -345,6 +347,30 @@ class DataBackupActions extends ConsumerWidget {
             if (!context.mounted) return;
             await _applySettingsPayload(ref, decoded, context: context);
           }, l10n.import_settings_confirm),
+        ),
+        _categoryRow(
+          label: l10n.skills_memories_label,
+          l10n: l10n,
+          onExport: () async {
+            final json = jsonEncode(
+              await service.exportSkillsAndMemories(store()),
+            );
+            if (!context.mounted) return;
+            await _saveJsonExport(
+              context,
+              l10n.export_skills_memories,
+              'localmind_skills_memories_${DateTime.now().millisecondsSinceEpoch}.json',
+              json,
+            );
+          },
+          onImport: () => _importJsonFile(context, ref, (json) async {
+            final decoded = jsonDecode(json) as Map<String, dynamic>;
+            await service.importSkillsAndMemories(store(), decoded);
+            if (!context.mounted) return;
+            ref.invalidate(memoriesProvider);
+            ref.invalidate(memoryRelationsProvider);
+            ref.invalidate(skillsProvider);
+          }, l10n.import_data_confirm),
         ),
         const SizedBox(height: 8),
         ShadButton.outline(

@@ -3883,5 +3883,11 @@
   "remember_this": "Remember this",
   "@remember_this": {"description": "Chat message action: remember this message"},
   "memory_saved": "Saved to memories",
-  "@memory_saved": {"description": "Snackbar after remembering"}
+  "@memory_saved": {"description": "Snackbar after remembering"},
+  "skills_memories_label": "Skills & memories",
+  "@skills_memories_label": {"description": "Settings Data row: export/import skills and memories"},
+  "export_skills_memories": "Export skills & memories",
+  "@export_skills_memories": {"description": "Export skills and memories to JSON"},
+  "import_skills_memories": "Import skills & memories",
+  "@import_skills_memories": {"description": "Import skills and memories from JSON"}
 }

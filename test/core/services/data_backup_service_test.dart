@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:localmind/core/services/data_backup_service.dart';
 import 'package:localmind/core/storage/entities.dart';
@@ -90,7 +92,7 @@ void main() {
     );
   });
 
-  test('cloud export excludes temporary chats, built-ins, and secrets', () {
+  test('cloud export excludes temporary chats, built-ins, and secrets', () async {
     final persistent = ConversationEntity.fromDomain(
       Conversation(
         id: 'persistent',
@@ -166,7 +168,13 @@ void main() {
       ConversationFolderEntity: _FakeBox<ConversationFolderEntity>(const []),
     });
 
-    final payload = DataBackupService().exportCloudSync(
+    final directory = await Directory.systemTemp.createTemp('backup-test');
+    addTearDown(() async {
+      if (await directory.exists()) await directory.delete(recursive: true);
+    });
+    final payload = await DataBackupService(
+      documentsDirectory: () async => directory,
+    ).exportCloudSync(
       store,
       jsonEncode({
         'themeMode': 1,

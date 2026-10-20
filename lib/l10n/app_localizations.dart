@@ -7130,6 +7130,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Saved to memories'**
   String get memory_saved;
+
+  /// Settings Data row: export/import skills and memories
+  ///
+  /// In en, this message translates to:
+  /// **'Skills & memories'**
+  String get skills_memories_label;
+
+  /// Export skills and memories to JSON
+  ///
+  /// In en, this message translates to:
+  /// **'Export skills & memories'**
+  String get export_skills_memories;
+
+  /// Import skills and memories from JSON
+  ///
+  /// In en, this message translates to:
+  /// **'Import skills & memories'**
+  String get import_skills_memories;
 }
 
 class _AppLocalizationsDelegate

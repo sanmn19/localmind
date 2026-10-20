@@ -180,7 +180,10 @@
     "memory_graph_view",
     "memory_list_view",
     "remember_this",
-    "memory_saved"
+    "memory_saved",
+    "skills_memories_label",
+    "export_skills_memories",
+    "import_skills_memories"
   ],
 
   "bn": [
@@ -368,7 +371,10 @@
     "memory_graph_view",
     "memory_list_view",
     "remember_this",
-    "memory_saved"
+    "memory_saved",
+    "skills_memories_label",
+    "export_skills_memories",
+    "import_skills_memories"
   ],
 
   "de": [
@@ -556,7 +562,10 @@
     "memory_graph_view",
     "memory_list_view",
     "remember_this",
-    "memory_saved"
+    "memory_saved",
+    "skills_memories_label",
+    "export_skills_memories",
+    "import_skills_memories"
   ],
 
   "es": [
@@ -744,7 +753,10 @@
     "memory_graph_view",
     "memory_list_view",
     "remember_this",
-    "memory_saved"
+    "memory_saved",
+    "skills_memories_label",
+    "export_skills_memories",
+    "import_skills_memories"
   ],
 
   "fr": [
@@ -932,7 +944,10 @@
     "memory_graph_view",
     "memory_list_view",
     "remember_this",
-    "memory_saved"
+    "memory_saved",
+    "skills_memories_label",
+    "export_skills_memories",
+    "import_skills_memories"
   ],
 
   "hi": [
@@ -1120,7 +1135,10 @@
     "memory_graph_view",
     "memory_list_view",
     "remember_this",
-    "memory_saved"
+    "memory_saved",
+    "skills_memories_label",
+    "export_skills_memories",
+    "import_skills_memories"
   ],
 
   "it": [
@@ -1308,7 +1326,10 @@
     "memory_graph_view",
     "memory_list_view",
     "remember_this",
-    "memory_saved"
+    "memory_saved",
+    "skills_memories_label",
+    "export_skills_memories",
+    "import_skills_memories"
   ],
 
   "ja": [
@@ -1496,7 +1517,10 @@
     "memory_graph_view",
     "memory_list_view",
     "remember_this",
-    "memory_saved"
+    "memory_saved",
+    "skills_memories_label",
+    "export_skills_memories",
+    "import_skills_memories"
   ],
 
   "ko": [
@@ -1670,7 +1694,10 @@
     "memory_graph_view",
     "memory_list_view",
     "remember_this",
-    "memory_saved"
+    "memory_saved",
+    "skills_memories_label",
+    "export_skills_memories",
+    "import_skills_memories"
   ],
 
   "pt": [
@@ -1844,7 +1871,10 @@
     "memory_graph_view",
     "memory_list_view",
     "remember_this",
-    "memory_saved"
+    "memory_saved",
+    "skills_memories_label",
+    "export_skills_memories",
+    "import_skills_memories"
   ],
 
   "ru": [
@@ -2032,7 +2062,10 @@
     "memory_graph_view",
     "memory_list_view",
     "remember_this",
-    "memory_saved"
+    "memory_saved",
+    "skills_memories_label",
+    "export_skills_memories",
+    "import_skills_memories"
   ],
 
   "tr": [
@@ -2220,7 +2253,10 @@
     "memory_graph_view",
     "memory_list_view",
     "remember_this",
-    "memory_saved"
+    "memory_saved",
+    "skills_memories_label",
+    "export_skills_memories",
+    "import_skills_memories"
   ],
 
   "zh": [
@@ -2408,7 +2444,10 @@
     "memory_graph_view",
     "memory_list_view",
     "remember_this",
-    "memory_saved"
+    "memory_saved",
+    "skills_memories_label",
+    "export_skills_memories",
+    "import_skills_memories"
   ],
 
   "zh_TW": [
@@ -2596,6 +2635,9 @@
     "memory_graph_view",
     "memory_list_view",
     "remember_this",
-    "memory_saved"
+    "memory_saved",
+    "skills_memories_label",
+    "export_skills_memories",
+    "import_skills_memories"
   ]
 }

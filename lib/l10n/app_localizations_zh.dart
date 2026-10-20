@@ -3777,6 +3777,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get memory_saved => 'Saved to memories';
+
+  @override
+  String get skills_memories_label => 'Skills & memories';
+
+  @override
+  String get export_skills_memories => 'Export skills & memories';
+
+  @override
+  String get import_skills_memories => 'Import skills & memories';
 }
 
 /// The translations for Chinese, as used in Taiwan (`zh_TW`).

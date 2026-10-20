@@ -1,3 +1,7 @@
+// Closure-members named without the underscore are intentional: the
+// initializers would otherwise fight prefer_initializing_formals.
+// ignore_for_file: prefer_initializing_formals
+
 import '../data/models/memory.dart';
 
 const memoriesMcpServerLabel = 'Memories';

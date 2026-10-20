@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:localmind/features/ask_local/data/ask_local_payload.dart';
 
@@ -93,6 +95,31 @@ void main() {
     expect(
       AskLocalRequestPayload.consumePendingMethod,
       'consumePendingAskLocal',
+    );
+  });
+
+  group('card entrypoint root-library contract', () {
+    test(
+      'askLocalCardMain is pragma-declared in the ROOT library '
+      '(lib/main.dart) — the engine resolves custom entrypoints only there',
+      () {
+        final source = File('lib/main.dart').readAsStringSync();
+        expect(
+          source,
+          contains("@pragma('vm:entry-point')"),
+          reason: 'the card entrypoint must survive AOT tree-shaking',
+        );
+        final pragmaIndex = source.indexOf("@pragma('vm:entry-point')");
+        final declarationIndex = source.indexOf('void askLocalCardMain()');
+        expect(declarationIndex, greaterThan(pragmaIndex));
+        expect(declarationIndex, greaterThan(-1));
+        // And the implementation must be reachable through the same import.
+        final impl = File(
+          'lib/features/ask_local/ask_local_entrypoint.dart',
+        ).readAsStringSync();
+        expect(impl, contains('void runAskLocalCardMain()'));
+        expect(impl, isNot(contains('void askLocalCardMain()')));
+      },
     );
   });
 }
