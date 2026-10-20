@@ -138,10 +138,21 @@ layout; edges labelled) with pan/zoom, tapping a node opens the memory sheet
 (edit title/content/kind/importance, relations, delete, archive). Search filters
 the list; the graph highlights the matching subgraph.
 
-### Backup
+### Backup & UI
 
-Add `MemoryEntity`, `MemoryRelationEntity`, `MemoryEmbeddingEntity` to
-`DataBackupService` export/import (IDs preserved; relations after memories).
+- `DataBackupService.exportAll` gains:
+  - `memories`: memories + relations (IDs preserved); embeddings are **not**
+    exported (recomputed on import).
+  - `skills`: a `name → markdown body` map read through `SkillsStore`.
+- `importAll` restores skills (writes the `.md` files, skipping names that
+  clash with built-ins only when identical) and memories (relations after
+  memories).
+- `exportCloudSync` derives from `exportAll`, so the cloud payload carries both
+  automatically — no extra cloud code.
+- **Settings → Data** gains a row like the others: **Skills & memories** with
+  Export and Import actions (targeted), while **Export all data** / **Import all
+  data** include them too.
+- Both paths are tolerant: an absent/empty section is a no-op, never a failure.
 
 ## Testing
 
@@ -152,4 +163,6 @@ Add `MemoryEntity`, `MemoryRelationEntity`, `MemoryEmbeddingEntity` to
 - Injection: section present with budget, omitted when empty, never in the persona
   slot.
 - Graph: nodes/edges from the store; delete removes edges.
-- Backup: memories + relations round-trip.
+- Backup: memories + relations round-trip; skills round-trip; export-all and
+  import-all include both; the cloud payload carries both; absent sections are a
+  no-op.
