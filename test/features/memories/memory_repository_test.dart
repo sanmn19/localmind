@@ -66,6 +66,44 @@ void main() {
     expect(repo.list(), isEmpty);
   });
 
+  test('put upserts by id instead of duplicating on every import', () {
+    final store = InMemoryMemoryStore();
+    final memory = Memory(
+      id: 'm1',
+      kind: MemoryKind.fact,
+      title: 'Coffee',
+      content: 'Oat milk',
+      createdAt: DateTime(2026),
+      updatedAt: DateTime(2026),
+    );
+    store.put(memory);
+    store.put(memory.copyWith(content: 'Oat milk, extra shot'));
+    expect(store.list(), hasLength(1));
+    expect(store.list().single.content, 'Oat milk, extra shot');
+  });
+
+  test('putEmbedding replaces the vector for the same memory and model', () {
+    final store = InMemoryMemoryStore();
+    store.putEmbedding(
+      MemoryEmbedding(
+        memoryId: 'm1',
+        modelId: 'e1',
+        vector: const [1, 0],
+        createdAt: DateTime(2026),
+      ),
+    );
+    store.putEmbedding(
+      MemoryEmbedding(
+        memoryId: 'm1',
+        modelId: 'e1',
+        vector: const [0, 1],
+        createdAt: DateTime(2026),
+      ),
+    );
+    expect(store.listEmbeddings(), hasLength(1));
+    expect(store.listEmbeddings().single.vector, [0, 1]);
+  });
+
   test('touch bumps lastUsedAt and useCount', () {
     final repo = MemoryRepository(InMemoryMemoryStore());
     final a = repo.remember(title: 'A', content: 'a');

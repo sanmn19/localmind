@@ -9,8 +9,8 @@ const memoriesMcpServerUrl = 'local://memories';
 
 /// Backing services for the in-process `local://memories` MCP server.
 /// Mirrors [SkillsServices]: closures over the memory providers so the manager
-/// and the feature stay wired through one small contract. `remember` is a
-/// passive write (auto-approved); `forget` always crosses the approval dialog.
+/// and the feature stay wired through one small contract. Reads (list/search)
+/// are auto-approved; writes (remember/forget) always cross the approval dialog.
 class MemoriesServices {
   MemoriesServices({
     required Future<List<Memory>> Function() list,

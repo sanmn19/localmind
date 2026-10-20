@@ -59,22 +59,64 @@ class ObjectBoxMemoryStore implements MemoryStore {
       .toList();
 
   @override
-  void putEmbedding(MemoryEmbedding embedding) => embeddings.put(
-        MemoryEmbeddingEntity(
-          memoryId: embedding.memoryId,
-          modelId: embedding.modelId,
-          dims: embedding.vector.length,
-          vector: Float32List.fromList(embedding.vector),
-          createdAt: embedding.createdAt,
-        ),
-      );
+  void putEmbedding(MemoryEmbedding embedding) {
+    // One vector per (memory, model): replace rather than append.
+    final query = embeddings
+        .query(
+          MemoryEmbeddingEntity_.memoryId
+              .equals(embedding.memoryId)
+              .and(
+                MemoryEmbeddingEntity_.modelId.equals(embedding.modelId),
+              ),
+        )
+        .build();
+    try {
+      embeddings.removeMany(query.findIds());
+    } finally {
+      query.close();
+    }
+    embeddings.put(
+      MemoryEmbeddingEntity(
+        memoryId: embedding.memoryId,
+        modelId: embedding.modelId,
+        dims: embedding.vector.length,
+        vector: Float32List.fromList(embedding.vector),
+        createdAt: embedding.createdAt,
+      ),
+    );
+  }
 
   @override
-  void put(Memory memory) => memories.put(_toEntity(memory));
+  void put(Memory memory) {
+    // Upsert by the domain id: imports run on every cloud sync, so a blind
+    // put (internalId = 0) would duplicate every memory on every sync.
+    final entity = _toEntity(memory);
+    final query = memories
+        .query(MemoryEntity_.id.equals(memory.id))
+        .build();
+    try {
+      final existing = query.findFirst();
+      if (existing != null) entity.internalId = existing.internalId;
+    } finally {
+      query.close();
+    }
+    memories.put(entity);
+  }
 
   @override
-  void putRelation(MemoryRelation relation) =>
-      relations.put(_relationToEntity(relation));
+  void putRelation(MemoryRelation relation) {
+    final entity = _relationToEntity(relation);
+    final query = relations
+        .query(MemoryRelationEntity_.id.equals(relation.id))
+        .build();
+    try {
+      final existing = query.findFirst();
+      if (existing != null) entity.internalId = existing.internalId;
+    } finally {
+      query.close();
+    }
+    relations.put(entity);
+  }
 
   @override
   void delete(String memoryId) {
@@ -190,14 +232,26 @@ class InMemoryMemoryStore implements MemoryStore {
   }
 
   @override
-  void putRelation(MemoryRelation relation) => _relations.add(relation);
+  void putRelation(MemoryRelation relation) {
+    final index = _relations.indexWhere((r) => r.id == relation.id);
+    if (index >= 0) {
+      _relations[index] = relation;
+    } else {
+      _relations.add(relation);
+    }
+  }
 
   @override
   List<MemoryEmbedding> listEmbeddings() =>
       List<MemoryEmbedding>.from(_embeddings);
 
   @override
-  void putEmbedding(MemoryEmbedding embedding) => _embeddings.add(embedding);
+  void putEmbedding(MemoryEmbedding embedding) {
+    _embeddings.removeWhere(
+      (e) => e.memoryId == embedding.memoryId && e.modelId == embedding.modelId,
+    );
+    _embeddings.add(embedding);
+  }
 
   @override
   void delete(String memoryId) =>
