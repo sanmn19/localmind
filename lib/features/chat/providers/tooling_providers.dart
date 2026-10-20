@@ -20,6 +20,10 @@ import '../data/background_engine.dart';
 import '../data/background_runner.dart';
 import '../data/background_task_service.dart';
 import '../data/models/background_task.dart';
+import 'package:localmind/features/memories/data/memories_mcp_server.dart';
+import 'package:localmind/features/memories/data/models/memory.dart';
+import 'package:localmind/features/memories/providers/memory_providers.dart';
+import 'package:localmind/features/memories/providers/memory_retrieval_providers.dart';
 import '../data/models/message.dart';
 import '../utils/message_variants.dart';
 import 'package:localmind/features/mail/data/google_auth_client.dart';
@@ -100,6 +104,7 @@ Future<bool> shouldAutoApproveTool(
   bool deviceToolsEnabled = false,
   bool mailAccountsConnected = false,
   bool skillsEnabled = false,
+  bool memoriesEnabled = false,
   bool backgroundTasksEnabled = false,
   bool notificationToolsEnabled = false,
   required ToolRegistry registry,
@@ -139,6 +144,14 @@ Future<bool> shouldAutoApproveTool(
       default:
         return false;
     }
+  }
+
+  if (await registry.isLocalTool(toolName, {memoriesMcpServerUrl})) {
+    // Remembering is a passive write (a fact, not an action) and auto-runs
+    // while the memories toggle is on. Forgetting always crosses the
+    // approval dialog, like skills.delete.
+    if (toolName == 'memories.forget') return false;
+    return memoriesEnabled;
   }
 
   if (await registry.isLocalTool(toolName, {skillsMcpServerUrl})) {
@@ -289,6 +302,54 @@ final webServerRegistrationProvider = Provider<void>((ref) {
     );
   } else if (manager.hasSkillsServer()) {
     manager.removeServer(skillsMcpServerLabel);
+  }
+  if (settings.memoriesEnabled) {
+    // Memory writes bridge straight into the memory repository and refresh
+    // the mirror; embeddings are best-effort (a failure keeps keyword
+    // retrieval working, never fails the write).
+    manager.addMemoriesServer(
+      MemoriesServices(
+        list: () async =>
+            ref.read(memoryRepositoryProvider).list(),
+        remember: (title, content, kind, importance) async => ref
+            .read(memoryRepositoryProvider)
+            .remember(
+              title: title,
+              content: content,
+              kind: kind,
+              importance: importance,
+            ),
+        search: (query) => ref
+            .read(memoryRetrieverProvider)
+            .retrieve(query),
+        forget: (id) async =>
+            ref.read(memoryRepositoryProvider).forget(id),
+        link: (from, to, label) async => ref
+            .read(memoryRepositoryProvider)
+            .link(from: from, to: to, label: label),
+        relationsFor: (id) async =>
+            ref.read(memoryRepositoryProvider).relationsFor(id),
+        enabled: () => ref.read(settingsProvider).memoriesEnabled,
+        afterRemember: (memory) async {
+          final gateway = ref.read(memoryEmbeddingGatewayProvider);
+          if (!gateway.isAvailable) return;
+          final vector = await gateway.embed(
+            '${memory.title}. ${memory.content}',
+          );
+          if (vector == null) return;
+          ref.read(memoryStoreProvider).putEmbedding(
+            MemoryEmbedding(
+              memoryId: memory.id,
+              modelId: gateway.modelId,
+              vector: vector,
+              createdAt: DateTime.now(),
+            ),
+          );
+        },
+      ),
+    );
+  } else if (manager.hasMemoriesServer()) {
+    manager.removeServer(memoriesMcpServerLabel);
   }
   if (settings.deviceToolsEnabled) {
     // Launcher calls ride the method channel; contacts read straight from

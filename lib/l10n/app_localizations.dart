@@ -6998,6 +6998,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Back up now'**
   String get cloud_sync_backup_now;
+
+  /// Drawer/settings row and screen title
+  ///
+  /// In en, this message translates to:
+  /// **'Memories'**
+  String get memories_title;
+
+  /// Settings toggle for the memories feature
+  ///
+  /// In en, this message translates to:
+  /// **'Remember facts'**
+  String get memories_enabled;
+
+  /// Settings toggle description
+  ///
+  /// In en, this message translates to:
+  /// **'Facts you ask LocalMind to remember are injected as context, never as instructions.'**
+  String get memories_enabled_desc;
 }
 
 class _AppLocalizationsDelegate

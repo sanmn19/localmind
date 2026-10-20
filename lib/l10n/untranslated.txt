@@ -158,7 +158,10 @@
     "cloud_sync_provider_google_drive",
     "cloud_sync_connect_google",
     "cloud_sync_connected_as",
-    "cloud_sync_backup_now"
+    "cloud_sync_backup_now",
+    "memories_title",
+    "memories_enabled",
+    "memories_enabled_desc"
   ],
 
   "bn": [
@@ -324,7 +327,10 @@
     "cloud_sync_provider_google_drive",
     "cloud_sync_connect_google",
     "cloud_sync_connected_as",
-    "cloud_sync_backup_now"
+    "cloud_sync_backup_now",
+    "memories_title",
+    "memories_enabled",
+    "memories_enabled_desc"
   ],
 
   "de": [
@@ -490,7 +496,10 @@
     "cloud_sync_provider_google_drive",
     "cloud_sync_connect_google",
     "cloud_sync_connected_as",
-    "cloud_sync_backup_now"
+    "cloud_sync_backup_now",
+    "memories_title",
+    "memories_enabled",
+    "memories_enabled_desc"
   ],
 
   "es": [
@@ -656,7 +665,10 @@
     "cloud_sync_provider_google_drive",
     "cloud_sync_connect_google",
     "cloud_sync_connected_as",
-    "cloud_sync_backup_now"
+    "cloud_sync_backup_now",
+    "memories_title",
+    "memories_enabled",
+    "memories_enabled_desc"
   ],
 
   "fr": [
@@ -822,7 +834,10 @@
     "cloud_sync_provider_google_drive",
     "cloud_sync_connect_google",
     "cloud_sync_connected_as",
-    "cloud_sync_backup_now"
+    "cloud_sync_backup_now",
+    "memories_title",
+    "memories_enabled",
+    "memories_enabled_desc"
   ],
 
   "hi": [
@@ -988,7 +1003,10 @@
     "cloud_sync_provider_google_drive",
     "cloud_sync_connect_google",
     "cloud_sync_connected_as",
-    "cloud_sync_backup_now"
+    "cloud_sync_backup_now",
+    "memories_title",
+    "memories_enabled",
+    "memories_enabled_desc"
   ],
 
   "it": [
@@ -1154,7 +1172,10 @@
     "cloud_sync_provider_google_drive",
     "cloud_sync_connect_google",
     "cloud_sync_connected_as",
-    "cloud_sync_backup_now"
+    "cloud_sync_backup_now",
+    "memories_title",
+    "memories_enabled",
+    "memories_enabled_desc"
   ],
 
   "ja": [
@@ -1320,7 +1341,10 @@
     "cloud_sync_provider_google_drive",
     "cloud_sync_connect_google",
     "cloud_sync_connected_as",
-    "cloud_sync_backup_now"
+    "cloud_sync_backup_now",
+    "memories_title",
+    "memories_enabled",
+    "memories_enabled_desc"
   ],
 
   "ko": [
@@ -1472,7 +1496,10 @@
     "cloud_sync_provider_google_drive",
     "cloud_sync_connect_google",
     "cloud_sync_connected_as",
-    "cloud_sync_backup_now"
+    "cloud_sync_backup_now",
+    "memories_title",
+    "memories_enabled",
+    "memories_enabled_desc"
   ],
 
   "pt": [
@@ -1624,7 +1651,10 @@
     "cloud_sync_provider_google_drive",
     "cloud_sync_connect_google",
     "cloud_sync_connected_as",
-    "cloud_sync_backup_now"
+    "cloud_sync_backup_now",
+    "memories_title",
+    "memories_enabled",
+    "memories_enabled_desc"
   ],
 
   "ru": [
@@ -1790,7 +1820,10 @@
     "cloud_sync_provider_google_drive",
     "cloud_sync_connect_google",
     "cloud_sync_connected_as",
-    "cloud_sync_backup_now"
+    "cloud_sync_backup_now",
+    "memories_title",
+    "memories_enabled",
+    "memories_enabled_desc"
   ],
 
   "tr": [
@@ -1956,7 +1989,10 @@
     "cloud_sync_provider_google_drive",
     "cloud_sync_connect_google",
     "cloud_sync_connected_as",
-    "cloud_sync_backup_now"
+    "cloud_sync_backup_now",
+    "memories_title",
+    "memories_enabled",
+    "memories_enabled_desc"
   ],
 
   "zh": [
@@ -2122,7 +2158,10 @@
     "cloud_sync_provider_google_drive",
     "cloud_sync_connect_google",
     "cloud_sync_connected_as",
-    "cloud_sync_backup_now"
+    "cloud_sync_backup_now",
+    "memories_title",
+    "memories_enabled",
+    "memories_enabled_desc"
   ],
 
   "zh_TW": [
@@ -2288,6 +2327,9 @@
     "cloud_sync_provider_google_drive",
     "cloud_sync_connect_google",
     "cloud_sync_connected_as",
-    "cloud_sync_backup_now"
+    "cloud_sync_backup_now",
+    "memories_title",
+    "memories_enabled",
+    "memories_enabled_desc"
   ]
 }

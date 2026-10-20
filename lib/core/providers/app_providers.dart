@@ -157,6 +157,8 @@ class SettingsNotifier extends Notifier<AppSettings> {
       _update(state.copyWith(toolWhitelist: value));
   void setSkillsEnabled(bool value) =>
       _update(state.copyWith(skillsEnabled: value));
+  void setMemoriesEnabled(bool value) =>
+      _update(state.copyWith(memoriesEnabled: value));
   void setBackgroundTasksEnabled(bool value) =>
       _update(state.copyWith(backgroundTasksEnabled: value));
   void setNotificationToolsEnabled(bool value) =>

@@ -11,6 +11,8 @@ import 'package:localmind/features/notifications/notifications_mcp_server.dart';
 import 'package:localmind/features/mcp/data/web/web_fetch_service.dart';
 import 'package:localmind/features/mcp/data/web/web_search_service.dart';
 import 'package:localmind/features/skills/data/skills_mcp_server.dart';
+import 'package:localmind/features/memories/data/memories_mcp_server.dart';
+import 'package:localmind/features/memories/data/models/memory.dart';
 import 'package:localmind/features/skills/data/skills_store.dart';
 
 import 'mcp_client.dart';
@@ -97,6 +99,7 @@ class McpServerManager {
   final Map<String, WebServices> _webServices = {};
   final Map<String, TerminalServices> _terminalServices = {};
   final Map<String, SkillsServices> _skillsServices = {};
+  final Map<String, MemoriesServices> _memoriesServices = {};
   final Map<String, DeviceServices> _deviceServices = {};
   final Map<String, MailServices> _mailServices = {};
   final Map<String, BackgroundServices> _backgroundServices = {};
@@ -406,6 +409,10 @@ class McpServerManager {
     ];
     _serverUrls[skillsMcpServerLabel] = skillsMcpServerUrl;
   }
+
+  /// Whether the memories server is registered.
+  bool hasMemoriesServer() =>
+      _memoriesServices.containsKey(memoriesMcpServerLabel);
 
   /// Test/inspection seam for the skills services bundle.
   @visibleForTesting
@@ -826,6 +833,10 @@ class McpServerManager {
       return _callSkillsTool(toolName, args);
     }
 
+    if (_memoriesServices.containsKey(serverLabel)) {
+      return _callMemoriesTool(toolName, args);
+    }
+
     if (_deviceServices.containsKey(serverLabel)) {
       return _callDeviceTool(toolName, args);
     }
@@ -1233,6 +1244,77 @@ class McpServerManager {
   /// `skillsEnabled` is on, so a refusal here guards the stale-registration
   /// window, not general policy. `skills.add`/`skills.delete` reaching this
   /// point always went through the user's approval dialog.
+  /// Registers the in-process memories MCP server (`memories.remember` /
+  /// `memories.search` / `memories.list` / `memories.forget`). Mirrors
+  /// [addSkillsServer]: idempotent re-add, and only `memories.forget` is
+  /// approval-gated (see `shouldAutoApproveTool`).
+  Future<void> addMemoriesServer(MemoriesServices services) async {
+    await removeServer(memoriesMcpServerLabel);
+
+    _memoriesServices[memoriesMcpServerLabel] = services;
+    _capabilities[memoriesMcpServerLabel] = const McpCapabilities(tools: true);
+    _tools[memoriesMcpServerLabel] = const [
+      McpTool(
+        name: 'memories.remember',
+        description:
+            'Remember a fact the user asked you to keep. It is injected '
+            'into future chats as context, never as an instruction.',
+        inputSchema: {
+          'type': 'object',
+          'properties': {
+            'title': {
+              'type': 'string',
+              'description': 'Short label, e.g. "Works at Acme".',
+            },
+            'content': {
+              'type': 'string',
+              'description': 'The fact to remember.',
+            },
+            'kind': {
+              'type': 'string',
+              'enum': ['fact', 'preference', 'entity', 'event'],
+            },
+            'importance': {'type': 'integer', 'minimum': 0, 'maximum': 100},
+          },
+          'required': ['title', 'content'],
+        },
+      ),
+      McpTool(
+        name: 'memories.search',
+        description: 'Find the remembered facts most relevant to a query.',
+        inputSchema: {
+          'type': 'object',
+          'properties': {
+            'query': {'type': 'string'},
+          },
+          'required': ['query'],
+        },
+      ),
+      McpTool(
+        name: 'memories.list',
+        description: 'List every remembered fact.',
+        inputSchema: {'type': 'object'},
+      ),
+      McpTool(
+        name: 'memories.forget',
+        description: 'Delete one remembered fact by its id.',
+        inputSchema: {
+          'type': 'object',
+          'properties': {
+            'id': {'type': 'string'},
+          },
+          'required': ['id'],
+        },
+      ),
+    ];
+    _serverUrls[memoriesMcpServerLabel] = memoriesMcpServerUrl;
+  }
+
+  /// Test/inspection seam for the memories services bundle.
+  @visibleForTesting
+  MemoriesServices? getMemoriesServices() =>
+      _memoriesServices[memoriesMcpServerLabel];
+
   Future<String> _callSkillsTool(
     String toolName,
     Map<String, dynamic> args,
@@ -1303,6 +1385,74 @@ class McpServerManager {
 
       default:
         throw McpException('Skills MCP tool not found: $toolName');
+    }
+  }
+
+  Future<String> _callMemoriesTool(
+    String toolName,
+    Map<String, dynamic> args,
+  ) async {
+    final services = _memoriesServices[memoriesMcpServerLabel];
+    if (services == null) {
+      throw McpException('MCP server not connected: $memoriesMcpServerLabel');
+    }
+    if (!services.enabled) {
+      throw McpException('the memories feature is disabled');
+    }
+
+    switch (toolName) {
+      case 'memories.list':
+        return formatMemoriesList(await services.list());
+
+      case 'memories.search':
+        final query = args['query'];
+        if (query is! String) {
+          throw McpException('memories.search requires a string query');
+        }
+        return formatMemoriesSearch(await services.search(query));
+
+      case 'memories.remember':
+        final title = args['title'];
+        final content = args['content'];
+        if (title is! String || content is! String) {
+          throw McpException(
+            'memories.remember requires string title/content arguments',
+          );
+        }
+        final failure = memoriesRememberFailure(title, content);
+        if (failure != null) {
+          throw McpException('memories.remember: $failure');
+        }
+        final rawKind = args['kind'];
+        final kind = MemoryKind.values.firstWhere(
+          (value) => value.name == rawKind,
+          orElse: () => MemoryKind.fact,
+        );
+        final rawImportance = args['importance'];
+        final importance = rawImportance is int
+            ? rawImportance.clamp(0, 100).toInt()
+            : 50;
+        final memory = await services.remember(
+          title,
+          content,
+          kind,
+          importance,
+        );
+        return formatMemoryRemember(memory);
+
+      case 'memories.forget':
+        final id = args['id'];
+        if (id is! String) {
+          throw McpException('memories.forget requires a string id');
+        }
+        final removed = await services.forget(id);
+        if (!removed) {
+          throw McpException('memories.forget: no memory with id $id');
+        }
+        return 'Forgot memory: $id';
+
+      default:
+        throw McpException('Memories MCP tool not found: $toolName');
     }
   }
 

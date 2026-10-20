@@ -12,6 +12,7 @@ class AppRoutes {
   static const String createPersona = '/personas/create';
   static const String settings = '/settings';
   static const String cloudSync = '/settings/cloud-sync';
+  static const String memories = '/memories';
   static const String models = '/models';
   static const String mcpTools = '/mcp-tools';
   static const String skills = '/skills';

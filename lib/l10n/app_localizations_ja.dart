@@ -3739,4 +3739,14 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get cloud_sync_backup_now => 'Back up now';
+
+  @override
+  String get memories_title => 'Memories';
+
+  @override
+  String get memories_enabled => 'Remember facts';
+
+  @override
+  String get memories_enabled_desc =>
+      'Facts you ask LocalMind to remember are injected as context, never as instructions.';
 }

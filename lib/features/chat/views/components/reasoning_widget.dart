@@ -11,11 +11,17 @@ class ReasoningWidget extends ConsumerStatefulWidget {
   final bool isStreaming;
   final bool hasMainContent;
 
+  /// Card/overlay mode: the thinking box starts collapsed and the streaming
+  /// auto-expand is suppressed (the card is compact — an opening reasoning
+  /// dump spams the small window). Manual expansion still works.
+  final bool startCollapsed;
+
   const ReasoningWidget({
     super.key,
     this.reasoningContent,
     this.isStreaming = false,
     this.hasMainContent = true,
+    this.startCollapsed = false,
   });
 
   @override
@@ -35,7 +41,9 @@ class _ReasoningWidgetState extends ConsumerState<ReasoningWidget>
     final autoCollapse = ref.read(
       settingsProvider.select((s) => s.autoCollapseThinking),
     );
-    _isExpanded = widget.isStreaming || !widget.hasMainContent || !autoCollapse;
+    _isExpanded =
+        !widget.startCollapsed &&
+        (widget.isStreaming || !widget.hasMainContent || !autoCollapse);
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 250),
@@ -59,7 +67,7 @@ class _ReasoningWidgetState extends ConsumerState<ReasoningWidget>
   void didUpdateWidget(ReasoningWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.isStreaming && !oldWidget.isStreaming) {
-      if (!_isExpanded) {
+      if (!widget.startCollapsed && !_isExpanded) {
         setState(() {
           _isExpanded = true;
           _animationController.forward();

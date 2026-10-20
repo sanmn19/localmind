@@ -3839,5 +3839,11 @@
   "cloud_sync_connected_as": "Connected as {email}",
   "@cloud_sync_connected_as": {"description": "Cloud Sync screen: connected Google account", "placeholders": {"email": {"type": "String"}}},
   "cloud_sync_backup_now": "Back up now",
-  "@cloud_sync_backup_now": {"description": "Cloud Sync screen: force a backup rotation and upload"}
+  "@cloud_sync_backup_now": {"description": "Cloud Sync screen: force a backup rotation and upload"},
+  "memories_title": "Memories",
+  "@memories_title": {"description": "Drawer/settings row and screen title"},
+  "memories_enabled": "Remember facts",
+  "@memories_enabled": {"description": "Settings toggle for the memories feature"},
+  "memories_enabled_desc": "Facts you ask LocalMind to remember are injected as context, never as instructions.",
+  "@memories_enabled_desc": {"description": "Settings toggle description"}
 }

@@ -94,6 +94,9 @@ class AppSettings {
   /// feature.
   final bool skillsEnabled;
 
+  /// Kill switch for remembered facts (injected as passive context).
+  final bool memoriesEnabled;
+
   /// Whether the in-process `local://background` MCP server (bg.spawn +
   /// bg.status + bg.cancel) is registered at all. Default OFF: autonomous
   /// background sub-agent threads only exist once the user opts in.
@@ -176,6 +179,7 @@ class AppSettings {
     this.shareTargetEnabled = true,
     this.toolWhitelist = const [],
     this.skillsEnabled = true,
+    this.memoriesEnabled = true,
     this.backgroundTasksEnabled = false,
     this.notificationToolsEnabled = false,
     this.mailConnectorAccounts = const [],
@@ -242,6 +246,7 @@ class AppSettings {
     bool? shareTargetEnabled,
     List<String>? toolWhitelist,
     bool? skillsEnabled,
+    bool? memoriesEnabled,
     bool? backgroundTasksEnabled,
     bool? notificationToolsEnabled,
     List<Map<String, dynamic>>? mailConnectorAccounts,
@@ -334,6 +339,7 @@ class AppSettings {
       shareTargetEnabled: shareTargetEnabled ?? this.shareTargetEnabled,
       toolWhitelist: toolWhitelist ?? this.toolWhitelist,
       skillsEnabled: skillsEnabled ?? this.skillsEnabled,
+      memoriesEnabled: memoriesEnabled ?? this.memoriesEnabled,
       backgroundTasksEnabled:
           backgroundTasksEnabled ?? this.backgroundTasksEnabled,
       notificationToolsEnabled:
@@ -405,6 +411,7 @@ class AppSettings {
       'shareTargetEnabled': shareTargetEnabled,
       'toolWhitelist': toolWhitelist,
       'skillsEnabled': skillsEnabled,
+      'memoriesEnabled': memoriesEnabled,
       'backgroundTasksEnabled': backgroundTasksEnabled,
       'notificationToolsEnabled': notificationToolsEnabled,
       'mailConnectorAccounts': mailConnectorAccounts,
@@ -478,6 +485,7 @@ class AppSettings {
       toolWhitelist:
           (map['toolWhitelist'] as List?)?.cast<String>() ?? const [],
       skillsEnabled: map['skillsEnabled'] ?? true,
+      memoriesEnabled: map['memoriesEnabled'] ?? true,
       backgroundTasksEnabled: map['backgroundTasksEnabled'] ?? false,
       notificationToolsEnabled: map['notificationToolsEnabled'] ?? false,
       mailConnectorAccounts:

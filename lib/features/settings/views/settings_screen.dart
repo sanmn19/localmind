@@ -161,6 +161,17 @@ class _SettingsViewsState extends ConsumerState<SettingsViews> {
           label: l10n.skills_name,
           onPressed: () => context.push(AppRoutes.skills),
         ),
+        _SectionActionButton(
+          icon: HugeIcons.strokeRoundedBrain01,
+          label: l10n.memories_title,
+          onPressed: () => context.push(AppRoutes.memories),
+        ),
+        _ToggleSetting(
+          label: l10n.memories_enabled,
+          description: l10n.memories_enabled_desc,
+          value: settings.memoriesEnabled,
+          onChanged: notifier.setMemoriesEnabled,
+        ),
       ],
     );
 

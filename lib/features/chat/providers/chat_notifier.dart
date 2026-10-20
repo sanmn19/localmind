@@ -22,6 +22,9 @@ import 'package:localmind/features/on_device/providers/on_device_providers.dart'
 import 'package:localmind/features/personas/providers/personas_providers.dart';
 import 'package:localmind/features/personas/utils/persona_prompt_utils.dart';
 import 'package:localmind/features/skills/data/skills_provider.dart';
+import 'package:localmind/features/memories/data/memory_context_section.dart';
+import 'package:localmind/features/memories/providers/memory_providers.dart';
+import 'package:localmind/features/memories/providers/memory_retrieval_providers.dart';
 import 'package:localmind/features/skills/data/skills_store.dart'
     show buildSkillsSystemSection;
 import 'package:localmind/features/servers/data/models/server.dart';
@@ -962,7 +965,10 @@ class ChatNotifier extends Notifier<ChatState> {
     session.resetCheckpointMetrics();
     session.updateSavedMetrics(assistantMessage);
 
-    final messagesForApi = _buildMessagesForApi(selectedModel);
+    final messagesForApi = _buildMessagesForApi(
+      selectedModel,
+      memoriesSection: await _buildMemoriesSection(state.messages),
+    );
 
     try {
       String reasoningContent = '';
@@ -1411,8 +1417,38 @@ class ChatNotifier extends Notifier<ChatState> {
     }
   }
 
-  List<Message> _buildMessagesForApi(ModelInfo? selectedModel) =>
-      _assembleApiMessages(selectedModel, state.messages);
+  List<Message> _buildMessagesForApi(
+    ModelInfo? selectedModel, {
+    String? memoriesSection,
+  }) => _assembleApiMessages(
+        selectedModel,
+        state.messages,
+        memoriesSection: memoriesSection,
+      );
+
+  /// Retrieves the memories relevant to the latest user turn and renders the
+  /// `# Memories` section. Best-effort: a failure never blocks the request.
+  Future<String?> _buildMemoriesSection(List<Message> timeline) async {
+    try {
+      String? query;
+      for (final message in timeline.reversed) {
+        if (message.role == MessageRole.user) {
+          query = message.content;
+          break;
+        }
+      }
+      if (query == null || query.trim().isEmpty) return null;
+      final memories = await ref.read(memoryRetrieverProvider).retrieve(query);
+      if (memories.isEmpty) return null;
+      for (final memory in memories) {
+        ref.read(memoryRepositoryProvider).touch(memory.id);
+      }
+      final section = buildMemoriesSystemSection(memories);
+      return section.isEmpty ? null : section;
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// Shared request-assembly path for the open chat's sends and the
   /// fork-context slice: composes the system message (persona + skills
@@ -1421,8 +1457,9 @@ class ChatNotifier extends Notifier<ChatState> {
   /// path so fork contexts can never drift from what the main thread sends.
   List<Message> _assembleApiMessages(
     ModelInfo? selectedModel,
-    List<Message> mainTimeline,
-  ) {
+    List<Message> mainTimeline, {
+    String? memoriesSection,
+  }) {
     final settings = ref.read(settingsProvider);
     final messages = <Message>[];
 
@@ -1462,6 +1499,15 @@ class ChatNotifier extends Notifier<ChatState> {
             ? skillsSection
             : '$systemContent\n\n$skillsSection';
       }
+    }
+
+    // Memories are passive facts, injected beside skills and never in the
+    // persona slot. They are retrieved per request (best-effort) and omitted
+    // when nothing is relevant.
+    if (memoriesSection != null && memoriesSection.trim().isNotEmpty) {
+      systemContent = (systemContent == null || systemContent.trim().isEmpty)
+          ? memoriesSection
+          : '$systemContent\n\n$memoriesSection';
     }
 
     if (shouldDisableThinking) {
@@ -1600,9 +1646,13 @@ class ChatNotifier extends Notifier<ChatState> {
 
   List<Message> _buildMessagesForContinue(
     ModelInfo? selectedModel,
-    Message assistantMessage,
-  ) {
-    final messages = _buildMessagesForApi(selectedModel);
+    Message assistantMessage, {
+    String? memoriesSection,
+  }) {
+    final messages = _buildMessagesForApi(
+      selectedModel,
+      memoriesSection: memoriesSection,
+    );
     if (messages.isEmpty) return messages;
     if (messages.last.role != MessageRole.assistant) return messages;
 
@@ -2777,9 +2827,17 @@ class ChatNotifier extends Notifier<ChatState> {
     final chatService = session.chatService;
     final chatParams = ref.read(chatParamsProvider);
 
+    final memoriesSection = await _buildMemoriesSection(state.messages);
     final messagesForApi = continueGeneration
-        ? _buildMessagesForContinue(selectedModel, assistantMessage)
-        : _buildMessagesForApi(selectedModel);
+        ? _buildMessagesForContinue(
+            selectedModel,
+            assistantMessage,
+            memoriesSection: memoriesSection,
+          )
+        : _buildMessagesForApi(
+            selectedModel,
+            memoriesSection: memoriesSection,
+          );
 
     try {
       session.resetStreamMetrics();
