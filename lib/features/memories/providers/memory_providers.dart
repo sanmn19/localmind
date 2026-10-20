@@ -31,7 +31,13 @@ final memoriesNotifierProvider =
 
 class MemoriesNotifier extends Notifier<int> {
   @override
-  int build() => 0;
+  int build() {
+    // Repair rows duplicated by the pre-upsert import path (best-effort).
+    try {
+      ref.read(memoryStoreProvider).dedupeById();
+    } catch (_) {}
+    return 0;
+  }
 
   Future<Memory> remember({
     required String title,

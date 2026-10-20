@@ -24,6 +24,10 @@ abstract class MemoryStore {
   void deleteRelationsTouching(String memoryId);
 
   void deleteRelation(String relationId);
+
+  /// One-time repair: removes duplicate rows sharing a domain id (keeps the
+  /// newest internalId), e.g. rows duplicated before the upsert fix.
+  void dedupeById();
 }
 
 class ObjectBoxMemoryStore implements MemoryStore {
@@ -158,6 +162,26 @@ class ObjectBoxMemoryStore implements MemoryStore {
     }
   }
 
+  @override
+  void dedupeById() {
+    final seen = <String>{};
+    final duplicates = <int>[];
+    for (final entity in memories.getAll()) {
+      if (!seen.add(entity.id)) duplicates.add(entity.internalId);
+    }
+    if (duplicates.isNotEmpty) memories.removeMany(duplicates);
+    final seenRelations = <String>{};
+    final duplicateRelations = <int>[];
+    for (final entity in relations.getAll()) {
+      if (!seenRelations.add(entity.id)) {
+        duplicateRelations.add(entity.internalId);
+      }
+    }
+    if (duplicateRelations.isNotEmpty) {
+      relations.removeMany(duplicateRelations);
+    }
+  }
+
   Memory _toDomain(MemoryEntity entity) => Memory(
         id: entity.id,
         kind: MemoryKind.values[entity.kindIndex.clamp(0, MemoryKind.values.length - 1)],
@@ -265,4 +289,12 @@ class InMemoryMemoryStore implements MemoryStore {
   @override
   void deleteRelation(String relationId) =>
       _relations.removeWhere((r) => r.id == relationId);
+
+  @override
+  void dedupeById() {
+    final seen = <String>{};
+    _memories.removeWhere((memory) => !seen.add(memory.id));
+    final seenRelations = <String>{};
+    _relations.removeWhere((relation) => !seenRelations.add(relation.id));
+  }
 }
