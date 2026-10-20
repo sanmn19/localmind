@@ -113,9 +113,12 @@ class GoogleSignInSession {
     return account;
   }
 
-  /// Refreshes silently by default; [interactive] may prompt.
-  Future<String?> accessToken({bool interactive = false}) =>
-      _adapter.accessToken(interactive: interactive);
+  /// Refreshes silently by default; [interactive] may prompt. Restores the
+  /// account first when the app restarted and the in-memory session is empty.
+  Future<String?> accessToken({bool interactive = false}) async {
+    if (_account == null) await restore();
+    return _adapter.accessToken(interactive: interactive);
+  }
 
   Future<void> disconnect() async {
     await _adapter.signOut();

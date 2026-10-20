@@ -735,6 +735,18 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
     }
   }
 
+  /// Restores the saved Google session after a restart (silent, no prompt).
+  Future<void> restoreGoogle() async {
+    final config = _local.loadConfig();
+    if (config?.provider != CloudSyncProviderKind.googleDrive) return;
+    final account = await _googleSession.restore();
+    if (!ref.mounted || account == null) return;
+    state = state.copyWith(
+      phase: CloudSyncPhase.ready,
+      message: 'Connected as ${account.email}.',
+    );
+  }
+
   Future<void> connectGoogle() async {
     final account = await _googleSession.connect();
     // Grant the Drive scope now, while the user is in the foreground: the

@@ -36,6 +36,13 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
   @override
   void initState() {
     super.initState();
+    // A restarted app has an empty in-memory session: restore it silently so
+    // the connected account and its token are available again.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(cloudSyncControllerProvider.notifier).restoreGoogle();
+      }
+    });
     final config = ref.read(cloudSyncControllerProvider.notifier).config;
     _endpoint = TextEditingController(
       text: config?.endpoint ?? 'https://s3.amazonaws.com',
