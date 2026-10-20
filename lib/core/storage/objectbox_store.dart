@@ -17,6 +17,9 @@ class ObjectBoxStore {
   late final Box<SavedMessageEntity> savedMessageBox;
   late final Box<SavedMessageFolderEntity> savedMessageFolderBox;
   late final Box<ManualModelEntity> manualModelBox;
+  late final Box<MemoryEntity> memoryBox;
+  late final Box<MemoryRelationEntity> memoryRelationBox;
+  late final Box<MemoryEmbeddingEntity> memoryEmbeddingBox;
 
   ObjectBoxStore.fromStore(this.store) {
     serverBox = Box<ServerEntity>(store);
@@ -27,6 +30,9 @@ class ObjectBoxStore {
     savedMessageBox = Box<SavedMessageEntity>(store);
     savedMessageFolderBox = Box<SavedMessageFolderEntity>(store);
     manualModelBox = Box<ManualModelEntity>(store);
+    memoryBox = Box<MemoryEntity>(store);
+    memoryRelationBox = Box<MemoryRelationEntity>(store);
+    memoryEmbeddingBox = Box<MemoryEmbeddingEntity>(store);
   }
 
   /// Create an instance of ObjectBox storage.

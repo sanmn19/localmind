@@ -932,6 +932,197 @@ final _entities = <obx_int.ModelEntity>[
     relations: <obx_int.ModelRelation>[],
     backlinks: <obx_int.ModelBacklink>[],
   ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(11, 344570830110125797),
+    name: 'MemoryEmbeddingEntity',
+    lastPropertyId: const obx_int.IdUid(6, 1741312766451779504),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 3739910779584128296),
+        name: 'internalId',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 7592414719667282777),
+        name: 'memoryId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(20, 4064235471376385509),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 104906701710319834),
+        name: 'modelId',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 1761409342601601762),
+        name: 'dims',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 4325817375072488009),
+        name: 'vector',
+        type: 28,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 1741312766451779504),
+        name: 'createdAt',
+        type: 10,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(12, 1157530772597595285),
+    name: 'MemoryEntity',
+    lastPropertyId: const obx_int.IdUid(14, 991201696784785310),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 6626835057537217192),
+        name: 'internalId',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 4373282373379323540),
+        name: 'id',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(21, 2012758969991147949),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 4550052434022580920),
+        name: 'kindIndex',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 2033625437709155446),
+        name: 'title',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 5852007063018317528),
+        name: 'content',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 3506563999153151734),
+        name: 'importance',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(7, 9149886955336759779),
+        name: 'createdAt',
+        type: 10,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(8, 3380424357586532831),
+        name: 'updatedAt',
+        type: 10,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(9, 5339625394738406733),
+        name: 'lastUsedAt',
+        type: 10,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(10, 8918486341619991709),
+        name: 'useCount',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(11, 9003486325753782994),
+        name: 'sourceConversationId',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(12, 3570397396766524340),
+        name: 'sourceMessageId',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(13, 3280964599812132135),
+        name: 'supersededById',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(14, 991201696784785310),
+        name: 'archived',
+        type: 1,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(13, 8613029486712728898),
+    name: 'MemoryRelationEntity',
+    lastPropertyId: const obx_int.IdUid(6, 5210792842061974525),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 1878717035168539030),
+        name: 'internalId',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 3443386797861147441),
+        name: 'fromMemoryId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(22, 8338107769014504188),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 7186694290044862110),
+        name: 'toMemoryId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(23, 2622125567475855692),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 419881938285970356),
+        name: 'label',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 7047900427854367103),
+        name: 'createdAt',
+        type: 10,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 5210792842061974525),
+        name: 'id',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(24, 3734785072290076025),
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
 ];
 
 /// Shortcut for [obx.Store.new] that passes [getObjectBoxModel] and for Flutter
@@ -977,8 +1168,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
     // Typically, this is done with `dart run build_runner build`.
     generatorVersion: obx_int.GeneratorVersion.v2025_12_16,
     entities: _entities,
-    lastEntityId: const obx_int.IdUid(10, 7335998010881530624),
-    lastIndexId: const obx_int.IdUid(19, 9141168625428584864),
+    lastEntityId: const obx_int.IdUid(13, 8613029486712728898),
+    lastIndexId: const obx_int.IdUid(24, 3734785072290076025),
     lastRelationId: const obx_int.IdUid(0, 0),
     lastSequenceId: const obx_int.IdUid(0, 0),
     retiredEntityUids: const [],
@@ -2168,6 +2359,253 @@ obx_int.ModelDefinition getObjectBoxModel() {
         return object;
       },
     ),
+    MemoryEmbeddingEntity: obx_int.EntityDefinition<MemoryEmbeddingEntity>(
+      model: _entities[10],
+      toOneRelations: (MemoryEmbeddingEntity object) => [],
+      toManyRelations: (MemoryEmbeddingEntity object) => {},
+      getId: (MemoryEmbeddingEntity object) => object.internalId,
+      setId: (MemoryEmbeddingEntity object, int id) {
+        object.internalId = id;
+      },
+      objectToFB: (MemoryEmbeddingEntity object, fb.Builder fbb) {
+        final memoryIdOffset = fbb.writeString(object.memoryId);
+        final modelIdOffset = fbb.writeString(object.modelId);
+        final vectorOffset = fbb.writeListFloat32(object.vector);
+        fbb.startTable(7);
+        fbb.addInt64(0, object.internalId);
+        fbb.addOffset(1, memoryIdOffset);
+        fbb.addOffset(2, modelIdOffset);
+        fbb.addInt64(3, object.dims);
+        fbb.addOffset(4, vectorOffset);
+        fbb.addInt64(5, object.createdAt.millisecondsSinceEpoch);
+        fbb.finish(fbb.endTable());
+        return object.internalId;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final internalIdParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final memoryIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 6, '');
+        final modelIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 8, '');
+        final dimsParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          10,
+          0,
+        );
+        final vectorParam = const obx_int.Float32ListReader().vTableGet(
+          buffer,
+          rootOffset,
+          12,
+          Float32List(0),
+        );
+        final createdAtParam = DateTime.fromMillisecondsSinceEpoch(
+          const fb.Int64Reader().vTableGet(buffer, rootOffset, 14, 0),
+        );
+        final object = MemoryEmbeddingEntity(
+          internalId: internalIdParam,
+          memoryId: memoryIdParam,
+          modelId: modelIdParam,
+          dims: dimsParam,
+          vector: vectorParam,
+          createdAt: createdAtParam,
+        );
+
+        return object;
+      },
+    ),
+    MemoryEntity: obx_int.EntityDefinition<MemoryEntity>(
+      model: _entities[11],
+      toOneRelations: (MemoryEntity object) => [],
+      toManyRelations: (MemoryEntity object) => {},
+      getId: (MemoryEntity object) => object.internalId,
+      setId: (MemoryEntity object, int id) {
+        object.internalId = id;
+      },
+      objectToFB: (MemoryEntity object, fb.Builder fbb) {
+        final idOffset = fbb.writeString(object.id);
+        final titleOffset = fbb.writeString(object.title);
+        final contentOffset = fbb.writeString(object.content);
+        final sourceConversationIdOffset = object.sourceConversationId == null
+            ? null
+            : fbb.writeString(object.sourceConversationId!);
+        final sourceMessageIdOffset = object.sourceMessageId == null
+            ? null
+            : fbb.writeString(object.sourceMessageId!);
+        final supersededByIdOffset = object.supersededById == null
+            ? null
+            : fbb.writeString(object.supersededById!);
+        fbb.startTable(15);
+        fbb.addInt64(0, object.internalId);
+        fbb.addOffset(1, idOffset);
+        fbb.addInt64(2, object.kindIndex);
+        fbb.addOffset(3, titleOffset);
+        fbb.addOffset(4, contentOffset);
+        fbb.addInt64(5, object.importance);
+        fbb.addInt64(6, object.createdAt.millisecondsSinceEpoch);
+        fbb.addInt64(7, object.updatedAt.millisecondsSinceEpoch);
+        fbb.addInt64(8, object.lastUsedAt?.millisecondsSinceEpoch);
+        fbb.addInt64(9, object.useCount);
+        fbb.addOffset(10, sourceConversationIdOffset);
+        fbb.addOffset(11, sourceMessageIdOffset);
+        fbb.addOffset(12, supersededByIdOffset);
+        fbb.addBool(13, object.archived);
+        fbb.finish(fbb.endTable());
+        return object.internalId;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final lastUsedAtValue = const fb.Int64Reader().vTableGetNullable(
+          buffer,
+          rootOffset,
+          20,
+        );
+        final internalIdParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final idParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 6, '');
+        final kindIndexParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          8,
+          0,
+        );
+        final titleParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 10, '');
+        final contentParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 12, '');
+        final importanceParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          14,
+          0,
+        );
+        final createdAtParam = DateTime.fromMillisecondsSinceEpoch(
+          const fb.Int64Reader().vTableGet(buffer, rootOffset, 16, 0),
+        );
+        final updatedAtParam = DateTime.fromMillisecondsSinceEpoch(
+          const fb.Int64Reader().vTableGet(buffer, rootOffset, 18, 0),
+        );
+        final lastUsedAtParam = lastUsedAtValue == null
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(lastUsedAtValue);
+        final useCountParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          22,
+          0,
+        );
+        final sourceConversationIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 24);
+        final sourceMessageIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 26);
+        final supersededByIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 28);
+        final archivedParam = const fb.BoolReader().vTableGet(
+          buffer,
+          rootOffset,
+          30,
+          false,
+        );
+        final object = MemoryEntity(
+          internalId: internalIdParam,
+          id: idParam,
+          kindIndex: kindIndexParam,
+          title: titleParam,
+          content: contentParam,
+          importance: importanceParam,
+          createdAt: createdAtParam,
+          updatedAt: updatedAtParam,
+          lastUsedAt: lastUsedAtParam,
+          useCount: useCountParam,
+          sourceConversationId: sourceConversationIdParam,
+          sourceMessageId: sourceMessageIdParam,
+          supersededById: supersededByIdParam,
+          archived: archivedParam,
+        );
+
+        return object;
+      },
+    ),
+    MemoryRelationEntity: obx_int.EntityDefinition<MemoryRelationEntity>(
+      model: _entities[12],
+      toOneRelations: (MemoryRelationEntity object) => [],
+      toManyRelations: (MemoryRelationEntity object) => {},
+      getId: (MemoryRelationEntity object) => object.internalId,
+      setId: (MemoryRelationEntity object, int id) {
+        object.internalId = id;
+      },
+      objectToFB: (MemoryRelationEntity object, fb.Builder fbb) {
+        final fromMemoryIdOffset = fbb.writeString(object.fromMemoryId);
+        final toMemoryIdOffset = fbb.writeString(object.toMemoryId);
+        final labelOffset = fbb.writeString(object.label);
+        final idOffset = fbb.writeString(object.id);
+        fbb.startTable(7);
+        fbb.addInt64(0, object.internalId);
+        fbb.addOffset(1, fromMemoryIdOffset);
+        fbb.addOffset(2, toMemoryIdOffset);
+        fbb.addOffset(3, labelOffset);
+        fbb.addInt64(4, object.createdAt.millisecondsSinceEpoch);
+        fbb.addOffset(5, idOffset);
+        fbb.finish(fbb.endTable());
+        return object.internalId;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final internalIdParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final idParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 14, '');
+        final fromMemoryIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 6, '');
+        final toMemoryIdParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 8, '');
+        final labelParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 10, '');
+        final createdAtParam = DateTime.fromMillisecondsSinceEpoch(
+          const fb.Int64Reader().vTableGet(buffer, rootOffset, 12, 0),
+        );
+        final object = MemoryRelationEntity(
+          internalId: internalIdParam,
+          id: idParam,
+          fromMemoryId: fromMemoryIdParam,
+          toMemoryId: toMemoryIdParam,
+          label: labelParam,
+          createdAt: createdAtParam,
+        );
+
+        return object;
+      },
+    ),
   };
 
   return obx_int.ModelDefinition(model, bindings);
@@ -2859,5 +3297,144 @@ class ManualModelEntity_ {
   /// See [ManualModelEntity.createdAt].
   static final createdAt = obx.QueryDateProperty<ManualModelEntity>(
     _entities[9].properties[4],
+  );
+}
+
+/// [MemoryEmbeddingEntity] entity fields to define ObjectBox queries.
+class MemoryEmbeddingEntity_ {
+  /// See [MemoryEmbeddingEntity.internalId].
+  static final internalId = obx.QueryIntegerProperty<MemoryEmbeddingEntity>(
+    _entities[10].properties[0],
+  );
+
+  /// See [MemoryEmbeddingEntity.memoryId].
+  static final memoryId = obx.QueryStringProperty<MemoryEmbeddingEntity>(
+    _entities[10].properties[1],
+  );
+
+  /// See [MemoryEmbeddingEntity.modelId].
+  static final modelId = obx.QueryStringProperty<MemoryEmbeddingEntity>(
+    _entities[10].properties[2],
+  );
+
+  /// See [MemoryEmbeddingEntity.dims].
+  static final dims = obx.QueryIntegerProperty<MemoryEmbeddingEntity>(
+    _entities[10].properties[3],
+  );
+
+  /// See [MemoryEmbeddingEntity.vector].
+  static final vector = obx.QueryDoubleVectorProperty<MemoryEmbeddingEntity>(
+    _entities[10].properties[4],
+  );
+
+  /// See [MemoryEmbeddingEntity.createdAt].
+  static final createdAt = obx.QueryDateProperty<MemoryEmbeddingEntity>(
+    _entities[10].properties[5],
+  );
+}
+
+/// [MemoryEntity] entity fields to define ObjectBox queries.
+class MemoryEntity_ {
+  /// See [MemoryEntity.internalId].
+  static final internalId = obx.QueryIntegerProperty<MemoryEntity>(
+    _entities[11].properties[0],
+  );
+
+  /// See [MemoryEntity.id].
+  static final id = obx.QueryStringProperty<MemoryEntity>(
+    _entities[11].properties[1],
+  );
+
+  /// See [MemoryEntity.kindIndex].
+  static final kindIndex = obx.QueryIntegerProperty<MemoryEntity>(
+    _entities[11].properties[2],
+  );
+
+  /// See [MemoryEntity.title].
+  static final title = obx.QueryStringProperty<MemoryEntity>(
+    _entities[11].properties[3],
+  );
+
+  /// See [MemoryEntity.content].
+  static final content = obx.QueryStringProperty<MemoryEntity>(
+    _entities[11].properties[4],
+  );
+
+  /// See [MemoryEntity.importance].
+  static final importance = obx.QueryIntegerProperty<MemoryEntity>(
+    _entities[11].properties[5],
+  );
+
+  /// See [MemoryEntity.createdAt].
+  static final createdAt = obx.QueryDateProperty<MemoryEntity>(
+    _entities[11].properties[6],
+  );
+
+  /// See [MemoryEntity.updatedAt].
+  static final updatedAt = obx.QueryDateProperty<MemoryEntity>(
+    _entities[11].properties[7],
+  );
+
+  /// See [MemoryEntity.lastUsedAt].
+  static final lastUsedAt = obx.QueryDateProperty<MemoryEntity>(
+    _entities[11].properties[8],
+  );
+
+  /// See [MemoryEntity.useCount].
+  static final useCount = obx.QueryIntegerProperty<MemoryEntity>(
+    _entities[11].properties[9],
+  );
+
+  /// See [MemoryEntity.sourceConversationId].
+  static final sourceConversationId = obx.QueryStringProperty<MemoryEntity>(
+    _entities[11].properties[10],
+  );
+
+  /// See [MemoryEntity.sourceMessageId].
+  static final sourceMessageId = obx.QueryStringProperty<MemoryEntity>(
+    _entities[11].properties[11],
+  );
+
+  /// See [MemoryEntity.supersededById].
+  static final supersededById = obx.QueryStringProperty<MemoryEntity>(
+    _entities[11].properties[12],
+  );
+
+  /// See [MemoryEntity.archived].
+  static final archived = obx.QueryBooleanProperty<MemoryEntity>(
+    _entities[11].properties[13],
+  );
+}
+
+/// [MemoryRelationEntity] entity fields to define ObjectBox queries.
+class MemoryRelationEntity_ {
+  /// See [MemoryRelationEntity.internalId].
+  static final internalId = obx.QueryIntegerProperty<MemoryRelationEntity>(
+    _entities[12].properties[0],
+  );
+
+  /// See [MemoryRelationEntity.fromMemoryId].
+  static final fromMemoryId = obx.QueryStringProperty<MemoryRelationEntity>(
+    _entities[12].properties[1],
+  );
+
+  /// See [MemoryRelationEntity.toMemoryId].
+  static final toMemoryId = obx.QueryStringProperty<MemoryRelationEntity>(
+    _entities[12].properties[2],
+  );
+
+  /// See [MemoryRelationEntity.label].
+  static final label = obx.QueryStringProperty<MemoryRelationEntity>(
+    _entities[12].properties[3],
+  );
+
+  /// See [MemoryRelationEntity.createdAt].
+  static final createdAt = obx.QueryDateProperty<MemoryRelationEntity>(
+    _entities[12].properties[4],
+  );
+
+  /// See [MemoryRelationEntity.id].
+  static final id = obx.QueryStringProperty<MemoryRelationEntity>(
+    _entities[12].properties[5],
   );
 }

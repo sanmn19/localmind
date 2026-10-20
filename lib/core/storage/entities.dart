@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:objectbox/objectbox.dart';
 import '../models/enums.dart';
 import '../../features/chat/data/models/background_task.dart';
@@ -848,6 +849,119 @@ class ManualModelEntity {
     required this.serverId,
     required this.modelId,
     this.displayName,
+    required this.createdAt,
+  });
+}
+
+
+/// One remembered fact: a passive context row, never an instruction.
+@Entity()
+class MemoryEntity {
+  @Id()
+  int internalId = 0;
+
+  @Index()
+  String id;
+
+  int kindIndex;
+
+  String title;
+
+  String content;
+
+  int importance;
+
+  @Property(type: PropertyType.date)
+  DateTime createdAt;
+
+  @Property(type: PropertyType.date)
+  DateTime updatedAt;
+
+  @Property(type: PropertyType.date)
+  DateTime? lastUsedAt;
+
+  int useCount;
+
+  String? sourceConversationId;
+
+  String? sourceMessageId;
+
+  String? supersededById;
+
+  bool archived;
+
+  MemoryEntity({
+    this.internalId = 0,
+    required this.id,
+    required this.kindIndex,
+    required this.title,
+    required this.content,
+    this.importance = 50,
+    required this.createdAt,
+    required this.updatedAt,
+    this.lastUsedAt,
+    this.useCount = 0,
+    this.sourceConversationId,
+    this.sourceMessageId,
+    this.supersededById,
+    this.archived = false,
+  });
+}
+
+/// One directed, labelled edge between two memories.
+@Entity()
+class MemoryRelationEntity {
+  @Id()
+  int internalId = 0;
+
+  @Index()
+  String id;
+
+  @Index()
+  String fromMemoryId;
+
+  @Index()
+  String toMemoryId;
+
+  String label;
+
+  @Property(type: PropertyType.date)
+  DateTime createdAt;
+
+  MemoryRelationEntity({
+    this.internalId = 0,
+    required this.id,
+    required this.fromMemoryId,
+    required this.toMemoryId,
+    required this.label,
+    required this.createdAt,
+  });
+}
+
+/// The stored embedding vector of one memory for one embedding model.
+@Entity()
+class MemoryEmbeddingEntity {
+  @Id()
+  int internalId = 0;
+
+  @Index()
+  String memoryId;
+
+  String modelId;
+
+  int dims;
+
+  Float32List vector;
+
+  @Property(type: PropertyType.date)
+  DateTime createdAt;
+
+  MemoryEmbeddingEntity({
+    this.internalId = 0,
+    required this.memoryId,
+    required this.modelId,
+    required this.dims,
+    required this.vector,
     required this.createdAt,
   });
 }
