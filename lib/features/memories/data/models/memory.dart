@@ -79,3 +79,18 @@ class MemoryRelation {
   final String label;
   final DateTime createdAt;
 }
+
+
+class MemoryEmbedding {
+  const MemoryEmbedding({
+    required this.memoryId,
+    required this.modelId,
+    required this.vector,
+    required this.createdAt,
+  });
+
+  final String memoryId;
+  final String modelId;
+  final List<double> vector;
+  final DateTime createdAt;
+}

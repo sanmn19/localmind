@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../../../core/storage/entities.dart';
 import '../../../objectbox.g.dart';
 import 'models/memory.dart';
@@ -9,9 +11,13 @@ abstract class MemoryStore {
 
   List<MemoryRelation> listRelations();
 
+  List<MemoryEmbedding> listEmbeddings();
+
   void put(Memory memory);
 
   void putRelation(MemoryRelation relation);
+
+  void putEmbedding(MemoryEmbedding embedding);
 
   void delete(String memoryId);
 
@@ -24,10 +30,12 @@ class ObjectBoxMemoryStore implements MemoryStore {
   ObjectBoxMemoryStore({
     required this.memories,
     required this.relations,
+    required this.embeddings,
   });
 
   final Box<MemoryEntity> memories;
   final Box<MemoryRelationEntity> relations;
+  final Box<MemoryEmbeddingEntity> embeddings;
 
   @override
   List<Memory> list() =>
@@ -36,6 +44,30 @@ class ObjectBoxMemoryStore implements MemoryStore {
   @override
   List<MemoryRelation> listRelations() =>
       relations.getAll().map(_relationToDomain).toList();
+
+  @override
+  List<MemoryEmbedding> listEmbeddings() => embeddings
+      .getAll()
+      .map(
+        (entity) => MemoryEmbedding(
+          memoryId: entity.memoryId,
+          modelId: entity.modelId,
+          vector: List<double>.from(entity.vector),
+          createdAt: entity.createdAt,
+        ),
+      )
+      .toList();
+
+  @override
+  void putEmbedding(MemoryEmbedding embedding) => embeddings.put(
+        MemoryEmbeddingEntity(
+          memoryId: embedding.memoryId,
+          modelId: embedding.modelId,
+          dims: embedding.vector.length,
+          vector: Float32List.fromList(embedding.vector),
+          createdAt: embedding.createdAt,
+        ),
+      );
 
   @override
   void put(Memory memory) => memories.put(_toEntity(memory));
@@ -138,6 +170,7 @@ class ObjectBoxMemoryStore implements MemoryStore {
 class InMemoryMemoryStore implements MemoryStore {
   final List<Memory> _memories = [];
   final List<MemoryRelation> _relations = [];
+  final List<MemoryEmbedding> _embeddings = [];
 
   @override
   List<Memory> list() => List<Memory>.from(_memories);
@@ -158,6 +191,13 @@ class InMemoryMemoryStore implements MemoryStore {
 
   @override
   void putRelation(MemoryRelation relation) => _relations.add(relation);
+
+  @override
+  List<MemoryEmbedding> listEmbeddings() =>
+      List<MemoryEmbedding>.from(_embeddings);
+
+  @override
+  void putEmbedding(MemoryEmbedding embedding) => _embeddings.add(embedding);
 
   @override
   void delete(String memoryId) =>

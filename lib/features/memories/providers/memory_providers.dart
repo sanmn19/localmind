@@ -10,6 +10,7 @@ final memoryStoreProvider = Provider<MemoryStore>((ref) {
   return ObjectBoxMemoryStore(
     memories: db.memoryBox,
     relations: db.memoryRelationBox,
+    embeddings: db.memoryEmbeddingBox,
   );
 });
 
