@@ -204,6 +204,24 @@ void main() {
     },
   );
 
+  test('pruneSamples prunes the queue without extracting', () async {
+    final now = DateTime(2026, 10, 20, 12);
+    final store = _RecordingStore()..add(_sample(1, 'x', 'com.whatsapp'));
+    final extractor = _FakeExtractor();
+    final batch = _processor(
+      store: store,
+      extractor: extractor,
+      now: () => now,
+    );
+
+    await batch.pruneSamples();
+
+    expect(store.prunedBefore, now.subtract(const Duration(hours: 24)));
+    expect(store.prunedKeepMax, 4000);
+    expect(extractor.calls, 0);
+    expect(store.processed, isEmpty);
+  });
+
   test('a disabled feature still prunes stale samples', () async {
     final now = DateTime(2026, 10, 20, 12);
     final store = _RecordingStore();

@@ -61,18 +61,26 @@ class ScreenMemoryBatchProcessor {
 
   bool get isRunning => _running;
 
-  Future<void> batchNow() async {
-    if (_running) return;
-    final now = _now();
+  /// Drops samples past the 24-hour retention window without extracting.
+  ///
+  /// Runs while the feature is off too: otherwise text captured before the user
+  /// switched it off would stay on disk indefinitely.
+  Future<void> pruneSamples() async {
     try {
       _store.prune(
-        before: now.subtract(_sampleRetention),
+        before: _now().subtract(_sampleRetention),
         keepMax: _keepMaxSamples,
       );
     } catch (error) {
-      // Pruning is best-effort; a store hiccup must not stop the batch.
+      // Pruning is best-effort; a store hiccup must not stop a batch.
       Log.warning('Screen sample prune failed: $error');
     }
+  }
+
+  Future<void> batchNow() async {
+    if (_running) return;
+    await pruneSamples();
+    final now = _now();
     if (!_settings().screenMemoryEnabled) return;
 
     final backoffUntil = _backoffUntil;

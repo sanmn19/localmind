@@ -142,6 +142,8 @@ MemoryRepository.remember(kind: inferred, tags, shortSummary,
   null) and while the feature is off.
 - Shipped defaults: the feature is **off**; sample every **500 ms**; batch every
   **60 s**; prune samples after **24 hours** and keep at most **4000**.
+- Switching the feature off stops the timers and prunes the queue, so text captured
+  before disabling cannot outlive its retention window while sampling is paused.
 
 ### Extraction
 

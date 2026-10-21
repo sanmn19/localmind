@@ -3,6 +3,7 @@
 
 import 'dart:async';
 
+import '../../../core/logger/app_logger.dart';
 import '../../settings/data/models/app_settings.dart';
 import 'screen_memory_batch_processor.dart';
 import 'screen_sampler.dart';
@@ -34,6 +35,13 @@ class ScreenMemoryScheduler {
     final batchSeconds = settings.screenMemoryBatchIntervalSeconds;
     if (!settings.screenMemoryEnabled || sampleMs <= 0 || batchSeconds <= 0) {
       stop();
+      // No more batches run while the feature is off, so drain expired samples
+      // here instead of leaving captured text on disk indefinitely.
+      unawaited(
+        _batch.pruneSamples().catchError((Object error, StackTrace stack) {
+          Log.warning('Screen sample prune failed: $error');
+        }),
+      );
       return;
     }
 
@@ -54,7 +62,11 @@ class ScreenMemoryScheduler {
     );
     _batchTimer = Timer.periodic(
       batchInterval,
-      (_) => unawaited(_batch.batchNow()),
+      (_) => unawaited(
+        _batch.batchNow().catchError((Object error, StackTrace stack) {
+          Log.warning('Screen memory batch failed: $error');
+        }),
+      ),
     );
   }
 

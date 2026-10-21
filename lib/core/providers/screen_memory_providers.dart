@@ -44,7 +44,7 @@ final screenMemorySchedulerProvider = Provider<ScreenMemoryScheduler>((ref) {
 /// Starts the sampler and batch timers while screen memories are on, and stops
 /// them when the feature is switched off. Watched once by the app root.
 final screenMemoryTickProvider = Provider<void>((ref) {
-  final enabled = ref.watch(
+  ref.watch(
     settingsProvider.select((settings) => settings.screenMemoryEnabled),
   );
   ref.watch(
@@ -57,10 +57,8 @@ final screenMemoryTickProvider = Provider<void>((ref) {
       (settings) => settings.screenMemoryBatchIntervalSeconds,
     ),
   );
-  // Off: never build the DB-backed sampler/batch. A prior build's onDispose
-  // already stopped its timers.
-  if (!enabled) return;
-
+  // applySettings also prunes the sample queue while the feature is off, so a
+  // previous build's captured text cannot outlive the 24-hour window.
   final scheduler = ref.watch(screenMemorySchedulerProvider);
   scheduler.applySettings(ref.read(settingsProvider));
   ref.onDispose(scheduler.stop);

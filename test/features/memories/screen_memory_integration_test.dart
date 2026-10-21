@@ -79,10 +79,16 @@ class _FakeBatch extends ScreenMemoryBatchProcessor {
       );
 
   int calls = 0;
+  int pruneCalls = 0;
 
   @override
   Future<void> batchNow() async {
     calls++;
+  }
+
+  @override
+  Future<void> pruneSamples() async {
+    pruneCalls++;
   }
 }
 
@@ -177,5 +183,29 @@ void main() {
     expect(scheduler.isRunning, isTrue);
     scheduler.applySettings(AppSettings().copyWith(screenMemoryEnabled: false));
     expect(scheduler.isRunning, isFalse);
+  });
+
+  test('disabling the scheduler prunes samples without batching', () async {
+    final batch = _FakeBatch();
+    final scheduler = ScreenMemoryScheduler(
+      sampler: ScreenSampler(
+        gateway: _FakeGateway(text: 'x', packageName: 'com.whatsapp'),
+        store: _RecordingStore(),
+        settings: () => AppSettings(screenMemoryEnabled: true),
+      ),
+      batch: batch,
+    );
+    addTearDown(scheduler.dispose);
+
+    scheduler.applySettings(AppSettings().copyWith(screenMemoryEnabled: true));
+    expect(scheduler.isRunning, isTrue);
+    expect(batch.pruneCalls, 0);
+
+    scheduler.applySettings(AppSettings().copyWith(screenMemoryEnabled: false));
+    expect(scheduler.isRunning, isFalse);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(batch.pruneCalls, 1);
+    expect(batch.calls, 0);
   });
 }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../logger/app_logger.dart';
 import '../providers/app_providers.dart';
 import '../providers/screen_memory_providers.dart';
 
@@ -39,7 +40,14 @@ class _ScreenMemoryLifecycleHostState
   void _batchNow() {
     if (!mounted) return;
     if (!ref.read(settingsProvider).screenMemoryEnabled) return;
-    unawaited(ref.read(screenMemorySchedulerProvider).batchNow());
+    unawaited(
+      ref
+          .read(screenMemorySchedulerProvider)
+          .batchNow()
+          .catchError((Object error, StackTrace stack) {
+            Log.warning('Screen memory batch failed: $error');
+          }),
+    );
   }
 
   @override
