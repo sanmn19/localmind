@@ -50,7 +50,18 @@ class MemoriesNotifier extends Notifier<int> {
     MemoryKind kind = MemoryKind.fact,
     int importance = 50,
     String? scopeConversationId,
+    List<String> tags = const [],
+    String shortSummary = '',
+    DateTime? expiresAt,
+    String? sourceApp,
   }) async {
+    if (kind == MemoryKind.inferred) {
+      throw ArgumentError.value(
+        kind,
+        'kind',
+        'inferred memories are written by the screen extractor',
+      );
+    }
     final memory = ref
         .read(memoryRepositoryProvider)
         .remember(
@@ -59,6 +70,10 @@ class MemoriesNotifier extends Notifier<int> {
           kind: kind,
           importance: importance,
           scopeConversationId: scopeConversationId,
+          tags: tags,
+          shortSummary: shortSummary,
+          expiresAt: expiresAt,
+          sourceApp: sourceApp,
         );
     ref.invalidate(memoriesProvider);
     state++;
