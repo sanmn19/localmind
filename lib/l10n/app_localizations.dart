@@ -7080,8 +7080,50 @@ abstract class AppLocalizations {
   /// Screen memories card footer
   ///
   /// In en, this message translates to:
-  /// **'Samples stay on this device for at most 24 hours and are never exported. Screen text is sent only to the model server you selected.'**
+  /// **'Samples are pruned at the next batch or app open after 24 hours, and whenever you turn Screen memories off. They are never exported. Screen text is sent only to the model server you selected.'**
   String get screen_memories_footer;
+
+  /// Screen memories: accessibility service status row
+  ///
+  /// In en, this message translates to:
+  /// **'Screen capture service'**
+  String get screen_memories_service;
+
+  /// Screen memories: accessibility service explanation
+  ///
+  /// In en, this message translates to:
+  /// **'LocalMind needs the accessibility service to read on-screen text.'**
+  String get screen_memories_service_desc;
+
+  /// Screen memories: accessibility service is on
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled'**
+  String get screen_memories_service_enabled;
+
+  /// Screen memories: accessibility service is off
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get screen_memories_service_disabled;
+
+  /// Screen memories: accessibility service status is loading
+  ///
+  /// In en, this message translates to:
+  /// **'Checking…'**
+  String get screen_memories_service_checking;
+
+  /// Screen memories: open Android accessibility settings button
+  ///
+  /// In en, this message translates to:
+  /// **'Open accessibility settings'**
+  String get screen_memories_service_open_settings;
+
+  /// Screen memories: accessibility settings open failure
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open accessibility settings.'**
+  String get screen_memories_service_error;
 
   /// Memories screen: add button/dialog title
   ///

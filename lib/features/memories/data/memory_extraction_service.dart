@@ -8,6 +8,7 @@ import '../../chat/data/models/chat_parameters.dart';
 import '../../chat/data/models/message.dart';
 import '../../servers/data/models/server.dart';
 import 'models/memory.dart';
+import 'screen_privacy_filter.dart';
 
 /// One memory proposed by the background extractor.
 class ExtractedMemory {
@@ -246,7 +247,9 @@ Return [] when nothing is worth saving.
       ).take(maxPerScreenBatch).toList();
     } catch (error) {
       Log.warning('Screen memory extraction failed: $error');
-      return const [];
+      // The batch processor owns retry/backoff: swallowing here would make a
+      // model or network failure look like an empty, successful batch.
+      rethrow;
     }
   }
 
@@ -276,7 +279,10 @@ Return [] when nothing is worth saving.
       final summary = _oneLine((item['summary'] as String?) ?? '');
       if (_looksSecret(title) ||
           _looksSecret(content) ||
-          _looksSecret(summary)) {
+          _looksSecret(summary) ||
+          ScreenPrivacyFilter.containsSensitiveData(title) ||
+          ScreenPrivacyFilter.containsSensitiveData(content) ||
+          ScreenPrivacyFilter.containsSensitiveData(summary)) {
         continue;
       }
       final parsedKind = MemoryKind.values.firstWhere(

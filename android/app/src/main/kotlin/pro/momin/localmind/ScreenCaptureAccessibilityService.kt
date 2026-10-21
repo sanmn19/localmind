@@ -205,22 +205,42 @@ class ScreenCaptureAccessibilityService : AccessibilityService() {
     }
 
     /** Depth-first walk in reading order; password nodes take their whole
-     *  subtree with them, and collection stops at the character cap. */
+     *  subtree with them, and collection stops at the character cap. Nodes are
+     *  recycled after use on API 26-32; recycle is a no-op from API 33. */
     private fun collectNodeText(root: AccessibilityNodeInfo, out: StringBuilder) {
         val stack = ArrayDeque<AccessibilityNodeInfo>()
         stack.addLast(root)
-        while (stack.isNotEmpty() && out.length < MAX_SCREEN_TEXT_CHARS) {
-            val node = stack.removeLast()
-            if (node.isPassword) continue
-            val nodeText = node.text
-            appendNodeText(out, nodeText)
-            val description = node.contentDescription
-            if (description != null && description.toString() != nodeText?.toString()) {
-                appendNodeText(out, description)
+        try {
+            while (stack.isNotEmpty() && out.length < MAX_SCREEN_TEXT_CHARS) {
+                val node = stack.removeLast()
+                try {
+                    if (!node.isPassword) {
+                        val nodeText = node.text
+                        appendNodeText(out, nodeText)
+                        val description = node.contentDescription
+                        if (description != null && description.toString() != nodeText?.toString()) {
+                            appendNodeText(out, description)
+                        }
+                        for (index in node.childCount - 1 downTo 0) {
+                            node.getChild(index)?.let(stack::addLast)
+                        }
+                    }
+                } finally {
+                    recycleNode(node)
+                }
             }
-            for (index in node.childCount - 1 downTo 0) {
-                node.getChild(index)?.let(stack::addLast)
+        } finally {
+            // The character cap can leave acquired nodes on the stack.
+            while (stack.isNotEmpty()) {
+                recycleNode(stack.removeLast())
             }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun recycleNode(node: AccessibilityNodeInfo) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            node.recycle()
         }
     }
 

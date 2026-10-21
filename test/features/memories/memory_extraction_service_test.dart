@@ -38,6 +38,30 @@ void main() {
     expect(parsed, isEmpty);
   });
 
+  test('drops memories carrying a card number or OTP', () async {
+    final card = await _extractScreen(
+      service,
+      '[{"kind":"inferred","title":"Card",'
+      '"content":"Card 4111 1111 1111 1111 on file."}]',
+    );
+    final otp = await _extractScreen(
+      service,
+      '[{"kind":"inferred","title":"Code",'
+      '"content":"Your verification code is 482913."}]',
+    );
+    expect(card, isEmpty);
+    expect(otp, isEmpty);
+  });
+
+  test('keeps a memory with a normal phone number', () async {
+    final parsed = await _extractScreen(
+      service,
+      '[{"kind":"inferred","title":"Phone",'
+      '"content":"Call me at +1 555 123 4567."}]',
+    );
+    expect(parsed.single.content, contains('555'));
+  });
+
   test('caps a turn at three memories', () {
     final parsed = service.parse(
       '[{"kind":"fact","title":"A","content":"one","importance":50},'

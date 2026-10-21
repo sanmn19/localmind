@@ -71,10 +71,6 @@ class DataBackupService {
     'showSystemMessagesInChat',
     'memoriesEnabled',
     'autoMemoryEnabled',
-    'screenMemoryEnabled',
-    'screenMemorySampleIntervalMs',
-    'screenMemoryBatchIntervalSeconds',
-    'screenMemoryBlockedApps',
   };
 
   Map<String, dynamic> _messageToMap(Message message) => {
@@ -478,6 +474,10 @@ class DataBackupService {
       'savedMessages': all['savedMessages'],
       'savedMessageFolders': all['savedMessageFolders'],
       'conversationFolders': all['conversationFolders'],
+      // Cloud sync carries the memory graph too. Screen-memory device settings
+      // stay out of `settings` so a restore cannot turn screen watching on.
+      'memories': all['memories'],
+      'memoryRelations': all['memoryRelations'],
     };
   }
 

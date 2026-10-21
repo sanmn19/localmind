@@ -3,6 +3,7 @@
 
 import '../../../core/logger/app_logger.dart';
 import '../../settings/data/models/app_settings.dart';
+import 'screen_privacy_filter.dart';
 import 'screen_sample_store.dart';
 import 'screen_text_gateway.dart';
 
@@ -40,13 +41,23 @@ class ScreenSampler {
     try {
       final screen = await _gateway.readText();
       if (_disposed || screen == null || !screen.isInteractive) return;
-      if (_isBlocked(screen.packageName, settings.screenMemoryBlockedApps)) {
+      if (isBlockedPackage(
+        screen.packageName,
+        settings.screenMemoryBlockedApps,
+      )) {
         return;
       }
       final text = _normalize(screen.text);
       if (text.isEmpty) return;
       final hash = _hash(screen.packageName, text);
       if (hash == _lastHash) return;
+      if (ScreenPrivacyFilter.containsSensitiveData(text)) {
+        // Remember the hash so the same sensitive screen is not re-read every
+        // tick; a changed screen is evaluated again.
+        _lastHash = hash;
+        Log.info('Screen sample skipped: sensitive content');
+        return;
+      }
       _store.add(
         ScreenSample(
           capturedAt: _now(),
@@ -70,7 +81,7 @@ class ScreenSampler {
   }
 
   /// An exact package or a blocked package's subpackage.
-  static bool _isBlocked(String packageName, Iterable<String> blocked) {
+  static bool isBlockedPackage(String packageName, Iterable<String> blocked) {
     for (final app in blocked) {
       final value = app.trim();
       if (value.isEmpty) continue;

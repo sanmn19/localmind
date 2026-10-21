@@ -184,6 +184,10 @@ void main() {
         'hasCompletedOnboarding': true,
         'hasAskedForNotifications': true,
         'futureSecret': 'must-not-sync',
+        'screenMemoryEnabled': true,
+        'screenMemorySampleIntervalMs': 1000,
+        'screenMemoryBatchIntervalSeconds': 120,
+        'screenMemoryBlockedApps': ['com.bank'],
       }),
     );
 
@@ -201,6 +205,18 @@ void main() {
     expect(payload['settings'], isNot(contains('defaultServerId')));
     expect(payload['settings'], isNot(contains('hasCompletedOnboarding')));
     expect(payload['settings'], isNot(contains('futureSecret')));
+    // Screen-watching settings are device-local: a restore on another device
+    // must not turn the feature on without a local opt-in.
+    expect(payload['settings'], isNot(contains('screenMemoryEnabled')));
+    expect(
+      payload['settings'],
+      isNot(contains('screenMemorySampleIntervalMs')),
+    );
+    expect(
+      payload['settings'],
+      isNot(contains('screenMemoryBatchIntervalSeconds')),
+    );
+    expect(payload['settings'], isNot(contains('screenMemoryBlockedApps')));
   });
 
   test('memory tags, summary, expiry and source app survive export/import',
@@ -255,6 +271,60 @@ void main() {
     final restored = importedBox.items.single;
     expect(restored.id, 'memory-1');
     expect(restored.kindIndex, MemoryKind.inferred.index);
+    expect(restored.tags, ['work', 'standup']);
+    expect(restored.shortSummary, 'Standup at 10:00');
+    expect(restored.expiresAt, DateTime.utc(2026, 10, 21));
+    expect(restored.sourceApp, 'com.whatsapp');
+  });
+
+  test('cloud sync carries memories and preserves their fields', () async {
+    final memory = MemoryEntity(
+      id: 'cloud-memory-1',
+      kindIndex: MemoryKind.inferred.index,
+      title: 'Standup',
+      content: 'Standup moved to 10:00.',
+      createdAt: DateTime.utc(2026, 10, 20),
+      updatedAt: DateTime.utc(2026, 10, 20),
+      tags: const ['work', 'standup'],
+      shortSummary: 'Standup at 10:00',
+      expiresAt: DateTime.utc(2026, 10, 21),
+      sourceApp: 'com.whatsapp',
+    );
+    final store = _FakeStore({
+      MemoryEntity: _MemoryBox([memory]),
+      MemoryRelationEntity: _FakeBox<MemoryRelationEntity>(const []),
+      MemoryEmbeddingEntity: _FakeBox<MemoryEmbeddingEntity>(const []),
+    });
+    final directory = await Directory.systemTemp.createTemp(
+      'backup-cloud-memory-test',
+    );
+    addTearDown(() async {
+      if (await directory.exists()) await directory.delete(recursive: true);
+    });
+    final service = DataBackupService(
+      documentsDirectory: () async => directory,
+    );
+
+    final payload = await service.exportCloudSync(store, jsonEncode({}));
+    final exported = (payload['memories'] as List).single
+        as Map<String, dynamic>;
+    expect(exported['tags'], ['work', 'standup']);
+    expect(exported['shortSummary'], 'Standup at 10:00');
+    expect(exported['expiresAt'], '2026-10-21T00:00:00.000Z');
+    expect(exported['sourceApp'], 'com.whatsapp');
+    expect(payload['memoryRelations'], isA<List>());
+
+    final importedBox = _MemoryBox();
+    await service.importSkillsAndMemories(
+      _FakeStore({
+        MemoryEntity: importedBox,
+        MemoryRelationEntity: _FakeBox<MemoryRelationEntity>(const []),
+        MemoryEmbeddingEntity: _FakeBox<MemoryEmbeddingEntity>(const []),
+      }),
+      payload,
+    );
+
+    final restored = importedBox.items.single;
     expect(restored.tags, ['work', 'standup']);
     expect(restored.shortSummary, 'Standup at 10:00');
     expect(restored.expiresAt, DateTime.utc(2026, 10, 21));

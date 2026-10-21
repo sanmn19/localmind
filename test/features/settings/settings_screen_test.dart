@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:localmind/core/providers/app_providers.dart';
 import 'package:localmind/core/providers/storage_providers.dart';
+import 'package:localmind/core/services/android_assistant_service.dart';
 import 'package:localmind/core/theme/app_theme.dart';
 import 'package:localmind/features/personas/data/models/persona.dart';
 import 'package:localmind/features/personas/providers/personas_providers.dart';
@@ -24,7 +25,10 @@ class _NoPersonas extends PersonasNotifier {
   Future<List<Persona>> build() async => const [];
 }
 
-Future<ProviderContainer> _pump(WidgetTester tester) async {
+Future<ProviderContainer> _pump(
+  WidgetTester tester, {
+  AndroidAssistantService? assistantService,
+}) async {
   // The test font draws every glyph a full em wide; give rows room.
   tester.view.physicalSize = const Size(700, 1000);
   tester.view.devicePixelRatio = 1;
@@ -46,6 +50,8 @@ Future<ProviderContainer> _pump(WidgetTester tester) async {
       ),
       serversProvider.overrideWith(_NoServers.new),
       personasNotifierProvider.overrideWith(_NoPersonas.new),
+      if (assistantService != null)
+        androidAssistantServiceProvider.overrideWithValue(assistantService),
     ],
   );
   addTearDown(container.dispose);
@@ -130,6 +136,42 @@ void main() {
     expect(find.text('Sample every'), findsOneWidget);
     expect(find.text('Summarize every'), findsOneWidget);
     expect(find.text('Blocked apps'), findsOneWidget);
-    expect(find.text('5 packages are never sampled'), findsOneWidget);
+    expect(find.text('27 packages are never sampled'), findsOneWidget);
   });
+
+  testWidgets('the screen memories card shows the capture service status', (
+    tester,
+  ) async {
+    final service = _FakeAndroidAssistantService(screenCaptureEnabled: true);
+    await _pump(tester, assistantService: service);
+    await tester.pump();
+
+    expect(find.text('Screen capture service'), findsOneWidget);
+    expect(find.text('Enabled'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Open accessibility settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Open accessibility settings'));
+    await tester.pump();
+
+    expect(service.openSettingsCalls, 1);
+  });
+}
+
+class _FakeAndroidAssistantService extends AndroidAssistantService {
+  _FakeAndroidAssistantService({required this.screenCaptureEnabled})
+    : super(supportedPlatform: true);
+
+  final bool screenCaptureEnabled;
+  int openSettingsCalls = 0;
+
+  @override
+  Future<bool> isScreenCaptureEnabled() async => screenCaptureEnabled;
+
+  @override
+  Future<void> openScreenCaptureSettings() async => openSettingsCalls++;
+
+  @override
+  Future<AndroidAssistantStatus> getStatus() async =>
+      AndroidAssistantStatus.unsupported;
 }

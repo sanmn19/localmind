@@ -13,14 +13,39 @@ enum SyntaxThemeName { light, dark }
 class AppSettings {
   static const Object _unset = Object();
 
-  /// Known password-manager and authenticator packages blocked by default.
-  /// Bank packages are user-specific and belong in the blocked-apps dialog.
+  /// Known password-manager, authenticator, and banking packages blocked by
+  /// default. The banking entries are best-effort: package names vary by region,
+  /// and the list stays user-editable in the blocked-apps dialog.
   static const List<String> defaultScreenMemoryBlockedApps = [
+    // Password managers and authenticators.
     'com.onepassword.android',
     'com.x8bit.bitwarden',
     'com.dashlane',
     'com.lastpass.lpandroid',
     'com.google.android.apps.authenticator2',
+    // Banking apps and common regional variants.
+    'com.chase.sig.android', // Chase (US)
+    'com.chase.intl', // Chase (international)
+    'com.infonow.bofa', // Bank of America
+    'com.wf.wellsfargomobile', // Wells Fargo
+    'com.citi.citimobile', // Citi
+    'com.konylabs.capitalone', // Capital One
+    'com.htsu.hsbcpersonalbanking', // HSBC
+    'com.barclays.android.barclaysmobilebanking', // Barclays
+    'com.revolut.revolut', // Revolut
+    'co.uk.getmondo', // Monzo
+    'de.number26.android', // N26
+    'com.ing.mobile', // ING
+    'com.santander.app', // Santander
+    'uk.co.santander.santanderUK', // Santander UK
+    'com.db.mobile', // Deutsche Bank
+    'com.rbs.mobile.android.natwest', // NatWest
+    'com.lloydsbank.mobile', // Lloyds
+    'com.grppl.android.shell.halifax', // Halifax
+    'com.usaa.mobile.android.usaa', // USAA
+    'com.pnc.ecommerce.mobile', // PNC
+    'com.ally.MobileBanking', // Ally
+    'com.td.bbmobilenew', // TD Canada
   ];
 
   final double temperature;

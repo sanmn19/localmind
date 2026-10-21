@@ -191,6 +191,8 @@ class _SettingsViewsState extends ConsumerState<SettingsViews> {
           value: settings.screenMemoryEnabled,
           onChanged: notifier.setScreenMemoryEnabled,
         ),
+        if (assistantService.isSupportedPlatform)
+          const _ScreenCaptureServiceSetting(),
         if (settings.screenMemoryEnabled) ...[
           _ScreenIntervalSetting(
             label: l10n.screen_memories_sample_interval,
@@ -987,6 +989,151 @@ class _AndroidAssistantSettingState
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(actionLabel),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScreenCaptureServiceSetting extends ConsumerStatefulWidget
+    implements _Searchable {
+  const _ScreenCaptureServiceSetting();
+
+  @override
+  List<String> searchTerms(AppLocalizations l10n) => [
+    l10n.screen_memories_service,
+    l10n.screen_memories_service_desc,
+  ];
+
+  @override
+  ConsumerState<_ScreenCaptureServiceSetting> createState() =>
+      _ScreenCaptureServiceSettingState();
+}
+
+class _ScreenCaptureServiceSettingState
+    extends ConsumerState<_ScreenCaptureServiceSetting>
+    with WidgetsBindingObserver {
+  bool? _enabled;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _refreshStatus();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshStatus();
+    }
+  }
+
+  Future<void> _refreshStatus() async {
+    try {
+      final enabled = await ref
+          .read(androidAssistantServiceProvider)
+          .isScreenCaptureEnabled();
+      if (mounted) setState(() => _enabled = enabled);
+    } on PlatformException {
+      if (mounted) setState(() => _enabled = false);
+    } on MissingPluginException {
+      if (mounted) setState(() => _enabled = false);
+    }
+  }
+
+  Future<void> _openSettings() async {
+    if (_busy) return;
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(androidAssistantServiceProvider)
+          .openScreenCaptureSettings();
+    } on PlatformException {
+      messenger?.showSnackBar(
+        SnackBar(content: Text(l10n.screen_memories_service_error)),
+      );
+    } on MissingPluginException {
+      messenger?.showSnackBar(
+        SnackBar(content: Text(l10n.screen_memories_service_error)),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+    if (!mounted) return;
+    await _refreshStatus();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final enabled = _enabled;
+    final statusLabel = switch (enabled) {
+      true => l10n.screen_memories_service_enabled,
+      false => l10n.screen_memories_service_disabled,
+      null => l10n.screen_memories_service_checking,
+    };
+    final statusColor = enabled == true
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurfaceVariant;
+
+    return _SettingPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _RowLabel(
+                  label: l10n.screen_memories_service,
+                  description: l10n.screen_memories_service_desc,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.09),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  statusLabel,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: statusColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ShadButton.outline(
+            onPressed: _busy ? null : _openSettings,
+            width: double.infinity,
+            leading: _busy
+                ? const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const HugeIcon(
+                    icon: HugeIcons.strokeRoundedSettings01,
+                    size: 16,
+                  ),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(l10n.screen_memories_service_open_settings),
             ),
           ),
         ],

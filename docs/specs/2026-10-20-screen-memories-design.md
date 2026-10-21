@@ -203,8 +203,9 @@ memory created by the model has them.
 - `screenMemoryBlockedApps` (default the known banking/password-manager
   packages): comma-separated package names.
 - Settings UI: a **Screen memories** card with the toggle, the sample and batch
-  intervals, and a "Blocked apps" dialog; the card states that samples are stored
-  on-device for at most 24 hours and text never leaves the device.
+  intervals, and a "Blocked apps" dialog; the card states that samples are pruned
+  at the next batch or app open after 24 hours (and when the feature is switched
+  off) and that text never leaves the device.
 
 ### Backup and cloud sync
 
@@ -219,7 +220,8 @@ empty summary, and no expiry — tolerant, no failure.
 - `inferred` is appended to the enum, not inserted, to protect stored indices.
 - Sample every **500 ms**, batch every **60 s**, plus app open and overlay open.
 - Permanence is the model's call: no expiry means permanent; no default window.
-- Samples are plaintext in ObjectBox, pruned after **24 hours**, never exported.
+- Samples are plaintext in ObjectBox, pruned at the next batch/app open after
+  **24 hours** (and when the feature is switched off), never exported.
 - Node text only in v1; screenshot + vision fallback is a follow-up.
 - The sampler is Dart (`Timer.periodic`); the existing foreground service keeps
   the process alive.

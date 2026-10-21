@@ -9,6 +9,7 @@ import '../../settings/data/models/app_settings.dart';
 import 'memory_extraction_service.dart';
 import 'memory_repository.dart';
 import 'screen_sample_store.dart';
+import 'screen_sampler.dart';
 
 /// Drains the screen-sample queue into at most one extraction call per batch.
 ///
@@ -81,7 +82,8 @@ class ScreenMemoryBatchProcessor {
     if (_running) return;
     await pruneSamples();
     final now = _now();
-    if (!_settings().screenMemoryEnabled) return;
+    final settings = _settings();
+    if (!settings.screenMemoryEnabled) return;
 
     final backoffUntil = _backoffUntil;
     if (backoffUntil != null && now.isBefore(backoffUntil)) return;
@@ -94,11 +96,30 @@ class ScreenMemoryBatchProcessor {
     final samples = _store.pending();
     if (samples.isEmpty) return;
 
+    // A package blocked after capture must not reach the model: discard its
+    // queued samples instead of merging them into the batch.
+    final allowed = <ScreenSample>[];
+    final discarded = <ScreenSample>[];
+    for (final sample in samples) {
+      if (ScreenSampler.isBlockedPackage(
+        sample.packageName,
+        settings.screenMemoryBlockedApps,
+      )) {
+        discarded.add(sample);
+      } else {
+        allowed.add(sample);
+      }
+    }
+    if (discarded.isNotEmpty) {
+      _store.markProcessed(discarded.map((sample) => sample.id), now);
+    }
+    if (allowed.isEmpty) return;
+
     final server = _server();
     final modelId = _modelId();
     if (server == null || modelId.isEmpty) return;
 
-    final merged = _merge(samples);
+    final merged = _merge(allowed);
     if (merged.text.isEmpty) return;
 
     final ChatService chatService;
@@ -109,7 +130,6 @@ class ScreenMemoryBatchProcessor {
       return;
     }
 
-    _store.markProcessed(samples.map((sample) => sample.id), now);
     _batchTimes.add(now);
     _running = true;
     try {
@@ -140,6 +160,9 @@ class ScreenMemoryBatchProcessor {
           importance: item.importance,
         );
       }
+      // Only a completed extraction consumes the queue; a throw leaves the
+      // samples pending so the backoff can retry them.
+      _store.markProcessed(allowed.map((sample) => sample.id), now);
     } catch (error) {
       _fail(now, error);
     } finally {

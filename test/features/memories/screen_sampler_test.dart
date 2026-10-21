@@ -75,6 +75,26 @@ void main() {
     expect(store.added, isEmpty);
   });
 
+  test('a screen with a card number or OTP is never stored', () async {
+    final store = _RecordingStore();
+    var text = 'Card 4111 1111 1111 1111 on file';
+    final sampler = ScreenSampler(
+      gateway: _ChangeableGateway(() => text),
+      store: store,
+      settings: () => _enabled(),
+    );
+    await sampler.tick();
+    expect(store.added, isEmpty);
+
+    text = 'Your verification code is 482913';
+    await sampler.tick();
+    expect(store.added, isEmpty);
+
+    text = 'Call me at +1 555 123 4567';
+    await sampler.tick();
+    expect(store.added, hasLength(1));
+  });
+
   test('a non-interactive screen is never read', () async {
     final gateway = _FakeGateway(
       text: 'x',

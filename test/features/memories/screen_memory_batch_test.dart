@@ -290,4 +290,59 @@ void main() {
     await batch.batchNow();
     expect(extractor.calls, 2);
   });
+
+  test('a failed extraction leaves the samples pending', () async {
+    final now = DateTime(2026, 10, 20, 9);
+    final store = _RecordingStore()..add(_sample(1, 'x', 'com.whatsapp'));
+    final extractor = _FakeExtractor(fail: true);
+    final batch = _processor(
+      store: store,
+      extractor: extractor,
+      now: () => now,
+    );
+
+    await batch.batchNow();
+
+    expect(extractor.calls, 1);
+    expect(store.processed, isEmpty);
+    await batch.batchNow();
+    expect(extractor.calls, 1);
+  });
+
+  test('an empty successful extraction marks the samples processed', () async {
+    final now = DateTime(2026, 10, 20, 9);
+    final store = _RecordingStore()..add(_sample(1, 'x', 'com.whatsapp'));
+    final extractor = _FakeExtractor();
+    final batch = _processor(
+      store: store,
+      extractor: extractor,
+      now: () => now,
+    );
+
+    await batch.batchNow();
+
+    expect(extractor.calls, 1);
+    expect(store.processed, [1]);
+  });
+
+  test('a queued sample from a now-blocked package is not extracted', () async {
+    final store = _RecordingStore()
+      ..add(_sample(1, 'Bank balance 1234', 'com.bank'))
+      ..add(_sample(2, 'Standup 10:00', 'com.whatsapp'));
+    final extractor = _FakeExtractor();
+    final batch = _processor(
+      store: store,
+      extractor: extractor,
+      settings: AppSettings(
+        screenMemoryEnabled: true,
+        screenMemoryBlockedApps: const ['com.bank'],
+      ),
+    );
+
+    await batch.batchNow();
+
+    expect(extractor.lastText, isNot(contains('Bank balance')));
+    expect(extractor.lastText, contains('Standup 10:00'));
+    expect(store.processed, containsAll([1, 2]));
+  });
 }

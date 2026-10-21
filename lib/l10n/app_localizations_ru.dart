@@ -3871,7 +3871,31 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get screen_memories_footer =>
-      'Samples stay on this device for at most 24 hours and are never exported. Screen text is sent only to the model server you selected.';
+      'Samples are pruned at the next batch or app open after 24 hours, and whenever you turn Screen memories off. They are never exported. Screen text is sent only to the model server you selected.';
+
+  @override
+  String get screen_memories_service => 'Screen capture service';
+
+  @override
+  String get screen_memories_service_desc =>
+      'LocalMind needs the accessibility service to read on-screen text.';
+
+  @override
+  String get screen_memories_service_enabled => 'Enabled';
+
+  @override
+  String get screen_memories_service_disabled => 'Disabled';
+
+  @override
+  String get screen_memories_service_checking => 'Checking…';
+
+  @override
+  String get screen_memories_service_open_settings =>
+      'Open accessibility settings';
+
+  @override
+  String get screen_memories_service_error =>
+      'Could not open accessibility settings.';
 
   @override
   String get memory_add => 'Add memory';
