@@ -222,10 +222,14 @@ Return [] when nothing is worth saving.
       createdAt: today,
     );
 
+    // The reply is structured JSON, so reasoning is pure overhead: a thinking
+    // model can otherwise spend the whole output budget before emitting any
+    // content, and the parser then sees an empty string.
     final extractionParams = params.copyWith(
       temperature: 0.2,
       maxTokens: 400,
       systemPrompt: _screenPrompt,
+      reasoningEnabled: false,
     );
 
     try {

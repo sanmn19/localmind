@@ -1868,6 +1868,8 @@ class ChatNotifier extends Notifier<ChatState> {
             scopeConversationId: item.conversationScoped
                 ? conversationId
                 : null,
+            tags: item.tags,
+            shortSummary: item.shortSummary,
           );
         }
         ref.invalidate(memoriesProvider);

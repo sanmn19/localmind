@@ -205,6 +205,21 @@ void main() {
     expect(extracted, hasLength(2));
   });
 
+  test('screen extraction disables reasoning for the hidden call', () async {
+    final chat = _RecordingChatService('[]');
+
+    await service.extractScreen(
+      chatService: chat,
+      server: _server(),
+      modelId: 'model',
+      params: ChatParameters.defaults(),
+      screenText: 'Standup at 10:00',
+      sourceApp: 'com.whatsapp',
+    );
+
+    expect(chat.lastParams?.reasoningEnabled, isFalse);
+  });
+
   test('an empty screen skips the hidden call', () async {
     final chat = _RecordingChatService('[]');
 
@@ -257,6 +272,7 @@ class _RecordingChatService implements ChatService {
 
   final String reply;
   List<Message>? lastMessages;
+  ChatParameters? lastParams;
 
   @override
   Stream<ChatResponse> sendMessage({
@@ -269,6 +285,7 @@ class _RecordingChatService implements ChatService {
     bool continueGeneration = false,
   }) {
     lastMessages = messages;
+    lastParams = params;
     return Stream.fromIterable([
       ChatResponse(type: ChatResponseType.message, content: reply),
       const ChatResponse(type: ChatResponseType.done),

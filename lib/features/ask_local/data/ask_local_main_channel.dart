@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:localmind/core/logger/app_logger.dart';
 import 'package:localmind/core/providers/app_providers.dart';
+import 'package:localmind/core/providers/screen_memory_providers.dart';
 import 'package:localmind/core/providers/storage_providers.dart';
 import 'package:localmind/core/storage/objectbox_store.dart';
 import 'package:localmind/core/utils/uuid.dart';
@@ -320,11 +321,25 @@ class AskLocalMainChannel {
       Log.error('Ask Local envelope resolve crashed: $error');
       bootstrap = null;
     }
-    return openOverlay(
+    final opened = await openOverlay(
       capturePath: payload.capturePath,
       selectedText: payload.selectedText,
       bootstrap:
           bootstrap == null ? const <String, Object?>{} : bootstrapToWire(bootstrap),
     );
+    if (opened) _batchScreenMemories(container);
+    return opened;
+  }
+
+  /// The overlay being shown is a batch trigger: queued samples are drained so
+  /// an inferred memory is ready for the next ask. Best-effort — a provider
+  /// hiccup must never block the overlay itself.
+  void _batchScreenMemories(ProviderContainer container) {
+    try {
+      if (!container.read(settingsProvider).screenMemoryEnabled) return;
+      unawaited(container.read(screenBatchProcessorProvider).batchNow());
+    } catch (error) {
+      Log.warning('Screen memory batch on overlay open failed: $error');
+    }
   }
 }

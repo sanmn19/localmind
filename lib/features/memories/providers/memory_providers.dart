@@ -1,19 +1,13 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/storage_providers.dart';
-import '../../chat/providers/chat_params_providers.dart';
-import '../../chat/providers/chat_service_providers.dart';
-import '../../chat/providers/model_selection_providers.dart';
-import '../../servers/providers/server_providers.dart';
 import '../data/memory_extraction_service.dart';
 import '../data/memory_repository.dart';
 import '../data/memory_store.dart';
 import '../data/models/memory.dart';
-import '../data/screen_memory_batch_processor.dart';
 import '../data/screen_sample_store.dart';
 import '../data/screen_sampler.dart';
 import '../data/screen_text_gateway.dart';
@@ -64,63 +58,6 @@ final screenSamplerProvider = Provider<ScreenSampler>((ref) {
   );
   ref.onDispose(sampler.dispose);
   return sampler;
-});
-
-final screenBatchProcessorProvider = Provider<ScreenMemoryBatchProcessor>((
-  ref,
-) {
-  return ScreenMemoryBatchProcessor(
-    store: ref.watch(screenSampleStoreProvider),
-    extractor: ref.watch(memoryExtractionServiceProvider),
-    repository: ref.watch(memoryRepositoryProvider),
-    chatService: () {
-      final service = ref.read(chatServiceProvider);
-      if (service == null) {
-        throw StateError('no active chat service');
-      }
-      return service;
-    },
-    server: () => ref.read(activeServerProvider),
-    modelId: () => ref.read(activeChatTargetProvider).effectiveModelId ?? '',
-    params: () => ref.read(chatParamsProvider),
-    settings: () => ref.read(settingsProvider),
-  );
-});
-
-/// Starts the sampler and batch timers while screen memories are on, and stops
-/// them when the feature is switched off. Watched once by the app root.
-final screenMemoryTickProvider = Provider<void>((ref) {
-  final enabled = ref.watch(
-    settingsProvider.select((settings) => settings.screenMemoryEnabled),
-  );
-  if (!enabled) return;
-
-  final sampleMs = ref.watch(
-    settingsProvider.select(
-      (settings) => settings.screenMemorySampleIntervalMs,
-    ),
-  );
-  final batchSeconds = ref.watch(
-    settingsProvider.select(
-      (settings) => settings.screenMemoryBatchIntervalSeconds,
-    ),
-  );
-  if (sampleMs <= 0 || batchSeconds <= 0) return;
-
-  final sampler = ref.watch(screenSamplerProvider);
-  final batch = ref.watch(screenBatchProcessorProvider);
-  final sampleTimer = Timer.periodic(
-    Duration(milliseconds: sampleMs),
-    (_) => unawaited(sampler.tick()),
-  );
-  final batchTimer = Timer.periodic(
-    Duration(seconds: batchSeconds),
-    (_) => unawaited(batch.batchNow()),
-  );
-  ref.onDispose(() {
-    sampleTimer.cancel();
-    batchTimer.cancel();
-  });
 });
 
 final memoriesNotifierProvider =

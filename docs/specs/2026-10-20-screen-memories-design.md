@@ -1,6 +1,6 @@
 # Screen Memories — sampled, inferred, tagged, expiring context
 
-Date: 2026-10-20 · Status: draft · Extends
+Date: 2026-10-20 · Status: shipped · Extends
 [`2026-10-19-memories-design.md`](2026-10-19-memories-design.md)
 
 ## Intent
@@ -32,7 +32,8 @@ is brought up.
    explicit memories keep injecting their content.
 6. The Memories screen filters by **kind**, filters/searches by **tag**, and keeps
    semantic search through the existing retriever.
-7. Expired memories are excluded from retrieval and shown as expired.
+7. Expired memories are excluded from retrieval and stay visible as expired
+   (no automatic prune).
 8. Backup and cloud sync carry the new fields.
 
 ## Non-goals
@@ -139,6 +140,8 @@ MemoryRepository.remember(kind: inferred, tags, shortSummary,
 - Hourly extraction cap: 6 batches per hour; failures back off for 5 minutes.
 - The tick is paused while the screen is off/locked (`readScreenText()` returns
   null) and while the feature is off.
+- Shipped defaults: the feature is **off**; sample every **500 ms**; batch every
+  **60 s**; prune samples after **24 hours** and keep at most **4000**.
 
 ### Extraction
 
@@ -155,6 +158,8 @@ plumbing with `extract(...)`:
   or the predicted `YYYY-MM-DD` when the memory is temporary (a meeting, a
   deadline, a task, a dated event). There is no default expiry.
 - At most 2 memories per batch; tags lowercase, 2–6 per memory.
+- The hidden call disables reasoning: it asks for structured JSON, so a thinking
+  model must not spend the output budget before emitting any content.
 - Dedupe: the repository's near-duplicate title merge updates an existing inferred
   memory (content, summary, tags, expiry) instead of inserting.
 
@@ -183,8 +188,9 @@ memory created by the model has them.
   tapping toggles the tag.
 - Row subtitle: type badge + short summary (inferred) or content (others) + tags;
   an expiry badge ("expires in N days" / "expired").
-- Editor: tags (comma-separated), short summary, kind dropdown including
-  inferred, expiry date picker (clearable).
+- Editor: tags (comma-separated), short summary, kind dropdown with the four
+  manual kinds (inferred rows come only from the screen extractor), expiry date
+  picker (clearable).
 
 ### Settings
 
@@ -216,14 +222,18 @@ empty summary, and no expiry — tolerant, no failure.
 - The sampler is Dart (`Timer.periodic`); the existing foreground service keeps
   the process alive.
 - Tags are free-form lowercase strings, not a tag entity, for v1.
-- Expiry archives on prune; rows stay visible as expired rather than deleted.
+- Expiry never auto-prunes or archives; expired rows stay visible as expired,
+  while retrieval excludes them.
 
 ## Testing
 
 - Model/store: inferred index mapping; tags/summary/expiry/sourceApp round-trip;
   sample queue add/pending/mark/prune.
-- Repository: tag normalization; expiry filter; prune archives expired; near-dup
+- Repository: tag normalization; expiry filter; `pruneExpired` archives expired
+  rows for explicit maintenance only (nothing calls it automatically); near-dup
   merge updates inferred fields.
+- Lifecycle: app open/resume and the Ask Local overlay call `batchNow`; the
+  sampler starts and stops with the settings toggle.
 - Extraction: parser accepts inferred + tags + summary + expiry; rejects secrets;
   auto-remember still works.
 - Retrieval: expired excluded; tag boost; short summary injected; budget unchanged.
