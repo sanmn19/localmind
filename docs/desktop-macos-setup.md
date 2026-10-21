@@ -10,11 +10,27 @@ The runner is generated in place:
 - sandboxed, hardened runtime, with network client/server, user-selected file
   read/write and audio-input entitlements
 
-## 1. Install Xcode
+## 1. Enable Swift Package Manager
+
+Flutter 3.44 resolves macOS plugins through Swift Package Manager, and this project
+depends on `llamadart_llama_cpp_flutter`, which is Swift-Package-Manager-only.
+Enable the feature **before** generating or building the runner:
+
+```bash
+flutter config --enable-swift-package-manager
+flutter config --list | grep swift-package-manager   # enable-swift-package-manager: true
+```
+
+`macos/Runner.xcodeproj/project.pbxproj` must reference
+`Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage` (the
+`flutter create --platforms=macos` template adds it). Without the feature enabled
+the build stops with the Swift-Package-Manager-only plugin error.
+
+## 2. Install Xcode
 
 Install Xcode 15 or newer from the App Store (or from
-<https://developer.apple.com/download/all/>). Flutter 3.44 resolves macOS plugins
-through Swift Package Manager, which needs Xcode 15+.
+<https://developer.apple.com/download/all/>). Flutter only treats the project as
+Swift-Package-Manager-capable when `xcodebuild` reports Xcode 15+.
 
 Point the command line tools at the full Xcode install and accept the license:
 
@@ -30,7 +46,8 @@ Verify:
 xcodebuild -version   # Xcode 15.x or newer
 ```
 
-## 2. CocoaPods (only if the runner falls back to CocoaPods)
+## 3. CocoaPods (only if the runner falls back to CocoaPods)
+
 
 The generated runner uses Swift Package Manager and has **no `macos/Podfile`**; every
 current macOS plugin (including `llamadart_llama_cpp_flutter`, which is
@@ -105,16 +122,31 @@ working.
 
 ## 5. Known toolchain blocker
 
-`flutter build macos` needs a full Xcode 15+ install. On a machine with only the
-Command Line Tools the build stops before `xcodebuild` with:
+`flutter build macos` needs a full Xcode 15+ install even with Swift Package
+Manager enabled. On a machine with only the Command Line Tools:
 
-```
-The following plugin(s) are only compatible with Swift Package Manager:
-  - llamadart_llama_cpp_flutter
+- Flutter cannot classify the project as Swift-Package-Manager-capable (that check
+  asks `xcodebuild` for its version) and stops before the build with:
 
-Your project does not currently support Swift Package Manager. To support Swift Package Manager:
-  - Ensure Xcode 15+ is being used   - Enable Swift Package Manager feature by running "flutter config --enable-swift-package-manager"
-```
+  ```
+  The following plugin(s) are only compatible with Swift Package Manager:
+    - llamadart_llama_cpp_flutter
+
+  Your project does not currently support Swift Package Manager. To support Swift Package Manager:
+    - Ensure Xcode 15+ is being used   - Enable Swift Package Manager feature by running "flutter config --enable-swift-package-manager"
+  ```
+
+- The underlying `xcodebuild` call reports:
+
+  ```
+  xcrun: error: unable to find utility "xcodebuild", not a developer tool or in PATH
+  ```
+
+  or, when the tools are installed but not selected:
+
+  ```
+  xcode-select: error: tool 'xcodebuild' requires Xcode, but active developer directory '/Library/Developer/CommandLineTools' is a command line tools instance
+  ```
 
 Installing Xcode and running `sudo xcodebuild -runFirstLaunch` resolves it.
 `flutter analyze` and `flutter test` do not need Xcode.
