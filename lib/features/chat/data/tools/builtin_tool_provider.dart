@@ -12,7 +12,7 @@ class BuiltInToolProvider implements ToolProvider {
   /// Every calendar tool refuses with this result when the device calendar
   /// plugin is absent (macOS/desktop) instead of calling a missing channel.
   static const _calendarUnavailable = ToolExecutionResult.failure(
-    'Calendar tools are unavailable on this platform.',
+    CalendarService.unavailableError,
   );
 
   BuiltInToolProvider({
