@@ -3925,6 +3925,38 @@ class AppLocalizationsBn extends AppLocalizations {
   String get memory_list_view => 'List view';
 
   @override
+  String get memory_filter_all => 'All';
+
+  @override
+  String get memory_tags_hint => 'Tags, separated by commas';
+
+  @override
+  String get memory_summary => 'Short summary';
+
+  @override
+  String get memory_expiry => 'Expires';
+
+  @override
+  String get memory_no_expiry => 'No expiry';
+
+  @override
+  String get memory_expired => 'Expired';
+
+  @override
+  String memory_expires_in_days(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Expires in $count days',
+      one: 'Expires in 1 day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get memory_clear => 'Clear';
+
+  @override
   String get remember_this => 'Remember this';
 
   @override

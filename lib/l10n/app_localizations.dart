@@ -7191,6 +7191,54 @@ abstract class AppLocalizations {
   /// **'List view'**
   String get memory_list_view;
 
+  /// Memories screen: clear the kind filter
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get memory_filter_all;
+
+  /// Memory editor: tags field label
+  ///
+  /// In en, this message translates to:
+  /// **'Tags, separated by commas'**
+  String get memory_tags_hint;
+
+  /// Memory editor: short summary field label
+  ///
+  /// In en, this message translates to:
+  /// **'Short summary'**
+  String get memory_summary;
+
+  /// Memory editor: expiry date field label
+  ///
+  /// In en, this message translates to:
+  /// **'Expires'**
+  String get memory_expiry;
+
+  /// Memory editor: expiry date is unset
+  ///
+  /// In en, this message translates to:
+  /// **'No expiry'**
+  String get memory_no_expiry;
+
+  /// Memories screen: expiry badge for a past expiry
+  ///
+  /// In en, this message translates to:
+  /// **'Expired'**
+  String get memory_expired;
+
+  /// Memories screen: expiry badge
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Expires in 1 day} other{Expires in {count} days}}'**
+  String memory_expires_in_days(int count);
+
+  /// Memory editor: clear the expiry date
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get memory_clear;
+
   /// Chat message action: remember this message
   ///
   /// In en, this message translates to:
