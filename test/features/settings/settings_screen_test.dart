@@ -113,4 +113,23 @@ void main() {
     await tester.pump();
     expect(container.read(settingsProvider).hapticFeedbackEnabled, !before);
   });
+
+  testWidgets('screen memories card reveals its controls when enabled', (
+    tester,
+  ) async {
+    final container = await _pump(tester);
+    expect(find.text('Screen memories'), findsOneWidget);
+    expect(find.text('Sample every'), findsNothing);
+
+    await tester.ensureVisible(find.text('Watch my screen'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Watch my screen'));
+    await tester.pump();
+
+    expect(container.read(settingsProvider).screenMemoryEnabled, isTrue);
+    expect(find.text('Sample every'), findsOneWidget);
+    expect(find.text('Summarize every'), findsOneWidget);
+    expect(find.text('Blocked apps'), findsOneWidget);
+    expect(find.text('5 packages are never sampled'), findsOneWidget);
+  });
 }

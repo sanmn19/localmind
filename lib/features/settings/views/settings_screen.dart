@@ -181,6 +181,37 @@ class _SettingsViewsState extends ConsumerState<SettingsViews> {
       ],
     );
 
+    final screenMemories = _SettingsSectionCard(
+      title: l10n.screen_memories_title,
+      footer: l10n.screen_memories_footer,
+      children: [
+        _ToggleSetting(
+          label: l10n.screen_memories_enabled,
+          description: l10n.screen_memories_enabled_desc,
+          value: settings.screenMemoryEnabled,
+          onChanged: notifier.setScreenMemoryEnabled,
+        ),
+        if (settings.screenMemoryEnabled) ...[
+          _ScreenIntervalSetting(
+            label: l10n.screen_memories_sample_interval,
+            value: settings.screenMemorySampleIntervalMs,
+            options: const [(500, '500 ms'), (1000, '1 s'), (2000, '2 s')],
+            onChanged: notifier.setScreenMemorySampleInterval,
+          ),
+          _ScreenIntervalSetting(
+            label: l10n.screen_memories_batch_interval,
+            value: settings.screenMemoryBatchIntervalSeconds,
+            options: const [(60, '1 min'), (120, '2 min'), (300, '5 min')],
+            onChanged: notifier.setScreenMemoryBatchInterval,
+          ),
+          _ScreenBlockedAppsSetting(
+            blocked: settings.screenMemoryBlockedApps,
+            onChanged: notifier.setScreenMemoryBlockedApps,
+          ),
+        ],
+      ],
+    );
+
     final chat = _SettingsSectionCard(
       key: _sectionKeys[_SettingsSection.chat],
       title: l10n.settings_section_chat,
@@ -514,6 +545,7 @@ class _SettingsViewsState extends ConsumerState<SettingsViews> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       general,
+                      screenMemories,
                       chat,
                       voice,
                       ?assistant,
@@ -1366,6 +1398,135 @@ class _ToggleSetting extends StatelessWidget implements _Searchable {
               Switch.adaptive(value: value, onChanged: onChanged),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A fixed-choice cadence row for screen sampling or batching.
+class _ScreenIntervalSetting extends StatelessWidget implements _Searchable {
+  const _ScreenIntervalSetting({
+    required this.label,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+
+  final String label;
+  final int value;
+  final List<(int value, String text)> options;
+  final ValueChanged<int> onChanged;
+
+  @override
+  List<String> searchTerms(AppLocalizations l10n) => [label];
+
+  @override
+  Widget build(BuildContext context) {
+    final items = [...options];
+    // A stored value outside the offered choices must still render instead of
+    // tripping the dropdown's value check.
+    if (!items.any((option) => option.$1 == value)) {
+      items.add((value, '$value'));
+    }
+    return _InlineDropdown<int>(
+      label: label,
+      value: value,
+      onChanged: (next) {
+        if (next != null) onChanged(next);
+      },
+      items: [for (final item in items) (item.$1, item.$2, null)],
+    );
+  }
+}
+
+/// Opens a comma-separated package list dialog; blocked packages (and their
+/// subpackages) are never sampled.
+class _ScreenBlockedAppsSetting extends StatelessWidget implements _Searchable {
+  const _ScreenBlockedAppsSetting({
+    required this.blocked,
+    required this.onChanged,
+  });
+
+  final List<String> blocked;
+  final ValueChanged<List<String>> onChanged;
+
+  @override
+  List<String> searchTerms(AppLocalizations l10n) => [
+    l10n.screen_memories_blocked_apps,
+    l10n.screen_memories_blocked_apps_desc(blocked.length),
+  ];
+
+  Future<void> _edit(BuildContext context) async {
+    final controller = TextEditingController(text: blocked.join(', '));
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        final dialogL10n = AppLocalizations.of(dialogContext)!;
+        return AlertDialog(
+          title: Text(dialogL10n.screen_memories_blocked_apps),
+          content: TextField(
+            controller: controller,
+            minLines: 3,
+            maxLines: 8,
+            autofocus: true,
+            decoration: InputDecoration(
+              hintText: dialogL10n.screen_memories_blocked_apps_hint,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(dialogL10n.cancel),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+              child: Text(dialogL10n.save),
+            ),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+    if (result == null) return;
+    final apps = result
+        .split(RegExp(r'[,\n]'))
+        .map((app) => app.trim())
+        .where((app) => app.isNotEmpty)
+        .toSet()
+        .toList();
+    onChanged(apps);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return InkWell(
+      onTap: () => _edit(context),
+      child: _SettingPanel(
+        child: Row(
+          children: [
+            HugeIcon(
+              icon: HugeIcons.strokeRoundedShield01,
+              size: 20,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _RowLabel(
+                label: l10n.screen_memories_blocked_apps,
+                description: l10n.screen_memories_blocked_apps_desc(
+                  blocked.length,
+                ),
+              ),
+            ),
+            HugeIcon(
+              icon: HugeIcons.strokeRoundedArrowRight01,
+              size: 16,
+              color: _mutedColor(context),
+            ),
+          ],
         ),
       ),
     );

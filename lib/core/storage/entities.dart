@@ -924,6 +924,39 @@ class MemoryEntity {
   });
 }
 
+/// One short-lived sample of another app's visible text, waiting for a batch.
+///
+/// Rows are plaintext in the local ObjectBox store, consumed by the batch
+/// processor, pruned after 24 hours, and never exported.
+@Entity()
+class ScreenSampleEntity {
+  @Id()
+  int internalId = 0;
+
+  @Property(type: PropertyType.date)
+  DateTime capturedAt;
+
+  @Index()
+  String packageName;
+
+  String text;
+
+  @Index()
+  String hash;
+
+  @Property(type: PropertyType.date)
+  DateTime? processedAt;
+
+  ScreenSampleEntity({
+    this.internalId = 0,
+    required this.capturedAt,
+    required this.packageName,
+    required this.text,
+    required this.hash,
+    this.processedAt,
+  });
+}
+
 /// One directed, labelled edge between two memories.
 @Entity()
 class MemoryRelationEntity {

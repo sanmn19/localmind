@@ -13,6 +13,16 @@ enum SyntaxThemeName { light, dark }
 class AppSettings {
   static const Object _unset = Object();
 
+  /// Known password-manager and authenticator packages blocked by default.
+  /// Bank packages are user-specific and belong in the blocked-apps dialog.
+  static const List<String> defaultScreenMemoryBlockedApps = [
+    'com.onepassword.android',
+    'com.x8bit.bitwarden',
+    'com.dashlane',
+    'com.lastpass.lpandroid',
+    'com.google.android.apps.authenticator2',
+  ];
+
   final double temperature;
   final double topP;
   final int maxTokens;
@@ -102,6 +112,20 @@ class AppSettings {
   /// unless the user opts in.
   final bool autoMemoryEnabled;
 
+  /// Whether the foreground screen is sampled into short-lived, on-device
+  /// samples that a batch turns into inferred memories. Off by default: screen
+  /// capture is opt-in.
+  final bool screenMemoryEnabled;
+
+  /// Sampling cadence in milliseconds (500 ms by default).
+  final int screenMemorySampleIntervalMs;
+
+  /// Batch cadence in seconds (60 s by default).
+  final int screenMemoryBatchIntervalSeconds;
+
+  /// Package names whose text is never sampled, including their subpackages.
+  final List<String> screenMemoryBlockedApps;
+
   /// Whether the in-process `local://background` MCP server (bg.spawn +
   /// bg.status + bg.cancel) is registered at all. Default OFF: autonomous
   /// background sub-agent threads only exist once the user opts in.
@@ -186,6 +210,10 @@ class AppSettings {
     this.skillsEnabled = true,
     this.memoriesEnabled = true,
     this.autoMemoryEnabled = false,
+    this.screenMemoryEnabled = false,
+    this.screenMemorySampleIntervalMs = 500,
+    this.screenMemoryBatchIntervalSeconds = 60,
+    this.screenMemoryBlockedApps = defaultScreenMemoryBlockedApps,
     this.backgroundTasksEnabled = false,
     this.notificationToolsEnabled = false,
     this.mailConnectorAccounts = const [],
@@ -254,6 +282,10 @@ class AppSettings {
     bool? skillsEnabled,
     bool? memoriesEnabled,
     bool? autoMemoryEnabled,
+    bool? screenMemoryEnabled,
+    int? screenMemorySampleIntervalMs,
+    int? screenMemoryBatchIntervalSeconds,
+    List<String>? screenMemoryBlockedApps,
     bool? backgroundTasksEnabled,
     bool? notificationToolsEnabled,
     List<Map<String, dynamic>>? mailConnectorAccounts,
@@ -348,6 +380,14 @@ class AppSettings {
       skillsEnabled: skillsEnabled ?? this.skillsEnabled,
       memoriesEnabled: memoriesEnabled ?? this.memoriesEnabled,
       autoMemoryEnabled: autoMemoryEnabled ?? this.autoMemoryEnabled,
+      screenMemoryEnabled: screenMemoryEnabled ?? this.screenMemoryEnabled,
+      screenMemorySampleIntervalMs:
+          screenMemorySampleIntervalMs ?? this.screenMemorySampleIntervalMs,
+      screenMemoryBatchIntervalSeconds:
+          screenMemoryBatchIntervalSeconds ??
+          this.screenMemoryBatchIntervalSeconds,
+      screenMemoryBlockedApps:
+          screenMemoryBlockedApps ?? this.screenMemoryBlockedApps,
       backgroundTasksEnabled:
           backgroundTasksEnabled ?? this.backgroundTasksEnabled,
       notificationToolsEnabled:
@@ -421,6 +461,10 @@ class AppSettings {
       'skillsEnabled': skillsEnabled,
       'memoriesEnabled': memoriesEnabled,
       'autoMemoryEnabled': autoMemoryEnabled,
+      'screenMemoryEnabled': screenMemoryEnabled,
+      'screenMemorySampleIntervalMs': screenMemorySampleIntervalMs,
+      'screenMemoryBatchIntervalSeconds': screenMemoryBatchIntervalSeconds,
+      'screenMemoryBlockedApps': screenMemoryBlockedApps,
       'backgroundTasksEnabled': backgroundTasksEnabled,
       'notificationToolsEnabled': notificationToolsEnabled,
       'mailConnectorAccounts': mailConnectorAccounts,
@@ -496,6 +540,14 @@ class AppSettings {
       skillsEnabled: map['skillsEnabled'] ?? true,
       memoriesEnabled: map['memoriesEnabled'] ?? true,
       autoMemoryEnabled: map['autoMemoryEnabled'] ?? false,
+      screenMemoryEnabled: map['screenMemoryEnabled'] ?? false,
+      screenMemorySampleIntervalMs:
+          map['screenMemorySampleIntervalMs']?.toInt() ?? 500,
+      screenMemoryBatchIntervalSeconds:
+          map['screenMemoryBatchIntervalSeconds']?.toInt() ?? 60,
+      screenMemoryBlockedApps:
+          (map['screenMemoryBlockedApps'] as List?)?.cast<String>() ??
+          defaultScreenMemoryBlockedApps,
       backgroundTasksEnabled: map['backgroundTasksEnabled'] ?? false,
       notificationToolsEnabled: map['notificationToolsEnabled'] ?? false,
       mailConnectorAccounts:

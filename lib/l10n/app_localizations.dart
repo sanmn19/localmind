@@ -7029,6 +7029,60 @@ abstract class AppLocalizations {
   /// **'After each reply, a hidden prompt asks the model whether anything in the conversation is worth remembering. Facts are saved silently; only explicit memory writes ask for approval.'**
   String get auto_memory_enabled_desc;
 
+  /// Settings card title for screen sampling
+  ///
+  /// In en, this message translates to:
+  /// **'Screen memories'**
+  String get screen_memories_title;
+
+  /// Settings toggle: sample other apps' visible text
+  ///
+  /// In en, this message translates to:
+  /// **'Watch my screen'**
+  String get screen_memories_enabled;
+
+  /// Settings toggle description for screen sampling
+  ///
+  /// In en, this message translates to:
+  /// **'Reads the visible text of the app you are using and turns durable details into inferred memories. Only changed screens are stored, and samples stay on this device.'**
+  String get screen_memories_enabled_desc;
+
+  /// Screen memories: sampling cadence setting
+  ///
+  /// In en, this message translates to:
+  /// **'Sample every'**
+  String get screen_memories_sample_interval;
+
+  /// Screen memories: batch cadence setting
+  ///
+  /// In en, this message translates to:
+  /// **'Summarize every'**
+  String get screen_memories_batch_interval;
+
+  /// Screen memories: blocked package list row and dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Blocked apps'**
+  String get screen_memories_blocked_apps;
+
+  /// Screen memories: blocked package count
+  ///
+  /// In en, this message translates to:
+  /// **'{count} packages are never sampled'**
+  String screen_memories_blocked_apps_desc(int count);
+
+  /// Screen memories: blocked apps text field hint
+  ///
+  /// In en, this message translates to:
+  /// **'Package names, separated by commas'**
+  String get screen_memories_blocked_apps_hint;
+
+  /// Screen memories card footer
+  ///
+  /// In en, this message translates to:
+  /// **'Samples stay on this device for at most 24 hours and are never exported. Screen text never leaves the device.'**
+  String get screen_memories_footer;
+
   /// Memories screen: add button/dialog title
   ///
   /// In en, this message translates to:

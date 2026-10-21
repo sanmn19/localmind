@@ -71,6 +71,10 @@ class DataBackupService {
     'showSystemMessagesInChat',
     'memoriesEnabled',
     'autoMemoryEnabled',
+    'screenMemoryEnabled',
+    'screenMemorySampleIntervalMs',
+    'screenMemoryBatchIntervalSeconds',
+    'screenMemoryBlockedApps',
   };
 
   Map<String, dynamic> _messageToMap(Message message) => {

@@ -3817,6 +3817,38 @@ class AppLocalizationsEn extends AppLocalizations {
       'After each reply, a hidden prompt asks the model whether anything in the conversation is worth remembering. Facts are saved silently; only explicit memory writes ask for approval.';
 
   @override
+  String get screen_memories_title => 'Screen memories';
+
+  @override
+  String get screen_memories_enabled => 'Watch my screen';
+
+  @override
+  String get screen_memories_enabled_desc =>
+      'Reads the visible text of the app you are using and turns durable details into inferred memories. Only changed screens are stored, and samples stay on this device.';
+
+  @override
+  String get screen_memories_sample_interval => 'Sample every';
+
+  @override
+  String get screen_memories_batch_interval => 'Summarize every';
+
+  @override
+  String get screen_memories_blocked_apps => 'Blocked apps';
+
+  @override
+  String screen_memories_blocked_apps_desc(int count) {
+    return '$count packages are never sampled';
+  }
+
+  @override
+  String get screen_memories_blocked_apps_hint =>
+      'Package names, separated by commas';
+
+  @override
+  String get screen_memories_footer =>
+      'Samples stay on this device for at most 24 hours and are never exported. Screen text never leaves the device.';
+
+  @override
   String get memory_add => 'Add memory';
 
   @override

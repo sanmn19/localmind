@@ -978,10 +978,53 @@
         }
       ],
       "relations": []
+    },
+    {
+      "id": "14:7290961308421388323",
+      "lastPropertyId": "6:1543794969499748401",
+      "name": "ScreenSampleEntity",
+      "properties": [
+        {
+          "id": "1:2914463186436894855",
+          "name": "internalId",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:3749610397584863900",
+          "name": "capturedAt",
+          "type": 10
+        },
+        {
+          "id": "3:8785051406051049327",
+          "name": "packageName",
+          "indexId": "25:7334307555973898391",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:5001260089664176565",
+          "name": "text",
+          "type": 9
+        },
+        {
+          "id": "5:622846149103655308",
+          "name": "hash",
+          "indexId": "26:3638442091653412889",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "6:1543794969499748401",
+          "name": "processedAt",
+          "type": 10
+        }
+      ],
+      "relations": []
     }
   ],
-  "lastEntityId": "13:8613029486712728898",
-  "lastIndexId": "24:3734785072290076025",
+  "lastEntityId": "14:7290961308421388323",
+  "lastIndexId": "26:3638442091653412889",
   "lastRelationId": "0:0",
   "lastSequenceId": "0:0",
   "modelVersion": 5,

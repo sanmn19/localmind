@@ -151,10 +151,11 @@ class ScreenCaptureAccessibilityService : AccessibilityService() {
     /**
      * Reads the visible text of the foreground app for the screen-memory
      * sampler. Null while the screen is off or locked, when no readable
-     * window belongs to another app, and when the readable windows carry no
-     * text. Password fields (and their subtrees), LocalMind's own windows,
-     * keyboards, and the system UI are skipped; the collected text is capped
-     * at [MAX_SCREEN_TEXT_CHARS].
+     * window belongs to another app, and when the readable window carries no
+     * text. Only the active/focused window is read, so a window behind it (a
+     * blocked app, say) can never contribute text. Password fields (and their
+     * subtrees), LocalMind's own windows, keyboards, and the system UI are
+     * skipped; the collected text is capped at [MAX_SCREEN_TEXT_CHARS].
      */
     fun readScreenText(onResult: (ScreenText?) -> Unit) {
         val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
@@ -166,25 +167,21 @@ class ScreenCaptureAccessibilityService : AccessibilityService() {
             return
         }
 
-        val roots = mutableListOf<AccessibilityNodeInfo>()
-        windows.orEmpty().forEach { window -> window.root?.let(roots::add) }
-        if (roots.isEmpty()) {
-            rootInActiveWindow?.let(roots::add)
+        // The active/focused window only: a window behind it (for example a
+        // blocked app under an overlay) must not contribute its package or text.
+        val root = rootInActiveWindow
+            ?: windows.orEmpty().firstOrNull { it.isFocused || it.isActive }?.root
+        val packageName = root?.packageName?.toString()
+        if (root == null || packageName == null || isSkippedPackage(packageName)) {
+            Log.i(TAG, "Screen text read found nothing (package=$packageName)")
+            onResult(null)
+            return
         }
 
         val collected = StringBuilder()
-        var appPackage: String? = null
-        for (root in roots) {
-            val windowPackage = root.packageName?.toString() ?: continue
-            if (isSkippedPackage(windowPackage)) continue
-            if (appPackage == null) appPackage = windowPackage
-            collectNodeText(root, collected)
-            if (collected.length >= MAX_SCREEN_TEXT_CHARS) break
-        }
-
-        val packageName = appPackage
+        collectNodeText(root, collected)
         val text = collected.take(MAX_SCREEN_TEXT_CHARS).toString()
-        if (packageName == null || text.isBlank()) {
+        if (text.isBlank()) {
             Log.i(TAG, "Screen text read found nothing (package=$packageName)")
             onResult(null)
             return

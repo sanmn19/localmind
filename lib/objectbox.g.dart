@@ -1153,6 +1153,54 @@ final _entities = <obx_int.ModelEntity>[
     relations: <obx_int.ModelRelation>[],
     backlinks: <obx_int.ModelBacklink>[],
   ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(14, 7290961308421388323),
+    name: 'ScreenSampleEntity',
+    lastPropertyId: const obx_int.IdUid(6, 1543794969499748401),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 2914463186436894855),
+        name: 'internalId',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 3749610397584863900),
+        name: 'capturedAt',
+        type: 10,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 8785051406051049327),
+        name: 'packageName',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(25, 7334307555973898391),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 5001260089664176565),
+        name: 'text',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 622846149103655308),
+        name: 'hash',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(26, 3638442091653412889),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 1543794969499748401),
+        name: 'processedAt',
+        type: 10,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
 ];
 
 /// Shortcut for [obx.Store.new] that passes [getObjectBoxModel] and for Flutter
@@ -1198,8 +1246,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
     // Typically, this is done with `dart run build_runner build`.
     generatorVersion: obx_int.GeneratorVersion.v2025_12_16,
     entities: _entities,
-    lastEntityId: const obx_int.IdUid(13, 8613029486712728898),
-    lastIndexId: const obx_int.IdUid(24, 3734785072290076025),
+    lastEntityId: const obx_int.IdUid(14, 7290961308421388323),
+    lastIndexId: const obx_int.IdUid(26, 3638442091653412889),
     lastRelationId: const obx_int.IdUid(0, 0),
     lastSequenceId: const obx_int.IdUid(0, 0),
     retiredEntityUids: const [],
@@ -2677,6 +2725,69 @@ obx_int.ModelDefinition getObjectBoxModel() {
         return object;
       },
     ),
+    ScreenSampleEntity: obx_int.EntityDefinition<ScreenSampleEntity>(
+      model: _entities[13],
+      toOneRelations: (ScreenSampleEntity object) => [],
+      toManyRelations: (ScreenSampleEntity object) => {},
+      getId: (ScreenSampleEntity object) => object.internalId,
+      setId: (ScreenSampleEntity object, int id) {
+        object.internalId = id;
+      },
+      objectToFB: (ScreenSampleEntity object, fb.Builder fbb) {
+        final packageNameOffset = fbb.writeString(object.packageName);
+        final textOffset = fbb.writeString(object.text);
+        final hashOffset = fbb.writeString(object.hash);
+        fbb.startTable(7);
+        fbb.addInt64(0, object.internalId);
+        fbb.addInt64(1, object.capturedAt.millisecondsSinceEpoch);
+        fbb.addOffset(2, packageNameOffset);
+        fbb.addOffset(3, textOffset);
+        fbb.addOffset(4, hashOffset);
+        fbb.addInt64(5, object.processedAt?.millisecondsSinceEpoch);
+        fbb.finish(fbb.endTable());
+        return object.internalId;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final processedAtValue = const fb.Int64Reader().vTableGetNullable(
+          buffer,
+          rootOffset,
+          14,
+        );
+        final internalIdParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final capturedAtParam = DateTime.fromMillisecondsSinceEpoch(
+          const fb.Int64Reader().vTableGet(buffer, rootOffset, 6, 0),
+        );
+        final packageNameParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 8, '');
+        final textParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 10, '');
+        final hashParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 12, '');
+        final processedAtParam = processedAtValue == null
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(processedAtValue);
+        final object = ScreenSampleEntity(
+          internalId: internalIdParam,
+          capturedAt: capturedAtParam,
+          packageName: packageNameParam,
+          text: textParam,
+          hash: hashParam,
+          processedAt: processedAtParam,
+        );
+
+        return object;
+      },
+    ),
   };
 
   return obx_int.ModelDefinition(model, bindings);
@@ -3532,5 +3643,38 @@ class MemoryRelationEntity_ {
   /// See [MemoryRelationEntity.id].
   static final id = obx.QueryStringProperty<MemoryRelationEntity>(
     _entities[12].properties[5],
+  );
+}
+
+/// [ScreenSampleEntity] entity fields to define ObjectBox queries.
+class ScreenSampleEntity_ {
+  /// See [ScreenSampleEntity.internalId].
+  static final internalId = obx.QueryIntegerProperty<ScreenSampleEntity>(
+    _entities[13].properties[0],
+  );
+
+  /// See [ScreenSampleEntity.capturedAt].
+  static final capturedAt = obx.QueryDateProperty<ScreenSampleEntity>(
+    _entities[13].properties[1],
+  );
+
+  /// See [ScreenSampleEntity.packageName].
+  static final packageName = obx.QueryStringProperty<ScreenSampleEntity>(
+    _entities[13].properties[2],
+  );
+
+  /// See [ScreenSampleEntity.text].
+  static final text = obx.QueryStringProperty<ScreenSampleEntity>(
+    _entities[13].properties[3],
+  );
+
+  /// See [ScreenSampleEntity.hash].
+  static final hash = obx.QueryStringProperty<ScreenSampleEntity>(
+    _entities[13].properties[4],
+  );
+
+  /// See [ScreenSampleEntity.processedAt].
+  static final processedAt = obx.QueryDateProperty<ScreenSampleEntity>(
+    _entities[13].properties[5],
   );
 }
