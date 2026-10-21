@@ -113,12 +113,25 @@ void main() {
     expect(touched.lastUsedAt, isNotNull);
   });
 
-  test('remember normalizes tags and stores expiry', () {
+  test('remember rejects inferred memories and stores nothing', () {
+    final store = InMemoryMemoryStore();
+    final repo = MemoryRepository(store);
+    expect(
+      () => repo.remember(
+        title: 'Standup',
+        content: 'Standup moved to 10:00.',
+        kind: MemoryKind.inferred,
+      ),
+      throwsArgumentError,
+    );
+    expect(store.list(), isEmpty);
+  });
+
+  test('rememberInferred normalizes tags and stores expiry', () {
     final repo = MemoryRepository(InMemoryMemoryStore());
-    final memory = repo.remember(
+    final memory = repo.rememberInferred(
       title: 'Standup',
       content: 'Standup moved to 10:00.',
-      kind: MemoryKind.inferred,
       tags: const [' Work ', 'work', 'Standup'],
       shortSummary: 'Standup at 10:00',
       expiresAt: DateTime(2026, 10, 21),
@@ -132,10 +145,9 @@ void main() {
 
   test('list and pruneExpired exclude an expired inferred memory', () {
     final repo = MemoryRepository(InMemoryMemoryStore());
-    repo.remember(
+    repo.rememberInferred(
       title: 'Deadline',
       content: 'Ship on Monday',
-      kind: MemoryKind.inferred,
       expiresAt: DateTime(2026, 10, 19),
     );
     expect(repo.list(), isEmpty);
@@ -145,16 +157,14 @@ void main() {
 
   test('a near-duplicate inferred memory updates tags and expiry', () {
     final repo = MemoryRepository(InMemoryMemoryStore());
-    final first = repo.remember(
+    final first = repo.rememberInferred(
       title: 'Standup time',
       content: '10:00',
-      kind: MemoryKind.inferred,
       tags: const ['work'],
     );
-    final second = repo.remember(
+    final second = repo.rememberInferred(
       title: 'Standup time',
       content: '10:30',
-      kind: MemoryKind.inferred,
       tags: const ['work', 'standup'],
       expiresAt: DateTime(2026, 10, 21),
     );
@@ -165,10 +175,9 @@ void main() {
 
   test('correct preserves tags, summary, expiry, and source app', () {
     final repo = MemoryRepository(InMemoryMemoryStore());
-    final old = repo.remember(
+    final old = repo.rememberInferred(
       title: 'Standup',
       content: '10:00',
-      kind: MemoryKind.inferred,
       tags: const ['work'],
       shortSummary: 'Standup at 10:00',
       expiresAt: DateTime(2026, 10, 21),
@@ -217,10 +226,9 @@ void main() {
   test('pruneExpired archives the expired row', () {
     final store = InMemoryMemoryStore();
     final repo = MemoryRepository(store);
-    repo.remember(
+    repo.rememberInferred(
       title: 'Deadline',
       content: 'Ship on Monday',
-      kind: MemoryKind.inferred,
       expiresAt: DateTime(2026, 10, 19),
     );
 
@@ -231,17 +239,15 @@ void main() {
 
   test('an expired row cannot absorb a new near-duplicate', () {
     final repo = MemoryRepository(InMemoryMemoryStore());
-    final expired = repo.remember(
+    final expired = repo.rememberInferred(
       title: 'Standup time',
       content: '10:00',
-      kind: MemoryKind.inferred,
       expiresAt: DateTime(2026, 10, 19),
     );
 
-    final fresh = repo.remember(
+    final fresh = repo.rememberInferred(
       title: 'Standup time',
       content: '10:30',
-      kind: MemoryKind.inferred,
     );
 
     expect(fresh.id, isNot(expired.id));
@@ -251,16 +257,14 @@ void main() {
   test('an expiry equal to now is still live, one second earlier is expired', () {
     final store = InMemoryMemoryStore();
     final repo = MemoryRepository(store);
-    final boundary = repo.remember(
+    final boundary = repo.rememberInferred(
       title: 'Boundary',
       content: 'still live',
-      kind: MemoryKind.inferred,
       expiresAt: DateTime(2026, 10, 20, 12),
     );
-    final past = repo.remember(
+    final past = repo.rememberInferred(
       title: 'Before boundary',
       content: 'expired',
-      kind: MemoryKind.inferred,
       expiresAt: DateTime(2026, 10, 20, 11, 59, 59),
     );
 
@@ -273,16 +277,14 @@ void main() {
 
   test('a null expiry on a near-duplicate clears the old expiry', () {
     final repo = MemoryRepository(InMemoryMemoryStore());
-    final first = repo.remember(
+    final first = repo.rememberInferred(
       title: 'Standup time',
       content: '10:00',
-      kind: MemoryKind.inferred,
       expiresAt: DateTime(2030),
     );
-    final second = repo.remember(
+    final second = repo.rememberInferred(
       title: 'Standup time',
       content: '10:30',
-      kind: MemoryKind.inferred,
     );
 
     expect(second.id, first.id);

@@ -31,6 +31,61 @@ class MemoryRepository {
     DateTime? expiresAt,
     String? sourceApp,
   }) {
+    if (kind == MemoryKind.inferred) {
+      throw ArgumentError.value(
+        kind,
+        'kind',
+        'use rememberInferred for inferred memories',
+      );
+    }
+    return _remember(
+      title: title,
+      content: content,
+      kind: kind,
+      importance: importance,
+      scopeConversationId: scopeConversationId,
+      excludeMemoryId: excludeMemoryId,
+      tags: tags,
+      shortSummary: shortSummary,
+      expiresAt: expiresAt,
+      sourceApp: sourceApp,
+    );
+  }
+
+  /// Creates an inferred memory. Only the screen batch should call this.
+  Memory rememberInferred({
+    required String title,
+    required String content,
+    List<String> tags = const [],
+    String shortSummary = '',
+    DateTime? expiresAt,
+    String? sourceApp,
+    int importance = 50,
+  }) {
+    return _remember(
+      title: title,
+      content: content,
+      kind: MemoryKind.inferred,
+      importance: importance,
+      tags: tags,
+      shortSummary: shortSummary,
+      expiresAt: expiresAt,
+      sourceApp: sourceApp,
+    );
+  }
+
+  Memory _remember({
+    required String title,
+    required String content,
+    MemoryKind kind = MemoryKind.fact,
+    int importance = 50,
+    String? scopeConversationId,
+    String? excludeMemoryId,
+    List<String> tags = const [],
+    String shortSummary = '',
+    DateTime? expiresAt,
+    String? sourceApp,
+  }) {
     final trimmedTitle = title.trim();
     final trimmedContent = content.trim();
     if (trimmedContent.isEmpty) {
@@ -123,7 +178,7 @@ class MemoryRepository {
     if (old == null) {
       throw ArgumentError('unknown memory "$oldId"');
     }
-    final replacement = remember(
+    final replacement = _remember(
       title: title,
       content: content,
       kind: kind ?? old.kind,

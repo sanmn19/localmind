@@ -27,6 +27,7 @@ void main() {
           ),
       throwsArgumentError,
     );
+    expect(store.list(), isEmpty);
   });
 
   test(

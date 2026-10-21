@@ -60,8 +60,8 @@ void main() {
     expect(parsed.single.importance, 100);
   });
 
-  test('parses inferred memories with tags, summary and expiry', () {
-    final parsed = service.parse('''
+  test('screen extraction parses tags, summary and expiry', () async {
+    final parsed = await _extractScreen(service, '''
   [{"kind":"inferred","title":"Standup","summary":"Standup at 10:00",
     "content":"Team standup moved to 10:00 on 2026-10-21.",
     "tags":["work","standup"],"importance":60,
@@ -74,8 +74,9 @@ void main() {
     expect(parsed.single.conversationScoped, isTrue);
   });
 
-  test('a permanent inferred memory keeps expiresAt null', () {
-    final parsed = service.parse(
+  test('a permanent inferred memory keeps expiresAt null', () async {
+    final parsed = await _extractScreen(
+      service,
       '[{"kind":"inferred","title":"Lives in Berlin",'
       '"summary":"Lives in Berlin","content":"Lives in Berlin.",'
       '"tags":["location"],"importance":60,"expiresAt":null}]',
@@ -83,24 +84,73 @@ void main() {
     expect(parsed.single.expiresAt, isNull);
   });
 
-  test('normalizes tags and caps them at eight', () {
+  test('chat parse coerces an inferred result to a fact and drops expiry', () {
     final parsed = service.parse(
+      '[{"kind":"inferred","title":"Standup",'
+      '"summary":"Standup at 10:00","content":"Standup at 10:00.",'
+      '"tags":["work"],"expiresAt":"2026-10-21"}]',
+    );
+    expect(parsed.single.kind, MemoryKind.fact);
+    expect(parsed.single.expiresAt, isNull);
+  });
+
+  test(
+    'screen extraction forces the inferred kind when it is renamed',
+    () async {
+      final parsed = await _extractScreen(
+        service,
+        '[{"kind":"fact","title":"Standup","content":"Standup at 10:00."},'
+        '{"title":"Lives in Berlin","content":"Lives in Berlin."}]',
+      );
+      expect(parsed, hasLength(2));
+      expect(
+        parsed.map((memory) => memory.kind),
+        everyElement(MemoryKind.inferred),
+      );
+    },
+  );
+
+  test('normalizes tags and caps them at eight', () async {
+    final parsed = await _extractScreen(
+      service,
       '[{"kind":"inferred","title":"T","content":"c",'
       '"tags":[" Work ","work","",1,"a","b","c","d","e","f","g","h"]}]',
     );
     expect(parsed.single.tags, ['work', 'a', 'b', 'c', 'd', 'e', 'f', 'g']);
   });
 
-  test('an inferred memory without a summary falls back to its content', () {
-    final parsed = service.parse(
-      '[{"kind":"inferred","title":"Lives in Berlin",'
-      '"content":"Lives in Berlin.","tags":["location"]}]',
+  test('parsed tags are unmodifiable', () async {
+    final parsed = await _extractScreen(
+      service,
+      '[{"kind":"inferred","title":"T","content":"c","tags":["work"]}]',
     );
-    expect(parsed.single.shortSummary, 'Lives in Berlin.');
+    expect(() => parsed.single.tags.add('other'), throwsUnsupportedError);
   });
 
-  test('an unparsable expiry stays permanent', () {
-    final parsed = service.parse(
+  test(
+    'an inferred memory without a summary falls back to its content',
+    () async {
+      final parsed = await _extractScreen(
+        service,
+        '[{"kind":"inferred","title":"Lives in Berlin",'
+        '"content":"Lives in Berlin.","tags":["location"]}]',
+      );
+      expect(parsed.single.shortSummary, 'Lives in Berlin.');
+    },
+  );
+
+  test('a short summary is capped at 400 characters', () async {
+    final longSummary = 'x' * 500;
+    final parsed = await _extractScreen(
+      service,
+      '[{"kind":"inferred","title":"T","content":"c","summary":"$longSummary"}]',
+    );
+    expect(parsed.single.shortSummary, hasLength(400));
+  });
+
+  test('an unparsable expiry stays permanent', () async {
+    final parsed = await _extractScreen(
+      service,
       '[{"kind":"inferred","title":"T","content":"c","expiresAt":"soon"}]',
     );
     expect(parsed.single.expiresAt, isNull);
@@ -182,6 +232,23 @@ Server _server() {
     port: 1234,
     createdAt: now,
     lastConnectedAt: now,
+  );
+}
+
+Future<List<ExtractedMemory>> _extractScreen(
+  MemoryExtractionService service,
+  String reply, {
+  String screenText = 'screen',
+  DateTime? now,
+}) {
+  return service.extractScreen(
+    chatService: _RecordingChatService(reply),
+    server: _server(),
+    modelId: 'model',
+    params: ChatParameters.defaults(),
+    screenText: screenText,
+    sourceApp: 'com.whatsapp',
+    now: now,
   );
 }
 
