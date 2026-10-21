@@ -11,6 +11,7 @@ import '../../../core/models/enums.dart';
 import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/storage_providers.dart';
 import '../../../core/services/device_tools_service.dart';
+import '../../../core/utils/platform_support.dart';
 import '../../../core/storage/entities.dart';
 import '../../../core/storage/objectbox_store.dart';
 import '../../../core/utils/uuid.dart';
@@ -702,6 +703,9 @@ Future<void> _ensureFgServiceChannel() async {
 /// Starts the Android foreground-service keep-alive (flutter_background_);;
 /// throw-suppressed for host tests / unsupported platforms.
 Future<void> startBackgroundKeepAliveService() async {
+  // The keep-alive is an Android foreground service; desktop builds have no
+  // service to start and no notification channel to create.
+  if (!supportsAndroidBackgroundService) return;
   await _ensureFgServiceChannel();
   final service = FlutterBackgroundService();
   await service.configure(

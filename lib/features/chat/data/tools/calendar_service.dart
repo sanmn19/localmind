@@ -1,5 +1,7 @@
 import 'package:device_calendar_plus/device_calendar_plus.dart';
 
+import '../../../../core/utils/platform_support.dart';
+
 /// Thin wrapper around [DeviceCalendar] for the built-in calendar tools.
 ///
 /// All methods return plain Dart types (strings / maps) so tool results can be
@@ -9,6 +11,10 @@ class CalendarService {
   static final instance = CalendarService._();
 
   final _plugin = DeviceCalendar.instance;
+
+  /// Whether the device calendar plugin exists on this platform. The built-in
+  /// tool entry points refuse before touching the plugin when this is false.
+  bool get isAvailable => supportsCalendarPlugin;
 
   // ---------------------------------------------------------------------------
   // Permissions

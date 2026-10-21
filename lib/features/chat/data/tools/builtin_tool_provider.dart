@@ -9,6 +9,12 @@ class BuiltInToolProvider implements ToolProvider {
   final bool calendarToolsEnabled;
   final bool locationToolsEnabled;
 
+  /// Every calendar tool refuses with this result when the device calendar
+  /// plugin is absent (macOS/desktop) instead of calling a missing channel.
+  static const _calendarUnavailable = ToolExecutionResult.failure(
+    'Calendar tools are unavailable on this platform.',
+  );
+
   BuiltInToolProvider({
     this.calendarToolsEnabled = false,
     this.locationToolsEnabled = false,
@@ -177,8 +183,9 @@ class BuiltInToolProvider implements ToolProvider {
   // ---------------------------------------------------------------------------
 
   Future<ToolExecutionResult> _listEvents(Map<String, dynamic> args) async {
+    final cal = CalendarService.instance;
+    if (!cal.isAvailable) return _calendarUnavailable;
     try {
-      final cal = CalendarService.instance;
       if (!await cal.hasAccess()) {
         return const ToolExecutionResult.failure(
           'Calendar permission not granted. '
@@ -210,8 +217,9 @@ class BuiltInToolProvider implements ToolProvider {
   }
 
   Future<ToolExecutionResult> _createEvent(Map<String, dynamic> args) async {
+    final cal = CalendarService.instance;
+    if (!cal.isAvailable) return _calendarUnavailable;
     try {
-      final cal = CalendarService.instance;
       if (!await cal.hasAccess()) {
         return const ToolExecutionResult.failure(
           'Calendar permission not granted. '
@@ -254,8 +262,9 @@ class BuiltInToolProvider implements ToolProvider {
   }
 
   Future<ToolExecutionResult> _listCalendars() async {
+    final cal = CalendarService.instance;
+    if (!cal.isAvailable) return _calendarUnavailable;
     try {
-      final cal = CalendarService.instance;
       if (!await cal.hasAccess()) {
         return const ToolExecutionResult.failure(
           'Calendar permission not granted. '

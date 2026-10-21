@@ -1,0 +1,120 @@
+# macOS desktop setup
+
+LocalMind ships a macOS desktop target alongside the Android app. This page covers
+the one-time toolchain setup and the Google OAuth client the desktop build needs.
+
+The runner is generated in place:
+
+- bundle id `pro.momin.localmind`, display name `LocalMind`
+- minimum macOS version 14.0 (MLX and the on-device backends need it)
+- sandboxed, hardened runtime, with network client/server, user-selected file
+  read/write and audio-input entitlements
+
+## 1. Install Xcode
+
+Install Xcode 15 or newer from the App Store (or from
+<https://developer.apple.com/download/all/>). Flutter 3.44 resolves macOS plugins
+through Swift Package Manager, which needs Xcode 15+.
+
+Point the command line tools at the full Xcode install and accept the license:
+
+```bash
+sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
+sudo xcodebuild -runFirstLaunch
+sudo xcodebuild -license accept
+```
+
+Verify:
+
+```bash
+xcodebuild -version   # Xcode 15.x or newer
+```
+
+## 2. CocoaPods (only if the runner falls back to CocoaPods)
+
+The generated runner uses Swift Package Manager and has **no `macos/Podfile`**; every
+current macOS plugin (including `llamadart_llama_cpp_flutter`, which is
+Swift-Package-Manager-only) resolves through
+`macos/Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage`.
+
+If you add a plugin without Swift Package Manager support, Flutter switches the runner
+to CocoaPods. In that case install CocoaPods and add a `macos/Podfile` with
+`platform :osx, '14.0'`:
+
+```bash
+brew install cocoapods
+pod --version
+```
+
+## 3. Run the app
+
+```bash
+fvm flutter pub get
+fvm flutter run -d macos
+```
+
+Debug and release builds:
+
+```bash
+fvm flutter build macos --debug
+fvm flutter build macos --release
+```
+
+Without FVM, replace `fvm flutter` with your Flutter 3.44.2 binary, e.g.
+`~/fvm/versions/3.44.2/bin/flutter run -d macos`.
+
+## 4. Google sign-in (Drive sync)
+
+Google sign-in on macOS needs an OAuth **Desktop app** client; the existing
+Android/iOS client cannot be reused. Create one once per Google Cloud project:
+
+1. Open <https://console.cloud.google.com/apis/credentials> for the project.
+2. **Create credentials → OAuth client ID → Application type: Desktop app**.
+3. Copy the client id (ends in `.apps.googleusercontent.com`).
+
+Register it in `macos/Runner/Info.plist`:
+
+```xml
+<key>GIDClientID</key>
+<string>1234567890-abcdef.apps.googleusercontent.com</string>
+<key>CFBundleURLTypes</key>
+<array>
+  <dict>
+    <key>CFBundleURLSchemes</key>
+    <array>
+      <string>com.googleusercontent.apps.1234567890-abcdef</string>
+    </array>
+  </dict>
+</array>
+```
+
+The URL scheme is the client id **reversed** (`com.googleusercontent.apps.<id>`),
+which is what the OAuth redirect returns to.
+
+If the Drive/mail connectors also need a server (web) client id for token exchange,
+pass it at build time instead of committing it:
+
+```bash
+fvm flutter run -d macos \
+  --dart-define=GOOGLE_SERVER_CLIENT_ID=1234567890-web.apps.googleusercontent.com
+```
+
+Until the macOS client id is configured, the cloud sync screen reports
+"Google sign-in is not configured on this device" and the rest of the app keeps
+working.
+
+## 5. Known toolchain blocker
+
+`flutter build macos` needs a full Xcode 15+ install. On a machine with only the
+Command Line Tools the build stops before `xcodebuild` with:
+
+```
+The following plugin(s) are only compatible with Swift Package Manager:
+  - llamadart_llama_cpp_flutter
+
+Your project does not currently support Swift Package Manager. To support Swift Package Manager:
+  - Ensure Xcode 15+ is being used   - Enable Swift Package Manager feature by running "flutter config --enable-swift-package-manager"
+```
+
+Installing Xcode and running `sudo xcodebuild -runFirstLaunch` resolves it.
+`flutter analyze` and `flutter test` do not need Xcode.
