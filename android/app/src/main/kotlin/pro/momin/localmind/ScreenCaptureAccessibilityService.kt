@@ -2,6 +2,8 @@ package pro.momin.localmind
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
+import android.app.KeyguardManager
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -11,8 +13,10 @@ import android.hardware.HardwareBuffer
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.util.Log
 import android.view.Display
+import android.view.accessibility.AccessibilityNodeInfo
 import java.io.File
 import java.io.FileOutputStream
 
@@ -142,6 +146,92 @@ class ScreenCaptureAccessibilityService : AccessibilityService() {
         }
 
         captureNext(null)
+    }
+
+    /**
+     * Reads the visible text of the foreground app for the screen-memory
+     * sampler. Null while the screen is off or locked, when no readable
+     * window belongs to another app, and when the readable windows carry no
+     * text. Password fields (and their subtrees), LocalMind's own windows,
+     * keyboards, and the system UI are skipped; the collected text is capped
+     * at [MAX_SCREEN_TEXT_CHARS].
+     */
+    fun readScreenText(onResult: (ScreenText?) -> Unit) {
+        val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+        val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+        val interactive = powerManager?.isInteractive == true
+        if (!interactive || keyguardManager?.isKeyguardLocked == true) {
+            Log.i(TAG, "Screen text read skipped: interactive=$interactive")
+            onResult(null)
+            return
+        }
+
+        val roots = mutableListOf<AccessibilityNodeInfo>()
+        windows.orEmpty().forEach { window -> window.root?.let(roots::add) }
+        if (roots.isEmpty()) {
+            rootInActiveWindow?.let(roots::add)
+        }
+
+        val collected = StringBuilder()
+        var appPackage: String? = null
+        for (root in roots) {
+            val windowPackage = root.packageName?.toString() ?: continue
+            if (isSkippedPackage(windowPackage)) continue
+            if (appPackage == null) appPackage = windowPackage
+            collectNodeText(root, collected)
+            if (collected.length >= MAX_SCREEN_TEXT_CHARS) break
+        }
+
+        val packageName = appPackage
+        val text = collected.take(MAX_SCREEN_TEXT_CHARS).toString()
+        if (packageName == null || text.isBlank()) {
+            Log.i(TAG, "Screen text read found nothing (package=$packageName)")
+            onResult(null)
+            return
+        }
+        onResult(
+            ScreenText(
+                packageName = packageName,
+                text = text,
+                isInteractive = interactive
+            )
+        )
+    }
+
+    /** Own windows, keyboards, and the system UI never describe the user's
+     *  foreground app, so their text is skipped. */
+    private fun isSkippedPackage(packageName: String): Boolean {
+        if (packageName == this.packageName || packageName == SYSTEM_UI_PACKAGE) {
+            return true
+        }
+        return KEYBOARD_PACKAGE_PREFIXES.any { packageName.startsWith(it) }
+    }
+
+    /** Depth-first walk in reading order; password nodes take their whole
+     *  subtree with them, and collection stops at the character cap. */
+    private fun collectNodeText(root: AccessibilityNodeInfo, out: StringBuilder) {
+        val stack = ArrayDeque<AccessibilityNodeInfo>()
+        stack.addLast(root)
+        while (stack.isNotEmpty() && out.length < MAX_SCREEN_TEXT_CHARS) {
+            val node = stack.removeLast()
+            if (node.isPassword) continue
+            val nodeText = node.text
+            appendNodeText(out, nodeText)
+            val description = node.contentDescription
+            if (description != null && description.toString() != nodeText?.toString()) {
+                appendNodeText(out, description)
+            }
+            for (index in node.childCount - 1 downTo 0) {
+                node.getChild(index)?.let(stack::addLast)
+            }
+        }
+    }
+
+    private fun appendNodeText(out: StringBuilder, value: CharSequence?) {
+        val text = value?.toString()?.trim()
+        if (text.isNullOrEmpty()) return
+        if (out.isNotEmpty()) out.append('\n')
+        out.append(text)
     }
 
     /**
@@ -342,6 +432,18 @@ class ScreenCaptureAccessibilityService : AccessibilityService() {
         /** Stride of the row-average pixel sampling for stitch alignment. */
         private const val SCROLL_ROW_SAMPLE_STRIDE = 4
 
+        /** Character cap on one foreground-app text read. */
+        private const val MAX_SCREEN_TEXT_CHARS = 8000
+
+        /** System UI windows never count as the foreground app. */
+        private const val SYSTEM_UI_PACKAGE = "com.android.systemui"
+
+        /** Keyboard windows never count as the foreground app. */
+        private val KEYBOARD_PACKAGE_PREFIXES = listOf(
+            "com.google.android.inputmethod",
+            "com.android.inputmethod"
+        )
+
         /**
          * Set while the service is connected, cleared on unbind.
          */
@@ -407,3 +509,11 @@ class ScreenCaptureAccessibilityService : AccessibilityService() {
         }
     }
 }
+
+/** One on-demand foreground-app text read: the app that owned the window,
+ *  the concatenated visible text, and whether the screen was on and unlocked. */
+data class ScreenText(
+    val packageName: String,
+    val text: String,
+    val isInteractive: Boolean
+)

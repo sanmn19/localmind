@@ -33,6 +33,7 @@ class MainActivity : AudioServiceActivity() {
     private val ASK_LOCAL_EVENTS_CHANNEL = "localmind/ask_local/events"
     private val DEVICE_TOOLS_CHANNEL = "localmind/device_tools"
     private val NOTIFICATIONS_CHANNEL = "localmind/notifications"
+    private val SCREEN_CHANNEL = "localmind/screen"
 
     private var assistantChannel: MethodChannel? = null
     private var pendingAssistantInvocation = false
@@ -198,6 +199,13 @@ class MainActivity : AudioServiceActivity() {
                         )
                     }
                 }
+                else -> result.notImplemented()
+            }
+        }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SCREEN_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "readText" -> readScreenText(result)
                 else -> result.notImplemented()
             }
         }
@@ -889,6 +897,26 @@ class MainActivity : AudioServiceActivity() {
             } catch (error: Exception) {
                 Log.w("LocalMindAskLocal", "Card-closed event dropped: $error")
             }
+        }
+    }
+
+    /** `localmind/screen` "readText": one on-demand foreground-app text
+     *  read through the accessibility service. A missing service (or the screen
+     *  off/locked) answers success(null) so Dart just skips the tick. */
+    private fun readScreenText(result: MethodChannel.Result) {
+        val service = ScreenCaptureAccessibilityService.instance
+        if (service == null) {
+            result.success(null)
+            return
+        }
+        service.readScreenText { screen ->
+            result.success(
+                if (screen != null) mapOf(
+                    "packageName" to screen.packageName,
+                    "text" to screen.text,
+                    "isInteractive" to screen.isInteractive
+                ) else null
+            )
         }
     }
 
