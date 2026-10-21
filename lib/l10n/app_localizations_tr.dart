@@ -3878,7 +3878,7 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get screen_memories_footer =>
-      'Samples stay on this device for at most 24 hours and are never exported. Screen text never leaves the device.';
+      'Samples stay on this device for at most 24 hours and are never exported. Screen text is sent only to the model server you selected.';
 
   @override
   String get memory_add => 'Add memory';

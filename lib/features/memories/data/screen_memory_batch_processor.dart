@@ -119,6 +119,8 @@ class ScreenMemoryBatchProcessor {
         now: now,
       );
       for (final item in extracted) {
+        // One malformed item must not abort the rest of the batch.
+        if (item.content.trim().isEmpty) continue;
         _repository.rememberInferred(
           title: item.title,
           content: item.content,

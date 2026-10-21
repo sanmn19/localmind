@@ -3863,7 +3863,7 @@
   "@screen_memories_blocked_apps_desc": {"description": "Screen memories: blocked package count", "placeholders": {"count": {"type": "int"}}},
   "screen_memories_blocked_apps_hint": "Package names, separated by commas",
   "@screen_memories_blocked_apps_hint": {"description": "Screen memories: blocked apps text field hint"},
-  "screen_memories_footer": "Samples stay on this device for at most 24 hours and are never exported. Screen text never leaves the device.",
+  "screen_memories_footer": "Samples stay on this device for at most 24 hours and are never exported. Screen text is sent only to the model server you selected.",
   "@screen_memories_footer": {"description": "Screen memories card footer" },
   "@memories_enabled_desc": {"description": "Settings toggle description"},
   "memory_add": "Add memory",

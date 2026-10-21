@@ -220,6 +220,38 @@ void main() {
     expect(extractor.calls, 0);
   });
 
+  test('one empty item does not drop the rest of the batch', () async {
+    final store = _RecordingStore()
+      ..add(_sample(1, 'Standup 10:00', 'com.whatsapp'));
+    final extractor = _FakeExtractor(
+      results: const [
+        ExtractedMemory(
+          kind: MemoryKind.inferred,
+          title: 'Empty',
+          content: '   ',
+          importance: 50,
+          conversationScoped: false,
+        ),
+        ExtractedMemory(
+          kind: MemoryKind.inferred,
+          title: 'Standup at 10:00',
+          content: 'The user has a standup at 10:00.',
+          importance: 50,
+          conversationScoped: false,
+        ),
+      ],
+    );
+    final memoryStore = InMemoryMemoryStore();
+    final batch = _processor(
+      store: store,
+      extractor: extractor,
+      repository: MemoryRepository(memoryStore),
+    );
+    await batch.batchNow();
+
+    expect(memoryStore.list().map((m) => m.title), ['Standup at 10:00']);
+  });
+
   test('a failed batch backs off for five minutes', () async {
     var now = DateTime(2026, 10, 20, 9);
     final store = _RecordingStore()..add(_sample(1, 'x', 'com.whatsapp'));

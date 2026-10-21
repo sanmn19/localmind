@@ -7080,7 +7080,7 @@ abstract class AppLocalizations {
   /// Screen memories card footer
   ///
   /// In en, this message translates to:
-  /// **'Samples stay on this device for at most 24 hours and are never exported. Screen text never leaves the device.'**
+  /// **'Samples stay on this device for at most 24 hours and are never exported. Screen text is sent only to the model server you selected.'**
   String get screen_memories_footer;
 
   /// Memories screen: add button/dialog title
