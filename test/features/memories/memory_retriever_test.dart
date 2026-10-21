@@ -127,6 +127,62 @@ void main() {
     expect(otherChat.map((m) => m.id), isNot(contains(chat.id)));
   });
 
+  test('an expired memory is never retrieved', () async {
+    final store = InMemoryMemoryStore();
+    final repo = MemoryRepository(store);
+    repo.rememberInferred(
+      title: 'Deadline',
+      content: 'Ship on Monday',
+      expiresAt: DateTime(2026, 10, 19),
+    );
+
+    final rows = await _retriever(
+      repo,
+      store,
+      const NoopEmbeddingGateway(),
+    ).retrieve('deadline');
+
+    expect(rows, isEmpty);
+  });
+
+  test('a tag match boosts a memory', () async {
+    final store = InMemoryMemoryStore();
+    final repo = MemoryRepository(store);
+    final tagged = repo.remember(
+      title: 'Trip',
+      content: 'Oslo in May',
+      tags: const ['travel'],
+    );
+    repo.remember(title: 'Coffee', content: 'Oat milk');
+
+    final rows = await _retriever(
+      repo,
+      store,
+      const NoopEmbeddingGateway(),
+    ).retrieve('travel');
+
+    expect(rows.first.id, tagged.id);
+  });
+
+  test('an exact tag match breaks a keyword tie', () async {
+    final store = InMemoryMemoryStore();
+    final repo = MemoryRepository(store);
+    final tagged = repo.remember(
+      title: 'Trip',
+      content: 'Oslo in May',
+      tags: const ['travel'],
+    );
+    repo.remember(title: 'Travel', content: 'Notes');
+
+    final rows = await _retriever(
+      repo,
+      store,
+      const NoopEmbeddingGateway(),
+    ).retrieve('travel');
+
+    expect(rows.first.id, tagged.id);
+  });
+
   test('the budget caps the rows', () async {
     final store = InMemoryMemoryStore();
     final repo = MemoryRepository(store);

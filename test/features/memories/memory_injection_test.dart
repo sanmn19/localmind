@@ -19,6 +19,38 @@ void main() {
     expect(section, contains('- [preference] Coffee: Oat milk'));
   });
 
+  test('inferred memories inject their short summary', () {
+    final section = buildMemoriesSystemSection([
+      Memory(
+        id: 'm1',
+        kind: MemoryKind.inferred,
+        title: 'Standup',
+        content: 'Team standup moved to 10:00 on 2026-10-21.',
+        shortSummary: 'Standup at 10:00',
+        tags: const ['work'],
+        createdAt: DateTime(2026),
+        updatedAt: DateTime(2026),
+      ),
+    ]);
+    expect(section, contains('Standup at 10:00'));
+    expect(section, isNot(contains('moved to 10:00')));
+    expect(section, contains('[#work]'));
+  });
+
+  test('inferred memories fall back to content without a summary', () {
+    final section = buildMemoriesSystemSection([
+      Memory(
+        id: 'm1',
+        kind: MemoryKind.inferred,
+        title: 'Standup',
+        content: 'Team standup moved to 10:00 on 2026-10-21.',
+        createdAt: DateTime(2026),
+        updatedAt: DateTime(2026),
+      ),
+    ]);
+    expect(section, contains('moved to 10:00'));
+  });
+
   test('the section is empty when nothing is retrieved', () {
     expect(buildMemoriesSystemSection(const []), isEmpty);
   });

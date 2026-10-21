@@ -27,7 +27,10 @@ class MemoryRetriever {
     int budget = defaultBudget,
     String? conversationId,
   }) async {
-    final live = repository.list()
+    final now = DateTime.now();
+    final live = repository
+        .list()
+        .where((memory) => !memory.isExpired)
         .where(
           (memory) =>
               memory.scopeConversationId == null ||
@@ -47,6 +50,7 @@ class MemoryRetriever {
         .toList();
 
     final scores = <String, double>{};
+    final queryTokens = _tokens(query);
     final queryVector = await _embed(query);
     if (queryVector != null) {
       final vectors = {
@@ -69,9 +73,8 @@ class MemoryRetriever {
             (scores[relation.toMemoryId] ?? 0) + 0.25 * from;
       }
     } else {
-      final tokens = _tokens(query);
       for (final memory in live) {
-        scores[memory.id] = _keywordScore(tokens, memory);
+        scores[memory.id] = _keywordScore(queryTokens, memory);
       }
       for (final relation in relations) {
         final from = scores[relation.fromMemoryId] ?? 0;
@@ -83,23 +86,28 @@ class MemoryRetriever {
       }
     }
 
-    final now = DateTime.now();
-    final ranked = live
-        .where((memory) => (scores[memory.id] ?? 0) > 0)
-        .map((memory) {
-          final base = scores[memory.id] ?? 0;
-          final recency = _recencyScore(memory, now);
-          final importance = memory.importance / 100;
-          return (memory: memory, score: base + 0.15 * recency + 0.15 * importance);
-        })
-        .toList()
-      ..sort((a, b) => b.score.compareTo(a.score));
+    double baseScore(Memory memory) =>
+        (scores[memory.id] ?? 0) + _tagBoost(queryTokens, memory);
+
+    final ranked = live.where((memory) => baseScore(memory) > 0).map((memory) {
+      final recency = _recencyScore(memory, now);
+      final importance = memory.importance / 100;
+      return (
+        memory: memory,
+        score: baseScore(memory) + 0.15 * recency + 0.15 * importance,
+      );
+    }).toList()..sort((a, b) => b.score.compareTo(a.score));
 
     final selected = <Memory>[];
     var used = 0;
     for (final row in ranked) {
       if (selected.length >= topK) break;
-      final length = row.memory.title.length + row.memory.content.length + 16;
+      final body =
+          row.memory.kind == MemoryKind.inferred &&
+              row.memory.shortSummary.isNotEmpty
+          ? row.memory.shortSummary
+          : row.memory.content;
+      final length = row.memory.title.length + body.length + 16;
       if (used + length > budget && selected.isNotEmpty) break;
       selected.add(row.memory);
       used += length;
@@ -115,7 +123,9 @@ class MemoryRetriever {
 
   double _keywordScore(Set<String> queryTokens, Memory memory) {
     if (queryTokens.isEmpty) return 0;
-    final memoryTokens = _tokens('${memory.title} ${memory.content}');
+    final memoryTokens = _tokens(
+      '${memory.title} ${memory.content} ${memory.tags.join(' ')}',
+    );
     if (memoryTokens.isEmpty) return 0;
     var overlap = 0;
     for (final token in queryTokens) {
@@ -123,6 +133,10 @@ class MemoryRetriever {
     }
     return overlap / queryTokens.length;
   }
+
+  /// An exact query-token/tag match adds a small, deterministic boost.
+  double _tagBoost(Set<String> queryTokens, Memory memory) =>
+      memory.tags.any(queryTokens.contains) ? 0.1 : 0;
 
   Set<String> _tokens(String text) => text
       .toLowerCase()

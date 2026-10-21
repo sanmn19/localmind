@@ -19,7 +19,14 @@ String buildMemoriesSystemSection(List<Memory> memories) {
   );
   var truncated = false;
   for (final memory in memories) {
-    final row = '- [${memory.kind.name}] ${memory.title}: ${memory.content}';
+    final body =
+        memory.kind == MemoryKind.inferred && memory.shortSummary.isNotEmpty
+        ? memory.shortSummary
+        : memory.content;
+    final tags = memory.tags.isEmpty
+        ? ''
+        : ' [${memory.tags.map((tag) => '#$tag').join(' ')}]';
+    final row = '- [${memory.kind.name}] ${memory.title}: $body$tags';
     if (buffer.length + 1 + row.length > memoriesContextBudget) {
       truncated = true;
       break;

@@ -55,6 +55,12 @@ class Memory {
   /// Package that produced an inferred memory (e.g. `com.whatsapp`).
   final String? sourceApp;
 
+  /// A memory expires only after its expiry instant; null means permanent.
+  bool get isExpired {
+    final expiresAt = this.expiresAt;
+    return expiresAt != null && DateTime.now().isAfter(expiresAt);
+  }
+
   Memory copyWith({
     String? title,
     String? content,
