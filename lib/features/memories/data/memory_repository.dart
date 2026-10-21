@@ -19,6 +19,16 @@ class MemoryRepository {
         .toList();
   }
 
+  /// Every memory the memories screen should show. Expired rows stay visible
+  /// (the screen labels them "Expired"); archived and superseded rows do not.
+  /// Retrieval keeps using [list], which excludes expired rows.
+  List<Memory> listIncludingExpired() {
+    return _store
+        .list()
+        .where((m) => !m.archived && m.supersededById == null)
+        .toList();
+  }
+
   Memory remember({
     required String title,
     required String content,

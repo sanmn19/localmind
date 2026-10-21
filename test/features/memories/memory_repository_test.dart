@@ -155,6 +155,20 @@ void main() {
     expect(repo.list(), isEmpty);
   });
 
+  test('listIncludingExpired shows an expired memory that list hides', () {
+    final repo = MemoryRepository(InMemoryMemoryStore());
+    final expired = repo.rememberInferred(
+      title: 'Deadline',
+      content: 'Ship on Monday',
+      expiresAt: DateTime.now().subtract(const Duration(days: 1)),
+    );
+    expect(repo.list(), isEmpty);
+    expect(repo.listIncludingExpired().map((m) => m.id), [expired.id]);
+
+    repo.archive(expired.id);
+    expect(repo.listIncludingExpired(), isEmpty);
+  });
+
   test('a near-duplicate inferred memory updates tags and expiry', () {
     final repo = MemoryRepository(InMemoryMemoryStore());
     final first = repo.rememberInferred(

@@ -152,6 +152,39 @@ void main() {
     expect(find.byKey(const ValueKey('memory_row_m1')), findsOneWidget);
   });
 
+  testWidgets('a tag filter hides rows without the tag', (tester) async {
+    await _pump(tester, memories: [
+      _memory(id: 'm1', tags: const ['work']),
+      _memory(id: 'm2', tags: const ['home']),
+    ]);
+    expect(find.byKey(const ValueKey('memory_row_m2')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('memory_tag_filter_work')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('memory_row_m1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('memory_row_m2')), findsNothing);
+  });
+
+  testWidgets('an expired memory is shown as expired and still filters',
+      (tester) async {
+    await _pump(tester, memories: [
+      _memory(
+        id: 'm1',
+        kind: MemoryKind.inferred,
+        tags: const ['work'],
+        expiresAt: DateTime.now().subtract(const Duration(days: 1)),
+      ),
+      _memory(id: 'm2', tags: const ['home']),
+    ]);
+    expect(find.byKey(const ValueKey('memory_row_m1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('memory_expiry_m1')), findsOneWidget);
+    expect(find.text('Expired'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('memory_tag_filter_work')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('memory_row_m1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('memory_row_m2')), findsNothing);
+  });
+
   testWidgets('search matches a tag and the expiry badge shows', (
     tester,
   ) async {

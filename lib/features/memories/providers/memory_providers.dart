@@ -32,7 +32,7 @@ final memoryRepositoryProvider = Provider<MemoryRepository>((ref) {
 });
 
 final memoriesProvider = FutureProvider<List<Memory>>((ref) async {
-  return ref.watch(memoryRepositoryProvider).list();
+  return ref.watch(memoryRepositoryProvider).listIncludingExpired();
 });
 
 final memoryRelationsProvider = FutureProvider<List<MemoryRelation>>((ref) async {
