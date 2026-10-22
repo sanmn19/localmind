@@ -20,6 +20,7 @@ import 'features/conversations/providers/conversation_providers.dart' as conv;
 import 'features/chat/views/chat_screen.dart';
 import 'features/conversations/views/chat_history_screen.dart';
 import 'features/desktop/data/models/desktop_window.dart';
+import 'features/desktop/views/components/desktop_chat_window.dart';
 import 'features/desktop/views/components/desktop_command_palette.dart';
 import 'features/desktop/views/desktop_host.dart';
 import 'features/mcp/views/mcp_tools_screen.dart';
@@ -452,7 +453,10 @@ class _AppShellState extends ConsumerState<AppShell> {
 /// relaunch and fall back to their create state.
 Widget _buildDesktopScreen(DesktopWindowState window) {
   return switch (window.kind) {
-    DesktopWindowKind.chat => const ChatScreen(),
+    DesktopWindowKind.chat =>
+      window.conversationId == null
+          ? const ChatScreen()
+          : DesktopChatWindow(conversationId: window.conversationId!),
     DesktopWindowKind.history => const ChatHistoryScreen(),
     DesktopWindowKind.savedMessages => const SavedMessagesScreen(),
     DesktopWindowKind.servers => const ServerListScreen(),

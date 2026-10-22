@@ -134,6 +134,13 @@ final chatProvider = NotifierProvider<ChatNotifier, ChatState>(() {
 });
 
 class ChatNotifier extends Notifier<ChatState> {
+  ChatNotifier({this.resumeLastChat = true});
+
+  /// Whether [build] may restore the last active conversation from the previous
+  /// session. Floating desktop windows pass `false`: each window loads the
+  /// conversation it was opened for instead of racing the global resume.
+  final bool resumeLastChat;
+
   MessageSaveService? _saveService;
   PendingToolApproval? _pendingToolApproval;
   final Set<String> _titleGenerationsInFlight = <String>{};
@@ -430,7 +437,7 @@ class ChatNotifier extends Notifier<ChatState> {
         pending.completer.complete(false);
       }
     });
-    if (!_attemptedResume) {
+    if (resumeLastChat && !_attemptedResume) {
       _attemptedResume = true;
       Future.microtask(_tryResumeLastChat);
     }
@@ -473,7 +480,10 @@ class ChatNotifier extends Notifier<ChatState> {
         .setString(_lastActiveConversationKey, conversationId);
   }
 
-  Future<void> loadConversation(Conversation conversation) async {
+  Future<void> loadConversation(
+    Conversation conversation, {
+    bool activate = true,
+  }) async {
     if (!ref.mounted) return;
     // Leave an eligible reply streaming in the background (#94). Only the
     // open chat's own stream may be cancelled here; a reply already running
@@ -507,12 +517,14 @@ class ChatNotifier extends Notifier<ChatState> {
         isStreaming: liveMessage != null,
         streamingMessage: liveMessage,
       );
-      ref
-          .read(conv.activeConversationIdProvider.notifier)
-          .setActiveConversation(conversation);
+      if (activate) {
+        ref
+            .read(conv.activeConversationIdProvider.notifier)
+            .setActiveConversation(conversation);
+      }
       _publishGenerations();
 
-      if (!conversation.isTemporary) {
+      if (activate && !conversation.isTemporary) {
         _persistLastActiveConversation(conversation.id);
       }
 
@@ -1674,8 +1686,8 @@ class ChatNotifier extends Notifier<ChatState> {
       result.insert(0, message);
     }
 
-      return result;
-    }
+    return result;
+  }
 
   /// Fork-context slice (selection-fork feature): the composed API history
   /// for the OPEN conversation truncated at [anchorMessageId] inclusive —
