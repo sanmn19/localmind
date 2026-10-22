@@ -423,9 +423,16 @@ class MainActivity : AudioServiceActivity() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false
         val manager = getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
         if (manager == null) return false
-        val expected = ComponentName(this, ScreenCaptureAccessibilityService::class.java).flattenToString()
+        // AccessibilityServiceInfo.id is reported in short form on some
+        // Android builds ("pkg/.Service") and full form on others
+        // ("pkg/pkg.Service"). Compare the parsed components, not strings.
+        val expected = ComponentName(this, ScreenCaptureAccessibilityService::class.java)
         return manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-            .any { it.id == expected }
+            .any { info ->
+                val actual = ComponentName.unflattenFromString(info.id) ?: return@any false
+                actual.packageName == expected.packageName &&
+                    actual.className == expected.className
+            }
     }
 
     private fun getAssistantStatus(): String {
