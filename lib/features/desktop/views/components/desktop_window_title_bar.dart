@@ -7,7 +7,8 @@ import '../../data/models/desktop_window.dart';
 /// The title strip at the top of a floating window.
 ///
 /// It only renders the title and the window controls; the owning
-/// [DesktopWindowFrame] supplies the controller callbacks.
+/// [DesktopWindowFrame] supplies the controller callbacks and owns the drag
+/// state behind the move gestures.
 class DesktopWindowTitleBar extends StatelessWidget {
   const DesktopWindowTitleBar({
     super.key,
@@ -16,6 +17,11 @@ class DesktopWindowTitleBar extends StatelessWidget {
     required this.onClose,
     required this.onMinimize,
     required this.onMaximize,
+    required this.onDragStart,
+    required this.onDragUpdate,
+    required this.onDragEnd,
+    required this.onDragCancel,
+    required this.onDoubleTap,
   });
 
   /// The window this bar belongs to.
@@ -27,6 +33,21 @@ class DesktopWindowTitleBar extends StatelessWidget {
   final VoidCallback onClose;
   final VoidCallback onMinimize;
   final VoidCallback onMaximize;
+
+  /// Called when a move gesture starts on the bar.
+  final GestureDragStartCallback onDragStart;
+
+  /// Called with the movement since the last drag update.
+  final GestureDragUpdateCallback onDragUpdate;
+
+  /// Called when the move gesture ends.
+  final GestureDragEndCallback onDragEnd;
+
+  /// Called when the move gesture is cancelled by a competing gesture.
+  final GestureDragCancelCallback onDragCancel;
+
+  /// Called when the bar is double-tapped.
+  final VoidCallback onDoubleTap;
 
   @override
   Widget build(BuildContext context) {
@@ -48,12 +69,27 @@ class DesktopWindowTitleBar extends StatelessWidget {
       ),
       child: Row(
         children: [
+          // Only the title area moves the window: a double tap here must not
+          // delay the window controls by holding their gesture arena.
           Expanded(
-            child: Text(
-              window.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelLarge?.copyWith(color: titleColor),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onPanStart: onDragStart,
+              onPanUpdate: onDragUpdate,
+              onPanEnd: onDragEnd,
+              onPanCancel: onDragCancel,
+              onDoubleTap: onDoubleTap,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  window.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: titleColor,
+                  ),
+                ),
+              ),
             ),
           ),
           _WindowButton(

@@ -6,6 +6,7 @@ import 'package:localmind/core/providers/storage_providers.dart';
 import 'package:localmind/features/desktop/data/desktop_layout_store.dart';
 import 'package:localmind/features/desktop/data/models/desktop_window.dart';
 import 'package:localmind/features/desktop/providers/desktop_window_providers.dart';
+import 'package:localmind/features/desktop/utils/window_geometry.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Counts saves so the debounce can be observed without inspecting internals.
@@ -169,6 +170,46 @@ void main() {
     controller.resize(id, const Rect.fromLTWH(10, 10, 100, 100));
     window = container.read(desktopWindowControllerProvider).windows.single;
     expect(window.rect, const Rect.fromLTWH(10, 10, 360, 320));
+  });
+
+  test('snap fills a workspace edge and clears the maximised flag', () {
+    final container = createContainer();
+    final controller = container.read(desktopWindowControllerProvider.notifier);
+    controller.setWorkspace(const Rect.fromLTWH(0, 0, 1200, 800));
+    final id = controller.open(
+      kind: DesktopWindowKind.settings,
+      title: 'Settings',
+    );
+    controller.toggleMaximize(id);
+
+    controller.snap(id, DesktopSnapEdge.rightHalf);
+
+    final window = container
+        .read(desktopWindowControllerProvider)
+        .windows
+        .single;
+    expect(window.rect, const Rect.fromLTWH(600, 0, 600, 800));
+    expect(window.isMaximized, isFalse);
+  });
+
+  test('snap without a workspace is a no-op', () {
+    final container = createContainer();
+    final controller = container.read(desktopWindowControllerProvider.notifier);
+    final id = controller.open(
+      kind: DesktopWindowKind.settings,
+      title: 'Settings',
+    );
+    final before = container
+        .read(desktopWindowControllerProvider)
+        .windows
+        .single;
+
+    controller.snap(id, DesktopSnapEdge.full);
+
+    expect(
+      container.read(desktopWindowControllerProvider).windows.single,
+      before,
+    );
   });
 
   test('setWorkspace pulls every saved window back on screen', () {

@@ -146,6 +146,22 @@ class DesktopWindowController extends Notifier<DesktopLayout> {
   /// Resizes [id], clamped to the workspace when one is known.
   void resize(String id, Rect rect) => _setRect(id, rect);
 
+  /// Fills [edge] of the workspace with [id] and un-maximises it.
+  ///
+  /// Does nothing until the shell has reported a workspace: there is no edge to
+  /// fill before that.
+  void snap(String id, DesktopSnapEdge edge) {
+    final window = _window(id);
+    final workspace = _workspace;
+    if (window == null || workspace == null) return;
+    final next = window.copyWith(
+      rect: _clampToWorkspace(WindowGeometry.snapped(edge, workspace)),
+      isMaximized: false,
+    );
+    if (next == window) return;
+    _replace(next);
+  }
+
   /// Sets the workspace used to keep windows on screen and re-clamps every
   /// window already open.
   void setWorkspace(Rect workspace) {
