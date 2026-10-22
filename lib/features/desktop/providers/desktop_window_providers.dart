@@ -48,11 +48,16 @@ class DesktopWindowController extends Notifier<DesktopLayout> {
     String? route,
     String? conversationId,
     String? title,
+    bool isDraft = false,
   }) {
-    final existing = _findOpen(kind, conversationId);
-    if (existing != null) {
-      focus(existing.id);
-      return existing.id;
+    // Draft chats are independent: each one owns its own state, so a new draft
+    // never focuses an existing tab.
+    if (!isDraft) {
+      final existing = _findOpen(kind, conversationId);
+      if (existing != null) {
+        focus(existing.id);
+        return existing.id;
+      }
     }
     final id = 'w${_nextIdNumber++}';
     final window = DesktopWindowState(
@@ -61,6 +66,7 @@ class DesktopWindowController extends Notifier<DesktopLayout> {
       title: title ?? kind.defaultTitle,
       route: route,
       conversationId: conversationId,
+      isDraft: isDraft,
     );
     _set(
       DesktopLayout(windows: [...state.windows, window], focusedWindowId: id),

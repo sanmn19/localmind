@@ -234,18 +234,16 @@ void main() {
 
   testWidgets('the tab bar button opens a new chat tab', (tester) async {
     final container = createContainer();
-    var newChats = 0;
-
-    await pumpShell(tester, container, startNewChat: () async => 'c${newChats++}');
+    await pumpShell(tester, container);
 
     await tester.tap(find.byKey(const ValueKey('desktop-new-chat')));
     await tester.pumpAndSettle();
 
     final layout = layoutOf(container);
-    expect(newChats, 1);
     expect(layout.windows, hasLength(1));
     expect(layout.windows.single.kind, DesktopWindowKind.chat);
-    expect(layout.windows.single.conversationId, 'c0');
+    expect(layout.windows.single.isDraft, isTrue);
+    expect(layout.windows.single.conversationId, isNull);
     expect(find.text('screen:Chat'), findsOneWidget);
 
     await flushSaves(tester);

@@ -63,6 +63,7 @@ class DesktopWindowState {
     required this.title,
     this.route,
     this.conversationId,
+    this.isDraft = false,
   });
 
   final String id;
@@ -71,6 +72,9 @@ class DesktopWindowState {
   final String? route;
   final String? conversationId;
 
+  /// A fresh chat tab: it owns its own chat state and no conversation yet.
+  final bool isDraft;
+
   DesktopWindowState copyWith({
     DesktopWindowKind? kind,
     String? title,
@@ -78,6 +82,7 @@ class DesktopWindowState {
     bool clearRoute = false,
     String? conversationId,
     bool clearConversationId = false,
+    bool? isDraft,
   }) {
     return DesktopWindowState(
       id: id,
@@ -87,6 +92,7 @@ class DesktopWindowState {
       conversationId: clearConversationId
           ? null
           : (conversationId ?? this.conversationId),
+      isDraft: isDraft ?? this.isDraft,
     );
   }
 
@@ -97,6 +103,7 @@ class DesktopWindowState {
       'title': title,
       'route': route,
       'conversationId': conversationId,
+      'isDraft': isDraft,
     };
   }
 
@@ -120,6 +127,7 @@ class DesktopWindowState {
       title: title is String && title.isNotEmpty ? title : kind.defaultTitle,
       route: route is String ? route : null,
       conversationId: conversationId is String ? conversationId : null,
+      isDraft: json['isDraft'] == true,
     );
   }
 
@@ -130,6 +138,7 @@ class DesktopWindowState {
           other.id == id &&
           other.kind == kind &&
           other.title == title &&
+          other.isDraft == isDraft &&
           other.route == route &&
           other.conversationId == conversationId;
 

@@ -460,10 +460,11 @@ class _AppShellState extends ConsumerState<AppShell> {
 /// one after a relaunch and fall back to their create state.
 Widget buildDesktopScreen(DesktopWindowState window) {
   return switch (window.kind) {
-    DesktopWindowKind.chat =>
-      window.conversationId == null
-          ? const ChatScreen()
-          : DesktopChatWindow(conversationId: window.conversationId!),
+    DesktopWindowKind.chat => window.isDraft
+        ? const DesktopChatWindow.draft()
+        : window.conversationId == null
+        ? const ChatScreen()
+        : DesktopChatWindow(conversationId: window.conversationId!),
     DesktopWindowKind.history => const ChatHistoryScreen(),
     DesktopWindowKind.savedMessages => const SavedMessagesScreen(),
     DesktopWindowKind.servers => const ServerListScreen(),
@@ -491,10 +492,35 @@ Widget buildDesktopScreen(DesktopWindowState window) {
 class DesktopChatWindow extends ConsumerWidget {
   const DesktopChatWindow({super.key, required this.conversationId});
 
-  final String conversationId;
+  /// A fresh chat tab: its own notifier and no conversation to load.
+  const DesktopChatWindow.draft({super.key}) : conversationId = null;
+
+  final String? conversationId;
+
+  bool get _isDraft => conversationId == null;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (_isDraft) {
+      return ProviderScope(
+        key: const ValueKey('desktop-draft-chat'),
+        overrides: [
+          chatProvider.overrideWith(() => ChatNotifier(resumeLastChat: false)),
+          // A draft never touches the app-wide chat, active conversation or
+          // generation state; everything it can reach is scoped here.
+          conv.activeConversationIdProvider.overrideWith(
+            _DraftActiveConversationIdNotifier.new,
+          ),
+          conv.activeConversationProvider.overrideWith(
+            _DraftActiveConversationNotifier.new,
+          ),
+          activeGenerationsProvider.overrideWith(ActiveGenerationsNotifier.new),
+          isStreamingProvider.overrideWith(IsStreamingNotifier.new),
+          chatMcpConfigProvider.overrideWith(ChatMcpConfigNotifier.new),
+        ],
+        child: const ChatScreen(),
+      );
+    }
     return ref
         .watch(conv.conversationsProvider)
         .when(
@@ -628,6 +654,43 @@ class _FixedActiveConversationIdNotifier
   @override
   void setActiveConversationId(String? id) {
     state = id;
+  }
+}
+
+/// The draft tab's active id: it never has one and never writes the app-wide id.
+class _DraftActiveConversationIdNotifier
+    extends conv.ActiveConversationIdNotifier {
+  @override
+  String? build() => null;
+
+  @override
+  void setActiveConversation(Conversation? conversation) {
+    state = conversation?.id;
+  }
+
+  @override
+  void setActiveConversationId(String? id) {
+    state = id;
+  }
+}
+
+/// The draft tab's active conversation, resolved inside its own scope.
+class _DraftActiveConversationNotifier extends conv.ActiveConversationNotifier {
+  @override
+  Conversation? build() {
+    final id = ref.watch(conv.activeConversationIdProvider);
+    if (id == null) return null;
+    final conversations =
+        ref.watch(conv.conversationsProvider).value ?? const [];
+    return conversations.where((candidate) => candidate.id == id).firstOrNull;
+  }
+
+  @override
+  void setActiveConversation(Conversation? conversation) {
+    ref
+        .read(conv.activeConversationIdProvider.notifier)
+        .setActiveConversation(conversation);
+    state = conversation;
   }
 }
 

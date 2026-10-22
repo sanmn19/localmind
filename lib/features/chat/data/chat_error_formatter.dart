@@ -159,7 +159,7 @@ class ChatErrorFormatter {
       case 404:
         return const ChatApiError(
           message:
-              'Model not found. Pull or load the model in Ollama, then try again.',
+              'Model not found. Load or pull the model on the server, then try again.',
           type: 'model_not_found',
         );
       case 408:

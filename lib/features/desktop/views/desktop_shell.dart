@@ -154,12 +154,12 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
   ///
   /// The home tab has no conversation id, so it renders the app-scope chat rather
   /// than a window bound to a conversation that does not exist yet.
-  Future<void> _newChat() async {
-    final conversationId = await widget.startNewChat?.call();
-    if (!mounted) return;
+  void _newChat() {
+    // A new chat tab starts empty and owns its own chat state; the app-wide chat
+    // is reset by the sidebar's New Chat, not by every draft tab.
     _controller.open(
       kind: DesktopWindowKind.chat,
-      conversationId: conversationId,
+      isDraft: true,
       title: DesktopWindowKind.chat.defaultTitle,
     );
   }
