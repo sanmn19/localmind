@@ -30,6 +30,17 @@ void main() {
     expect(restored.webSearchApiKey, 'k123');
   });
 
+  test('screen processing model survives toMap/fromMap', () {
+    final settings = AppSettings().copyWith(
+      screenMemoryServerId: 'server-1',
+      screenMemoryModelId: 'model-1',
+    );
+    final restored = AppSettings.fromMap(settings.toMap());
+    expect(restored.screenMemoryServerId, 'server-1');
+    expect(restored.screenMemoryModelId, 'model-1');
+    expect(AppSettings.fromMap({}).screenMemoryServerId, isNull);
+  });
+
   test('auto-remember defaults off and survives toMap/fromMap', () {
     expect(AppSettings().autoMemoryEnabled, isFalse);
     final restored = AppSettings.fromMap(

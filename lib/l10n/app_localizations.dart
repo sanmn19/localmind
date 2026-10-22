@@ -7047,12 +7047,6 @@ abstract class AppLocalizations {
   /// **'Reads the visible text of the app you are using and turns durable details into inferred memories. Only changed screens are stored, and samples stay on this device.'**
   String get screen_memories_enabled_desc;
 
-  /// Screen memories: sampling cadence setting
-  ///
-  /// In en, this message translates to:
-  /// **'Sample every'**
-  String get screen_memories_sample_interval;
-
   /// Screen memories: batch cadence setting
   ///
   /// In en, this message translates to:
@@ -7076,6 +7070,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Package names, separated by commas'**
   String get screen_memories_blocked_apps_hint;
+
+  /// No description provided for @screen_memories_blocked_apps_search.
+  ///
+  /// In en, this message translates to:
+  /// **'Search installed apps'**
+  String get screen_memories_blocked_apps_search;
+
+  /// No description provided for @screen_memories_blocked_apps_empty.
+  ///
+  /// In en, this message translates to:
+  /// **'No apps found'**
+  String get screen_memories_blocked_apps_empty;
+
+  /// No description provided for @screen_memories_blocked_apps_not_installed.
+  ///
+  /// In en, this message translates to:
+  /// **'Not installed'**
+  String get screen_memories_blocked_apps_not_installed;
+
+  /// No description provided for @screen_memories_processing_model.
+  ///
+  /// In en, this message translates to:
+  /// **'Processing model'**
+  String get screen_memories_processing_model;
+
+  /// No description provided for @screen_memories_processing_model_desc.
+  ///
+  /// In en, this message translates to:
+  /// **'Server and model used to turn screen samples into memories.'**
+  String get screen_memories_processing_model_desc;
+
+  /// No description provided for @screen_memories_processing_model_chat.
+  ///
+  /// In en, this message translates to:
+  /// **'Same as chat'**
+  String get screen_memories_processing_model_chat;
+
+  /// No description provided for @screen_memories_processing_model_empty.
+  ///
+  /// In en, this message translates to:
+  /// **'No models found on this server'**
+  String get screen_memories_processing_model_empty;
+
+  /// No description provided for @screen_memories_processing_model_reset.
+  ///
+  /// In en, this message translates to:
+  /// **'Use chat model'**
+  String get screen_memories_processing_model_reset;
 
   /// Screen memories card footer
   ///

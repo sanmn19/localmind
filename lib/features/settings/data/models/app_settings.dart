@@ -148,6 +148,11 @@ class AppSettings {
   /// Batch cadence in seconds (60 s by default).
   final int screenMemoryBatchIntervalSeconds;
 
+  /// Server/model used to turn screen samples into memories. Null means
+  /// "same as the active chat model".
+  final String? screenMemoryServerId;
+  final String? screenMemoryModelId;
+
   /// Package names whose text is never sampled, including their subpackages.
   final List<String> screenMemoryBlockedApps;
 
@@ -238,6 +243,8 @@ class AppSettings {
     this.screenMemoryEnabled = false,
     this.screenMemorySampleIntervalMs = 500,
     this.screenMemoryBatchIntervalSeconds = 60,
+    this.screenMemoryServerId,
+    this.screenMemoryModelId,
     this.screenMemoryBlockedApps = defaultScreenMemoryBlockedApps,
     this.backgroundTasksEnabled = false,
     this.notificationToolsEnabled = false,
@@ -310,6 +317,8 @@ class AppSettings {
     bool? screenMemoryEnabled,
     int? screenMemorySampleIntervalMs,
     int? screenMemoryBatchIntervalSeconds,
+    Object? screenMemoryServerId = _unset,
+    Object? screenMemoryModelId = _unset,
     List<String>? screenMemoryBlockedApps,
     bool? backgroundTasksEnabled,
     bool? notificationToolsEnabled,
@@ -411,6 +420,12 @@ class AppSettings {
       screenMemoryBatchIntervalSeconds:
           screenMemoryBatchIntervalSeconds ??
           this.screenMemoryBatchIntervalSeconds,
+      screenMemoryServerId: identical(screenMemoryServerId, _unset)
+          ? this.screenMemoryServerId
+          : screenMemoryServerId as String?,
+      screenMemoryModelId: identical(screenMemoryModelId, _unset)
+          ? this.screenMemoryModelId
+          : screenMemoryModelId as String?,
       screenMemoryBlockedApps:
           screenMemoryBlockedApps ?? this.screenMemoryBlockedApps,
       backgroundTasksEnabled:
@@ -489,6 +504,8 @@ class AppSettings {
       'screenMemoryEnabled': screenMemoryEnabled,
       'screenMemorySampleIntervalMs': screenMemorySampleIntervalMs,
       'screenMemoryBatchIntervalSeconds': screenMemoryBatchIntervalSeconds,
+      'screenMemoryServerId': screenMemoryServerId,
+      'screenMemoryModelId': screenMemoryModelId,
       'screenMemoryBlockedApps': screenMemoryBlockedApps,
       'backgroundTasksEnabled': backgroundTasksEnabled,
       'notificationToolsEnabled': notificationToolsEnabled,
@@ -570,6 +587,8 @@ class AppSettings {
           map['screenMemorySampleIntervalMs']?.toInt() ?? 500,
       screenMemoryBatchIntervalSeconds:
           map['screenMemoryBatchIntervalSeconds']?.toInt() ?? 60,
+      screenMemoryServerId: map['screenMemoryServerId'] as String?,
+      screenMemoryModelId: map['screenMemoryModelId'] as String?,
       screenMemoryBlockedApps:
           (map['screenMemoryBlockedApps'] as List?)?.cast<String>() ??
           defaultScreenMemoryBlockedApps,

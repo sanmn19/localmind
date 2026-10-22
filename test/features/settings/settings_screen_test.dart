@@ -133,7 +133,7 @@ void main() {
     await tester.pump();
 
     expect(container.read(settingsProvider).screenMemoryEnabled, isTrue);
-    expect(find.text('Sample every'), findsOneWidget);
+    expect(find.text('Sample every'), findsNothing);
     expect(find.text('Summarize every'), findsOneWidget);
     expect(find.text('Blocked apps'), findsOneWidget);
     expect(find.text('27 packages are never sampled'), findsOneWidget);

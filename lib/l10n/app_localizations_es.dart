@@ -3853,9 +3853,6 @@ class AppLocalizationsEs extends AppLocalizations {
       'Reads the visible text of the app you are using and turns durable details into inferred memories. Only changed screens are stored, and samples stay on this device.';
 
   @override
-  String get screen_memories_sample_interval => 'Sample every';
-
-  @override
   String get screen_memories_batch_interval => 'Summarize every';
 
   @override
@@ -3869,6 +3866,32 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get screen_memories_blocked_apps_hint =>
       'Package names, separated by commas';
+
+  @override
+  String get screen_memories_blocked_apps_search => 'Search installed apps';
+
+  @override
+  String get screen_memories_blocked_apps_empty => 'No apps found';
+
+  @override
+  String get screen_memories_blocked_apps_not_installed => 'Not installed';
+
+  @override
+  String get screen_memories_processing_model => 'Processing model';
+
+  @override
+  String get screen_memories_processing_model_desc =>
+      'Server and model used to turn screen samples into memories.';
+
+  @override
+  String get screen_memories_processing_model_chat => 'Same as chat';
+
+  @override
+  String get screen_memories_processing_model_empty =>
+      'No models found on this server';
+
+  @override
+  String get screen_memories_processing_model_reset => 'Use chat model';
 
   @override
   String get screen_memories_footer =>

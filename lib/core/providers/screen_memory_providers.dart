@@ -6,6 +6,7 @@ import '../../features/chat/providers/model_selection_providers.dart';
 import '../../features/memories/data/screen_memory_batch_processor.dart';
 import '../../features/memories/data/screen_memory_scheduler.dart';
 import '../../features/memories/providers/memory_providers.dart';
+import '../../features/servers/data/models/server.dart';
 import '../../features/servers/providers/server_providers.dart';
 import 'app_providers.dart';
 
@@ -13,19 +14,45 @@ import 'app_providers.dart';
 final screenBatchProcessorProvider = Provider<ScreenMemoryBatchProcessor>((
   ref,
 ) {
+  // Rebuild when the dedicated processing model changes.
+  ref.watch(
+    settingsProvider.select(
+      (settings) => (
+        settings.screenMemoryServerId,
+        settings.screenMemoryModelId,
+      ),
+    ),
+  );
+
+  Server? resolveServer() {
+    final configuredId = ref.read(settingsProvider).screenMemoryServerId;
+    if (configuredId != null) {
+      final servers = ref.read(serversProvider).value ?? const <Server>[];
+      for (final server in servers) {
+        if (server.id == configuredId) return server;
+      }
+    }
+    return ref.read(activeServerProvider);
+  }
+
   return ScreenMemoryBatchProcessor(
     store: ref.watch(screenSampleStoreProvider),
     extractor: ref.watch(memoryExtractionServiceProvider),
     repository: ref.watch(memoryRepositoryProvider),
     chatService: () {
-      final service = ref.read(chatServiceProvider);
-      if (service == null) {
-        throw StateError('no active chat service');
-      }
+      final server = resolveServer();
+      if (server == null) throw StateError('no processing server selected');
+      final service = ref.read(chatServiceFactoryProvider)(server);
+      if (service == null) throw StateError('no chat service for the selected server');
       return service;
     },
-    server: () => ref.read(activeServerProvider),
-    modelId: () => ref.read(activeChatTargetProvider).effectiveModelId ?? '',
+    server: resolveServer,
+    modelId: () {
+      final configured = ref.read(settingsProvider).screenMemoryModelId;
+      return configured ??
+          ref.read(activeChatTargetProvider).effectiveModelId ??
+          '';
+    },
     params: () => ref.read(chatParamsProvider),
     settings: () => ref.read(settingsProvider),
   );
