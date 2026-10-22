@@ -226,56 +226,24 @@ class CloudSyncSnapshot {
     'conversationFolders',
   };
 
-  static const _settingKeys = {
-    'temperature',
-    'topP',
-    'maxTokens',
-    'contextLength',
-    'themeMode',
-    'fontSize',
-    'showSystemMessages',
-    'hapticFeedbackEnabled',
-    'sendOnEnter',
-    'showDataIndicator',
-    'autoGenerateTitle',
-    'streamingEnabled',
-    'defaultPersonaId',
-    'defaultModelId',
-    'defaultModelServerId',
-    'mcpEnabled',
-    'newChatMcpEnabled',
-    'codeThemeDark',
-    'codeThemeLight',
-    'preferredBackend',
-    'ttsEngine',
-    'ttsVoiceId',
-    'ttsSpeed',
-    'kittenTtsModelVariant',
-    'autoSpeakEnabled',
-    'conciseVoiceResponsesEnabled',
-    'ttsProcessMarkdown',
-    'ttsSkipSeconds',
-    'smartReplyEnabled',
-    'aiUserResponseEnabled',
-    'localeCode',
-    'unloadModelsBeforeLoad',
-    'tempChatKeyboardIncognito',
-    'resumeLastChat',
-    'imageCompressionEnabled',
-    'imageCompressionLevel',
-    'smartRepliesUsePersona',
-    'keepPersonaOnNewChat',
-    'roleSwapButtonEnabled',
-    'showSystemMessagesInChat',
+  static const _rejectedSettingKeys = {
+    'huggingFaceToken',
+    'webSearchApiKey',
   };
 
   static void _validatePayload(Map<String, dynamic> payload) {
     if (payload['version'] != 1 ||
         payload['type'] != 'cloudSync' ||
         payload['settings'] is! Map ||
-        !(payload['settings'] as Map).keys.every(
-          (key) => key is String && _settingKeys.contains(key),
+        !(payload['settings'] as Map).entries.every(
+          (entry) =>
+              entry.key is String &&
+              !_rejectedSettingKeys.contains(entry.key),
         )) {
+      // Unknown setting keys are tolerated: older snapshots may contain keys
+      // that were removed from the synchronized set (for example the
+      // screen-memory device settings). AppSettings.fromMap ignores them;
+      // secret keys are still rejected.
       throw const FormatException('Invalid cloud sync payload');
     }
     for (final collection in _collections) {

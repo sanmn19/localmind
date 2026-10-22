@@ -501,9 +501,15 @@ class DataBackupService {
     if (payload['version'] != 1 ||
         payload['type'] != 'cloudSync' ||
         payload['settings'] is! Map ||
-        !(payload['settings'] as Map).keys.every(
-          (key) => key is String && _synchronizedSettingKeys.contains(key),
+        !(payload['settings'] as Map).entries.every(
+          (entry) =>
+              entry.key is String &&
+              entry.key != 'huggingFaceToken' &&
+              entry.key != 'webSearchApiKey',
         )) {
+      // Unknown setting keys are tolerated for forward/backward compatibility;
+      // AppSettings.fromMap ignores keys it does not know. Secret keys are still
+      // rejected.
       throw const FormatException('Invalid cloud sync payload');
     }
     for (final collection in collections) {
