@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:localmind/core/providers/app_providers.dart';
 import 'package:localmind/core/providers/storage_providers.dart';
+import 'package:localmind/core/services/data_backup_service.dart';
 import 'package:localmind/core/services/google_sign_in_session.dart';
 import 'package:localmind/core/storage/objectbox_store.dart';
 import 'package:localmind/features/cloud_sync/data/models/cloud_sync_models.dart';
@@ -76,6 +77,9 @@ class _FakeStorage implements CloudSyncStorage {
   List<int>? state;
   String? etag;
   int backupWrites = 0;
+  int stateWrites = 0;
+  bool failStateWrite = false;
+  CloudSyncLease? lease;
   final objects = <String, List<int>>{};
 
   @override
@@ -89,6 +93,18 @@ class _FakeStorage implements CloudSyncStorage {
 
   @override
   String backupKey(DateTime at) => 'backups/${at.toUtc().toIso8601String()}';
+
+  @override
+  bool get requiresLease => true;
+
+  @override
+  Future<CloudSyncLease?> readLease() async => lease;
+
+  @override
+  Future<void> writeLease(CloudSyncLease value) async => lease = value;
+
+  @override
+  Future<void> deleteLease() async => lease = null;
 
   @override
   Future<void> testConnection() async {}
@@ -112,6 +128,15 @@ class _FakeStorage implements CloudSyncStorage {
     String? expectedEtag,
     bool createOnly = false,
   }) async {
+    if (key == stateKey) {
+      if (failStateWrite) {
+        throw const CloudSyncFailure(
+          CloudSyncFailureKind.connectivity,
+          'The state write failed.',
+        );
+      }
+      stateWrites++;
+    }
     objects[key] = bytes;
     if (key == stateKey) {
       state = bytes;
@@ -206,12 +231,12 @@ void main() {
     );
   }
 
-  Future<void> seedRemoteState() async {
+  Future<void> seedRemoteState({Map<String, dynamic>? payload}) async {
     final snapshot = CloudSyncSnapshot(
       deviceId: 'remote-device-1',
       revision: 1,
       updatedAt: DateTime.utc(2026, 10, 1),
-      payload: _payload(ThemeMode.light.index),
+      payload: payload ?? _payload(ThemeMode.light.index),
     );
     storage.state = await crypto.encryptState(
       utf8.encode(snapshot.encode()),
@@ -220,6 +245,11 @@ void main() {
     );
     storage.etag = 'remote-1';
   }
+
+  Map<String, dynamic> localPayload() => DataBackupService().exportCloudSync(
+    container.read(databaseProvider).store,
+    AppSettings().toJson(),
+  );
 
   Future<void> setTheme(ThemeMode mode) => container
       .read(settingsProvider.notifier)
@@ -250,13 +280,84 @@ void main() {
     },
   );
 
+  test(
+    'a state write takes and releases the Drive lease for the next device',
+    () async {
+      await enableDrive();
+      await seedRemoteState();
+      final controller = container.read(cloudSyncControllerProvider.notifier);
+
+      // The first link adopts the remote settings and has nothing new to write.
+      await controller.syncNow(rethrowErrors: true);
+      expect(storage.stateWrites, 0);
+      expect(storage.lease, isNull);
+
+      await setTheme(ThemeMode.system);
+      await controller.syncNow(rethrowErrors: true);
+      expect(storage.stateWrites, 1);
+      expect(storage.lease, isNull);
+
+      // Another device finds no lease and syncs straight away.
+      await prefs.setString('cloudSync.deviceId.v1', 'device-b-0001');
+      await controller.syncNow(rethrowErrors: true);
+      expect(
+        container.read(cloudSyncControllerProvider).phase,
+        CloudSyncPhase.synced,
+      );
+      expect(storage.stateWrites, 1);
+      expect(storage.lease, isNull);
+    },
+  );
+
+  test('a read-only sync writes no state and takes no lease', () async {
+    await enableDrive();
+    await seedRemoteState(payload: localPayload());
+    final controller = container.read(cloudSyncControllerProvider.notifier);
+
+    await controller.syncNow(rethrowErrors: true);
+    await controller.syncNow(rethrowErrors: true);
+    expect(storage.stateWrites, 0);
+    expect(storage.lease, isNull);
+
+    // The periodic pull is a read-only tick as well.
+    controller.startPeriodicPull(interval: const Duration(milliseconds: 20));
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    controller.stopPeriodicPull();
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+
+    expect(storage.stateWrites, 0);
+    expect(storage.lease, isNull);
+  });
+
+  test('a failed state write clears the lease', () async {
+    await enableDrive();
+    await seedRemoteState();
+    final controller = container.read(cloudSyncControllerProvider.notifier);
+    await controller.syncNow(rethrowErrors: true);
+
+    await setTheme(ThemeMode.system);
+    storage.failStateWrite = true;
+    await controller.syncNow();
+
+    expect(
+      container.read(cloudSyncControllerProvider).phase,
+      CloudSyncPhase.error,
+    );
+    expect(storage.lease, isNull);
+  });
+
   test('disconnecting Drive signs the Google account out', () async {
     await enableDrive();
     final controller = container.read(cloudSyncControllerProvider.notifier);
+    storage.lease = CloudSyncLease(
+      deviceId: local.getOrCreateDeviceId(),
+      heartbeatAt: DateTime.now().toUtc(),
+    );
 
     await controller.disconnect();
 
     expect(auth.signOutCalls, 1);
+    expect(storage.lease, isNull);
     expect(local.loadConfig(), isNull);
   });
 

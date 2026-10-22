@@ -54,24 +54,26 @@ void main() {
     String? variantGroupId,
     int variantIndex = 0,
     bool isActiveVariant = true,
+    String? updatedAtIso,
   }) => {
     'id': id,
     'conversationId': conversationId,
     'role': role,
     'content': content,
     'createdAt': DateTime.utc(2026, 1, 1, 0, minute).toIso8601String(),
-    'updatedAt': DateTime.utc(
-      2026,
-      1,
-      1,
-      0,
-      updatedAt ?? minute,
-    ).toIso8601String(),
+    'updatedAt':
+        updatedAtIso ??
+        DateTime.utc(2026, 1, 1, 0, updatedAt ?? minute).toIso8601String(),
     'status': status,
     'variantGroupId': variantGroupId,
     'variantIndex': variantIndex,
     'isActiveVariant': isActiveVariant,
   };
+
+  String minutesAgo(int minutes) => DateTime.now()
+      .toUtc()
+      .subtract(Duration(minutes: minutes))
+      .toIso8601String();
 
   CloudSyncSnapshot withTombstones(
     CloudSyncSnapshot snapshot,
@@ -177,6 +179,55 @@ void main() {
 
     expect(forward.snapshot.payload['settings'], {'fontSize': 22.0});
     expect(backward.snapshot.payload['settings'], {'fontSize': 22.0});
+  });
+
+  test('resolves settings by when they changed, not when they synced', () async {
+    final syncedAt = DateTime.utc(2026, 10, 21, 12);
+    CloudSyncSnapshot at(
+      String device,
+      int revision,
+      Map<String, dynamic> settings,
+      DateTime settingsChangedAt,
+    ) => CloudSyncSnapshot(
+      deviceId: device,
+      revision: revision,
+      updatedAt: syncedAt,
+      settingsChangedAt: settingsChangedAt,
+      payload: {
+        'settings': settings,
+        'personas': <dynamic>[],
+        'conversations': <dynamic>[],
+        'messages': <dynamic>[],
+        'savedMessages': <dynamic>[],
+        'savedMessageFolders': <dynamic>[],
+        'conversationFolders': <dynamic>[],
+      },
+    );
+    // The remote device has the larger id, so a snapshot-time tie would let it
+    // win; its settings are older, so the local edit must win instead.
+    final remote = at('zzzz-remote-device', 1, {
+      'fontSize': 22.0,
+    }, syncedAt.subtract(const Duration(hours: 1)));
+    final local = at('aaaa-local-device', 2, {
+      'fontSize': 16.0,
+    }, syncedAt.subtract(const Duration(minutes: 5)));
+    final journal = {'payloadHash': 'previous'};
+
+    final forward = await service.merge(
+      local: local,
+      remote: remote,
+      journal: journal,
+    );
+    final backward = await service.merge(
+      local: remote,
+      remote: local,
+      journal: journal,
+    );
+
+    for (final result in [forward, backward]) {
+      expect(result.snapshot.payload['settings'], {'fontSize': 16.0});
+      expect(result.snapshot.settingsChangedAt, local.settingsChangedAt);
+    }
   });
 
   test(
@@ -323,8 +374,8 @@ void main() {
       'conversations': [conversation('c1', 'Chat', 1)],
       'messages': [message('m1', 'c1', 1)],
     });
-    final local = withTombstones(snapshot('local-device', 2, {}), const {
-      'conversations': {'c1': '2026-01-01T00:05:00.000Z'},
+    final local = withTombstones(snapshot('local-device', 2, {}), {
+      'conversations': {'c1': minutesAgo(5)},
     });
 
     final forward = await service.merge(
@@ -537,6 +588,37 @@ void main() {
     }
   });
 
+  test('keeps an in-place edit with the newer updatedAt', () async {
+    final remote = snapshot('remote-device', 1, {
+      'conversations': [conversation('c1', 'Chat', 1)],
+      'messages': [message('m1', 'c1', 1, content: 'before', updatedAt: 4)],
+    });
+    final local = snapshot('local-device', 2, {
+      'conversations': [conversation('c1', 'Chat', 1)],
+      'messages': [message('m1', 'c1', 1, content: 'after', updatedAt: 9)],
+    });
+
+    final forward = await service.merge(
+      local: local,
+      remote: remote,
+      journal: const {},
+    );
+    final backward = await service.merge(
+      local: remote,
+      remote: local,
+      journal: const {},
+    );
+
+    for (final result in [forward, backward]) {
+      final merged = (result.snapshot.payload['messages'] as List).single;
+      expect(merged['content'], 'after');
+      expect(
+        merged['updatedAt'],
+        DateTime.utc(2026, 1, 1, 0, 9).toIso8601String(),
+      );
+    }
+  });
+
   test(
     'orders two concurrent request and response pairs by request time',
     () async {
@@ -740,12 +822,12 @@ void main() {
           'id': 'p1',
           'name': 'Edited',
           'createdAt': '2026-01-01T00:01:00.000Z',
-          'updatedAt': '2026-01-01T00:06:00.000Z',
+          'updatedAt': minutesAgo(30),
         },
       ],
     });
-    final local = withTombstones(snapshot('local-device', 2, {}), const {
-      'personas': {'p1': '2026-01-01T00:05:00.000Z'},
+    final local = withTombstones(snapshot('local-device', 2, {}), {
+      'personas': {'p1': minutesAgo(60)},
     });
 
     final forward = await service.merge(
@@ -774,12 +856,12 @@ void main() {
           'id': 'p1',
           'name': 'Stale',
           'createdAt': '2026-01-01T00:01:00.000Z',
-          'updatedAt': '2026-01-01T00:04:00.000Z',
+          'updatedAt': minutesAgo(60),
         },
       ],
     });
-    final local = withTombstones(snapshot('local-device', 2, {}), const {
-      'personas': {'p1': '2026-01-01T00:05:00.000Z'},
+    final local = withTombstones(snapshot('local-device', 2, {}), {
+      'personas': {'p1': minutesAgo(30)},
     });
 
     final forward = await service.merge(
@@ -802,11 +884,17 @@ void main() {
     final local = withTombstones(
       snapshot('local-device', 2, {
         'conversations': [conversation('c1', 'Chat', 1)],
-        'messages': [message('m1', 'c1', 1, content: 'edited', updatedAt: 6)],
+        'messages': [
+          message(
+            'm1',
+            'c1',
+            1,
+            content: 'edited',
+            updatedAtIso: minutesAgo(30),
+          ),
+        ],
       }),
-      const {
-        'messages': {'m1': '2026-01-01T00:05:00.000Z'},
-      },
+      {'messages': {'m1': minutesAgo(60)}},
     );
     final remote = snapshot('remote-device', 1, {
       'conversations': [conversation('c1', 'Chat', 1)],
@@ -834,15 +922,21 @@ void main() {
   test('deletes a message not edited after its deletion', () async {
     final remote = snapshot('remote-device', 1, {
       'conversations': [conversation('c1', 'Chat', 1)],
-      'messages': [message('m1', 'c1', 1, content: 'stale', updatedAt: 4)],
+      'messages': [
+        message(
+          'm1',
+          'c1',
+          1,
+          content: 'stale',
+          updatedAtIso: minutesAgo(60),
+        ),
+      ],
     });
     final local = withTombstones(
       snapshot('local-device', 2, {
         'conversations': [conversation('c1', 'Chat', 1)],
       }),
-      const {
-        'messages': {'m1': '2026-01-01T00:05:00.000Z'},
-      },
+      {'messages': {'m1': minutesAgo(30)}},
     );
 
     final forward = await service.merge(
@@ -955,6 +1049,36 @@ void main() {
       journal: const {},
     );
     expect(result.snapshot.payload['personas'], isEmpty);
+  });
+
+  test('ages shared tombstones out of the merged snapshot', () async {
+    final now = DateTime.now().toUtc();
+    final old = now.subtract(const Duration(days: 31)).toIso8601String();
+    final recent = now.subtract(const Duration(days: 1)).toIso8601String();
+    final remote = withTombstones(snapshot('remote-device', 1, {}), {
+      'messages': {'old': old, 'kept': recent},
+    });
+    final local = withTombstones(snapshot('local-device', 2, {}), {
+      'messages': {'old': old, 'legacy': '1970-01-01T00:00:00.000Z'},
+    });
+
+    final forward = await service.merge(
+      local: local,
+      remote: remote,
+      journal: const {},
+    );
+    final backward = await service.merge(
+      local: remote,
+      remote: local,
+      journal: const {},
+    );
+
+    for (final result in [forward, backward]) {
+      expect(result.snapshot.tombstones['messages'], {
+        'kept': recent,
+        'legacy': '1970-01-01T00:00:00.000Z',
+      });
+    }
   });
 
   test('converges regardless of merge order', () async {

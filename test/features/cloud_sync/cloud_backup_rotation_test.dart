@@ -54,6 +54,18 @@ class _FakeStorage implements CloudSyncStorage {
   @override
   Future<List<String>> listBackups() async =>
       objects.keys.where((key) => key.startsWith('backups/')).toList()..sort();
+
+  @override
+  bool get requiresLease => false;
+
+  @override
+  Future<CloudSyncLease?> readLease() async => null;
+
+  @override
+  Future<void> writeLease(CloudSyncLease lease) async {}
+
+  @override
+  Future<void> deleteLease() async {}
 }
 
 void main() {

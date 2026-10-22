@@ -95,4 +95,15 @@ void main() {
     ];
     expect(() => CloudSyncSnapshot.fromJson(localPath), throwsFormatException);
   });
+
+  test('writes schema 2 and still reads schema 1 snapshots', () {
+    final legacy = CloudSyncSnapshot.fromJson(validSnapshot());
+    final current = legacy.toJson();
+
+    expect(current['schema'], 2);
+    expect(CloudSyncSnapshot.fromJson(current).revision, 1);
+
+    final future = validSnapshot()..['schema'] = 3;
+    expect(() => CloudSyncSnapshot.fromJson(future), throwsFormatException);
+  });
 }

@@ -11,6 +11,14 @@ class CloudSyncMergeResult {
   final int conflictCount;
 }
 
+/// The settings record that won the merge and the time it changed.
+class _SettingsResolution {
+  const _SettingsResolution(this.settings, this.changedAt);
+
+  final Map<String, dynamic> settings;
+  final DateTime changedAt;
+}
+
 class CloudSyncMergeService {
   static const _recordCollections = [
     'personas',
@@ -31,6 +39,9 @@ class CloudSyncMergeService {
   };
 
   static final _legacyTombstoneTime = DateTime.utc(1970);
+
+  /// How long a deletion stays in the shared snapshot so peers can learn it.
+  static const _tombstoneRetention = Duration(days: 30);
 
   Future<String> fingerprint(Map<String, dynamic> payload) async {
     final canonical = _canonicalize(payload);
@@ -136,11 +147,18 @@ class CloudSyncMergeService {
     final payload = Map<String, dynamic>.from(remote.payload);
     var conflicts = 0;
 
-    // Settings are a single record: last write wins by snapshot time, with the
-    // larger device id breaking ties. A first link keeps the remote settings.
-    payload['settings'] = lastHash == null
-        ? remote.payload['settings']
-        : _resolveSettings(local, remote);
+    // Settings are a single record: last write wins by the time the settings
+    // themselves changed (not by snapshot time, which moves on every sync), with
+    // the larger device id breaking ties. A first link keeps the remote settings.
+    final localSettingsAt = local.effectiveSettingsChangedAt;
+    final remoteSettingsAt = remote.effectiveSettingsChangedAt;
+    final settings = lastHash == null
+        ? _SettingsResolution(
+            Map<String, dynamic>.from(remote.payload['settings'] as Map),
+            remoteSettingsAt,
+          )
+        : _resolveSettings(local, remote, localSettingsAt, remoteSettingsAt);
+    payload['settings'] = settings.settings;
 
     final localMessages = _mapById(local.payload['messages']);
     final remoteMessages = _mapById(remote.payload['messages']);
@@ -287,14 +305,17 @@ class CloudSyncMergeService {
         updatedAt: DateTime.now().toUtc(),
         payload: payload,
         tombstones: tombstones,
+        settingsChangedAt: settings.changedAt,
       ),
       conflicts,
     );
   }
 
-  Map<String, dynamic> _resolveSettings(
+  _SettingsResolution _resolveSettings(
     CloudSyncSnapshot local,
     CloudSyncSnapshot remote,
+    DateTime localChangedAt,
+    DateTime remoteChangedAt,
   ) {
     final localSettings = Map<String, dynamic>.from(
       local.payload['settings'] as Map,
@@ -302,16 +323,24 @@ class CloudSyncMergeService {
     final remoteSettings = Map<String, dynamic>.from(
       remote.payload['settings'] as Map,
     );
-    if (local.updatedAt.isAfter(remote.updatedAt)) return localSettings;
-    if (remote.updatedAt.isAfter(local.updatedAt)) return remoteSettings;
+    if (localChangedAt.isAfter(remoteChangedAt)) {
+      return _SettingsResolution(localSettings, localChangedAt);
+    }
+    if (remoteChangedAt.isAfter(localChangedAt)) {
+      return _SettingsResolution(remoteSettings, remoteChangedAt);
+    }
     final byDevice = local.deviceId.compareTo(remote.deviceId);
-    if (byDevice != 0) return byDevice > 0 ? localSettings : remoteSettings;
+    if (byDevice != 0) {
+      return byDevice > 0
+          ? _SettingsResolution(localSettings, localChangedAt)
+          : _SettingsResolution(remoteSettings, remoteChangedAt);
+    }
     return _canonicalJson(
               localSettings,
             ).compareTo(_canonicalJson(remoteSettings)) >=
             0
-        ? localSettings
-        : remoteSettings;
+        ? _SettingsResolution(localSettings, localChangedAt)
+        : _SettingsResolution(remoteSettings, remoteChangedAt);
   }
 
   Map<String, dynamic> _resolveMessage(
@@ -424,6 +453,7 @@ class CloudSyncMergeService {
     Map<String, Map<String, String>> local,
     Map<String, Map<String, String>> remote,
   ) {
+    final cutoff = DateTime.now().toUtc().subtract(_tombstoneRetention);
     final merged = <String, Map<String, String>>{};
     for (final source in [local, remote]) {
       for (final entry in source.entries) {
@@ -434,8 +464,27 @@ class CloudSyncMergeService {
             values[tombstone.key] = tombstone.value;
           }
         }
+        // Age tombstones out on merge too: a peer that has not synced since
+        // would otherwise keep re-adding every tombstone the union has seen.
+        final retained = <String, String>{};
+        for (final value in values.entries) {
+          final at = DateTime.tryParse(value.value);
+          if (at == null) {
+            retained[value.key] = value.value;
+            continue;
+          }
+          // Legacy epoch tombstones carry no time and never age out.
+          if (at.isAfter(_legacyTombstoneTime) && at.isBefore(cutoff)) {
+            continue;
+          }
+          retained[value.key] = value.value;
+        }
+        if (retained.isEmpty) {
+          merged.remove(entry.key);
+          continue;
+        }
         merged[entry.key] = {
-          for (final key in values.keys.toList()..sort()) key: values[key]!,
+          for (final key in retained.keys.toList()..sort()) key: retained[key]!,
         };
       }
     }

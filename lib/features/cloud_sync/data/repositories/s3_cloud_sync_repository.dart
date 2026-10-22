@@ -61,6 +61,18 @@ class S3CloudSyncRepository implements CloudSyncStorage {
   String attachmentKey(String identifier) =>
       _key('v1/attachments/$identifier.enc');
 
+  @override
+  bool get requiresLease => false;
+
+  @override
+  Future<CloudSyncLease?> readLease() async => null;
+
+  @override
+  Future<void> writeLease(CloudSyncLease lease) async {}
+
+  @override
+  Future<void> deleteLease() async {}
+
   String _key(String suffix) {
     final prefix = config.prefix.trim().replaceAll(RegExp(r'^/+|/+$'), '');
     return prefix.isEmpty ? suffix : '$prefix/$suffix';

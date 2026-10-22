@@ -14,9 +14,11 @@ class GoogleDriveCloudSyncRepository implements CloudSyncStorage {
 
   static const rootFolderName = 'Localmind';
   static const leaseKey = 'v1/lease.json';
-  static const leaseTtl = Duration(minutes: 10);
 
   final _folderIds = <String, String>{};
+
+  @override
+  bool get requiresLease => true;
 
   @override
   String get stateKey => 'v1/state.enc';
@@ -93,6 +95,7 @@ class GoogleDriveCloudSyncRepository implements CloudSyncStorage {
       ..sort();
   }
 
+  @override
   Future<CloudSyncLease?> readLease() async {
     final file = await _findFile(leaseKey);
     if (file == null) return null;
@@ -105,21 +108,14 @@ class GoogleDriveCloudSyncRepository implements CloudSyncStorage {
     }
   }
 
+  @override
   Future<void> writeLease(CloudSyncLease lease) async {
     final bytes = const Utf8Encoder().convert(lease.encode());
     await writeObject(leaseKey, bytes);
   }
 
-  /// A foreign device with a recent heartbeat owns the sync right now.
-  bool isLeaseHeldByOther(
-    CloudSyncLease? lease,
-    String deviceId,
-    DateTime now,
-  ) {
-    if (lease == null) return false;
-    if (lease.deviceId == deviceId) return false;
-    return now.difference(lease.heartbeatAt) < leaseTtl;
-  }
+  @override
+  Future<void> deleteLease() => deleteObject(leaseKey);
 
   Future<Map<String, dynamic>?> _findFile(String key) async {
     final parts = key.split('/');

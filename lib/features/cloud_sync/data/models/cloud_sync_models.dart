@@ -178,6 +178,7 @@ class CloudSyncSnapshot {
     required this.updatedAt,
     required this.payload,
     this.tombstones = const {},
+    this.settingsChangedAt,
   });
 
   final String deviceId;
@@ -188,8 +189,19 @@ class CloudSyncSnapshot {
   /// Collection → id → ISO-8601 deletion time.
   final Map<String, Map<String, String>> tombstones;
 
+  /// When this device last changed the settings, which is independent of
+  /// [updatedAt]: that stamp moves on every sync, so using it for settings would
+  /// hand the win to whichever device synced last.
+  ///
+  /// Snapshots written before schema 2 carry no value; [effectiveSettingsChangedAt]
+  /// then falls back to the snapshot time.
+  final DateTime? settingsChangedAt;
+
+  DateTime get effectiveSettingsChangedAt => settingsChangedAt ?? updatedAt;
+
   factory CloudSyncSnapshot.fromJson(Map<String, dynamic> json) {
-    if (json['schema'] != 1 ||
+    final schema = json['schema'];
+    if ((schema != 1 && schema != 2) ||
         json['payload'] is! Map ||
         json['deviceId'] is! String ||
         (json['deviceId'] as String).length < 8 ||
@@ -219,8 +231,12 @@ class CloudSyncSnapshot {
       updatedAt: DateTime.parse(json['updatedAt'] as String),
       payload: payload,
       tombstones: tombstones,
+      settingsChangedAt: _readTime(json['settingsChangedAt']),
     );
   }
+
+  static DateTime? _readTime(Object? value) =>
+      value is String ? DateTime.tryParse(value)?.toUtc() : null;
 
   /// Reads the timestamped map shape, falling back to legacy id lists, whose
   /// deletions are dated at the epoch.
@@ -399,12 +415,14 @@ class CloudSyncSnapshot {
   }
 
   Map<String, dynamic> toJson() => {
-    'schema': 1,
+    'schema': 2,
     'deviceId': deviceId,
     'revision': revision,
     'updatedAt': updatedAt.toUtc().toIso8601String(),
     'payload': payload,
     'tombstones': tombstones,
+    if (settingsChangedAt != null)
+      'settingsChangedAt': settingsChangedAt!.toUtc().toIso8601String(),
   };
 
   String encode() => jsonEncode(toJson());
@@ -422,9 +440,18 @@ class CloudSyncRemoteState {
 class CloudSyncLease {
   const CloudSyncLease({required this.deviceId, required this.heartbeatAt});
 
+  /// A lease that stops blocking other devices after this long without a refresh.
+  static const ttl = Duration(minutes: 10);
+
   final String deviceId;
 
   final DateTime heartbeatAt;
+
+  /// A foreign device with a recent heartbeat owns the sync right now.
+  bool isHeldByOther(String otherDeviceId, DateTime now) {
+    if (deviceId == otherDeviceId) return false;
+    return now.difference(heartbeatAt) < ttl;
+  }
 
   factory CloudSyncLease.fromJson(Map<String, dynamic> json) => CloudSyncLease(
     deviceId: json['deviceId'] as String? ?? '',
