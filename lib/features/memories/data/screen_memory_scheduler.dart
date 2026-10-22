@@ -27,6 +27,7 @@ class ScreenMemoryScheduler {
   Duration? _sampleInterval;
   Duration? _batchInterval;
   bool _sampling = false;
+  bool _eventDriven = true;
 
   bool get isRunning => _batchTimer != null;
 
@@ -52,19 +53,22 @@ class ScreenMemoryScheduler {
 
     final sampleInterval = Duration(milliseconds: sampleMs);
     final batchInterval = Duration(seconds: batchSeconds);
+    final eventDriven = settings.screenMemorySamplingMode != 'interval';
 
-    // Native event-driven sampling: start or change the debounce. It survives
+    // Native sampling: event-driven by default, or the opt-in poll. It survives
     // the app being backgrounded, unlike a Dart timer.
-    if (!_sampling || _sampleInterval != sampleInterval) {
+    if (!_sampling ||
+        _sampleInterval != sampleInterval ||
+        _eventDriven != eventDriven) {
       _sampleInterval = sampleInterval;
       _sampling = true;
+      _eventDriven = eventDriven;
       unawaited(
-        _sampler.startSampling(sampleMs).catchError((
-          Object error,
-          StackTrace stack,
-        ) {
-          Log.warning('Screen sampling start failed: $error');
-        }),
+        _sampler
+            .startSampling(sampleMs, eventDriven: eventDriven)
+            .catchError((Object error, StackTrace stack) {
+              Log.warning('Screen sampling start failed: $error');
+            }),
       );
     }
 
@@ -87,7 +91,10 @@ class ScreenMemoryScheduler {
   Future<void> resumeSampling() async {
     final interval = _sampleInterval;
     if (!_sampling || interval == null) return;
-    await _sampler.startSampling(interval.inMilliseconds);
+    await _sampler.startSampling(
+      interval.inMilliseconds,
+      eventDriven: _eventDriven,
+    );
   }
 
   /// Drains native samples, then processes the queue: app open/resume and the
@@ -103,6 +110,7 @@ class ScreenMemoryScheduler {
     _sampleInterval = null;
     _batchInterval = null;
     _sampling = false;
+    _eventDriven = true;
   }
 
   void dispose() {

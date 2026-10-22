@@ -3809,6 +3809,22 @@ class AppLocalizationsJa extends AppLocalizations {
   String get screen_memories_processing_model_reset => 'Use chat model';
 
   @override
+  String get screen_memories_sampling_mode => 'Sampling mode';
+
+  @override
+  String get screen_memories_sampling_mode_desc =>
+      'Screen changes uses less battery; 500 ms captures more but drains faster.';
+
+  @override
+  String get screen_memories_sampling_event => 'On screen changes';
+
+  @override
+  String get screen_memories_sampling_interval => 'Every 500 ms';
+
+  @override
+  String get screen_memories_sample_interval => 'Sample every';
+
+  @override
   String get screen_memories_footer =>
       'Samples are pruned at the next batch or app open after 24 hours, and whenever you turn Screen memories off. They are never exported. Screen text is sent only to the model server you selected.';
 

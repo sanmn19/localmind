@@ -207,8 +207,10 @@ class MainActivity : AudioServiceActivity() {
             when (call.method) {
                 "readText" -> readScreenText(result)
                 "startSampling" -> {
-                    val interval = ((call.arguments as? Map<*, *>)?.get("intervalMs") as? Number)?.toLong() ?: 500L
-                    ScreenCaptureAccessibilityService.requestSampling(interval)
+                    val args = call.arguments as? Map<*, *>
+                    val interval = (args?.get("intervalMs") as? Number)?.toLong() ?: 500L
+                    val eventDriven = args?.get("eventDriven") as? Boolean ?: true
+                    ScreenCaptureAccessibilityService.requestSampling(interval, eventDriven)
                     result.success(null)
                 }
                 "stopSampling" -> {

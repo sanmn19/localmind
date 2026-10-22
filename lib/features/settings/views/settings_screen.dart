@@ -196,8 +196,17 @@ class _SettingsViewsState extends ConsumerState<SettingsViews> {
         if (assistantService.isSupportedPlatform)
           const _ScreenCaptureServiceSetting(),
         if (settings.screenMemoryEnabled) ...[
-          // Sampling is event-driven; the native reader debounces accessibility
-          // events, so there is no polling interval for the user to tune.
+          _ScreenSamplingModeSetting(
+            value: settings.screenMemorySamplingMode,
+            onChanged: notifier.setScreenMemorySamplingMode,
+          ),
+          if (settings.screenMemorySamplingMode == 'interval')
+            _ScreenIntervalSetting(
+              label: l10n.screen_memories_sample_interval,
+              value: settings.screenMemorySampleIntervalMs,
+              options: const [(500, '500 ms'), (1000, '1 s'), (2000, '2 s')],
+              onChanged: notifier.setScreenMemorySampleInterval,
+            ),
           _ScreenIntervalSetting(
             label: l10n.screen_memories_batch_interval,
             value: settings.screenMemoryBatchIntervalSeconds,
@@ -1915,6 +1924,58 @@ class _ScreenMemoryModelSetting extends ConsumerWidget implements _Searchable {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ScreenSamplingModeSetting extends StatelessWidget
+    implements _Searchable {
+  const _ScreenSamplingModeSetting({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  List<String> searchTerms(AppLocalizations l10n) => [
+    l10n.screen_memories_sampling_mode,
+    l10n.screen_memories_sampling_mode_desc,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return _SettingPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _RowLabel(
+            label: l10n.screen_memories_sampling_mode,
+            description: l10n.screen_memories_sampling_mode_desc,
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ChoiceChip(
+                key: const ValueKey('screen_sampling_event'),
+                label: Text(l10n.screen_memories_sampling_event),
+                selected: value != 'interval',
+                onSelected: (_) => onChanged('event'),
+              ),
+              ChoiceChip(
+                key: const ValueKey('screen_sampling_interval'),
+                label: Text(l10n.screen_memories_sampling_interval),
+                selected: value == 'interval',
+                onSelected: (_) => onChanged('interval'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

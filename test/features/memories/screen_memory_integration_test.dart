@@ -30,7 +30,7 @@ class _FakeGateway implements ScreenTextGateway {
       ScreenText(packageName: packageName, text: text, isInteractive: true);
 
   @override
-  Future<void> startSampling(int intervalMs) async {}
+  Future<void> startSampling(int intervalMs, {bool eventDriven = true}) async {}
 
   @override
   Future<void> stopSampling() async {}

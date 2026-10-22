@@ -39,9 +39,14 @@ class ScreenCaptureAccessibilityService : AccessibilityService() {
     private val sampleRing = ArrayDeque<ScreenTextSample>()
     private var samplingEnabled = false
     private var sampleIntervalMs = 500L
+    private var eventDriven = true
     private var screenOn = true
     private var lastSampleSignature: String? = null
     private val debounceSample = Runnable { captureSample() }
+    private val pollSample = Runnable {
+        captureSample()
+        schedulePoll()
+    }
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -49,10 +54,11 @@ class ScreenCaptureAccessibilityService : AccessibilityService() {
                 Intent.ACTION_SCREEN_OFF -> {
                     screenOn = false
                     mainHandler.removeCallbacks(debounceSample)
+                    mainHandler.removeCallbacks(pollSample)
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     screenOn = true
-                    scheduleSample()
+                    if (eventDriven) scheduleSample() else schedulePoll()
                 }
             }
         }
@@ -69,11 +75,13 @@ class ScreenCaptureAccessibilityService : AccessibilityService() {
             addAction(Intent.ACTION_SCREEN_OFF)
         }
         registerReceiver(screenReceiver, filter)
-        requestedSamplingIntervalMs?.let { startSampling(it) }
+        requestedSamplingIntervalMs?.let {
+            startSampling(it, requestedEventDriven)
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (!samplingEnabled) return
+        if (!samplingEnabled || !eventDriven) return
         when (event?.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
@@ -95,19 +103,32 @@ class ScreenCaptureAccessibilityService : AccessibilityService() {
         return super.onUnbind(intent)
     }
 
-    /** Starts event-driven sampling with [intervalMs] debounce. */
-    fun startSampling(intervalMs: Long) {
+    /**
+     * Starts sampling. [eventDriven] debounces accessibility events; otherwise
+     * the reader polls every [intervalMs] (the old 500 ms behavior).
+     */
+    fun startSampling(intervalMs: Long, eventDriven: Boolean = true) {
         samplingEnabled = true
+        this.eventDriven = eventDriven
         sampleIntervalMs = intervalMs.coerceIn(MIN_SAMPLE_INTERVAL_MS, MAX_SAMPLE_INTERVAL_MS)
-        scheduleSample()
+        mainHandler.removeCallbacks(debounceSample)
+        mainHandler.removeCallbacks(pollSample)
+        if (eventDriven) scheduleSample() else schedulePoll()
     }
 
     /** Stops sampling and drops any queued text. */
     fun stopSampling() {
         samplingEnabled = false
         mainHandler.removeCallbacks(debounceSample)
+        mainHandler.removeCallbacks(pollSample)
         sampleRing.clear()
         lastSampleSignature = null
+    }
+
+    private fun schedulePoll() {
+        if (!samplingEnabled || eventDriven || !screenOn) return
+        mainHandler.removeCallbacks(pollSample)
+        mainHandler.postDelayed(pollSample, sampleIntervalMs)
     }
 
     /** Drains and clears the queued samples for the Dart batch. */
@@ -588,12 +609,16 @@ class ScreenCaptureAccessibilityService : AccessibilityService() {
         @Volatile
         private var requestedSamplingIntervalMs: Long? = null
 
+        @Volatile
+        private var requestedEventDriven = true
+
         /** Requests sampling even if the service reconnects later. */
         @JvmStatic
-        fun requestSampling(intervalMs: Long) {
+        fun requestSampling(intervalMs: Long, eventDriven: Boolean = true) {
             val clamped = intervalMs.coerceIn(MIN_SAMPLE_INTERVAL_MS, MAX_SAMPLE_INTERVAL_MS)
             requestedSamplingIntervalMs = clamped
-            instance?.startSampling(clamped)
+            requestedEventDriven = eventDriven
+            instance?.startSampling(clamped, eventDriven)
         }
 
         @JvmStatic

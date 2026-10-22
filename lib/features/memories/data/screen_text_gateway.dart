@@ -23,8 +23,9 @@ class ScreenText {
 abstract class ScreenTextGateway {
   Future<ScreenText?> readText();
 
-  /// Starts native event-driven sampling with a debounce in milliseconds.
-  Future<void> startSampling(int intervalMs);
+  /// Starts native sampling. [eventDriven] debounces accessibility events;
+  /// otherwise the reader polls every [intervalMs].
+  Future<void> startSampling(int intervalMs, {bool eventDriven = true});
 
   /// Stops native sampling and drops queued samples.
   Future<void> stopSampling();
@@ -43,7 +44,7 @@ class NoopScreenTextGateway implements ScreenTextGateway {
   Future<ScreenText?> readText() async => null;
 
   @override
-  Future<void> startSampling(int intervalMs) async {}
+  Future<void> startSampling(int intervalMs, {bool eventDriven = true}) async {}
 
   @override
   Future<void> stopSampling() async {}
@@ -93,10 +94,13 @@ class MethodChannelScreenTextGateway implements ScreenTextGateway {
   }
 
   @override
-  Future<void> startSampling(int intervalMs) async {
+  Future<void> startSampling(int intervalMs, {bool eventDriven = true}) async {
     try {
       await _channel
-          .invokeMethod<void>('startSampling', {'intervalMs': intervalMs})
+          .invokeMethod<void>('startSampling', {
+            'intervalMs': intervalMs,
+            'eventDriven': eventDriven,
+          })
           .timeout(timeout);
     } on Exception {
       // Service off / host tests: sampling simply does not start.

@@ -30,6 +30,16 @@ void main() {
     expect(restored.webSearchApiKey, 'k123');
   });
 
+  test('screen sampling mode survives toMap/fromMap', () {
+    final settings = AppSettings().copyWith(
+      screenMemorySamplingMode: 'interval',
+      screenMemorySampleIntervalMs: 500,
+    );
+    final restored = AppSettings.fromMap(settings.toMap());
+    expect(restored.screenMemorySamplingMode, 'interval');
+    expect(AppSettings.fromMap({}).screenMemorySamplingMode, 'event');
+  });
+
   test('screen processing model survives toMap/fromMap', () {
     final settings = AppSettings().copyWith(
       screenMemoryServerId: 'server-1',
