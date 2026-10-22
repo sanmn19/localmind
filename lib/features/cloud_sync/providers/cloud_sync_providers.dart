@@ -49,6 +49,35 @@ final cloudSyncControllerProvider =
       CloudSyncController.new,
     );
 
+typedef CloudSyncStorageFactory =
+    CloudSyncStorage Function(
+      S3SyncConfig config,
+      CloudSyncCredentials? credentials,
+    );
+
+/// Builds the backend for a config; overridden in tests to fake the transport.
+final cloudSyncStorageFactoryProvider = Provider<CloudSyncStorageFactory>(
+  (ref) => (config, credentials) {
+    if (config.provider == CloudSyncProviderKind.googleDrive) {
+      return GoogleDriveCloudSyncRepository(
+        api: GoogleDriveApi(
+          Dio(),
+          ({bool interactive = false}) => ref
+              .read(googleSignInSessionProvider)
+              .accessToken(interactive: interactive),
+        ),
+      );
+    }
+    if (credentials == null) {
+      throw const CloudSyncFailure(
+        CloudSyncFailureKind.credentials,
+        'S3 credentials are missing.',
+      );
+    }
+    return S3CloudSyncRepository(config: config, credentials: credentials);
+  },
+);
+
 class CloudSyncController extends Notifier<CloudSyncStatus> {
   Timer? _debounce;
   Timer? _retryTimer;
@@ -92,24 +121,7 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
   CloudSyncStorage _storageFor(
     S3SyncConfig config,
     CloudSyncCredentials? credentials,
-  ) {
-    if (config.provider == CloudSyncProviderKind.googleDrive) {
-      return GoogleDriveCloudSyncRepository(
-        api: GoogleDriveApi(
-          Dio(),
-          ({bool interactive = false}) =>
-              _googleSession.accessToken(interactive: interactive),
-        ),
-      );
-    }
-    if (credentials == null) {
-      throw const CloudSyncFailure(
-        CloudSyncFailureKind.credentials,
-        'S3 credentials are missing.',
-      );
-    }
-    return S3CloudSyncRepository(config: config, credentials: credentials);
-  }
+  ) => ref.read(cloudSyncStorageFactoryProvider)(config, credentials);
 
   Future<Directory> _rotationRoot(CloudSyncProviderKind provider) async {
     final support = await getApplicationSupportDirectory();
@@ -374,10 +386,11 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
             final lastBackup = DateTime.tryParse(
               journal['lastBackupAt'] as String? ?? '',
             );
-            if (_forceBackup ||
-                lastBackup == null ||
-                now.difference(lastBackup) >=
-                    CloudBackupRotationService.minimumInterval) {
+            if (CloudBackupRotationService.shouldRotate(
+              forced: _forceBackup,
+              lastBackupAt: lastBackup,
+              now: now,
+            )) {
               _forceBackup = false;
               final root = await _rotationRoot(config.provider);
               await CloudBackupRotationService(
@@ -420,6 +433,7 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
           'payloadHash': mergedPayloadHash,
           'etag': etag,
           'lastSyncedAt': now.toIso8601String(),
+          'lastBackupAt': ?journal['lastBackupAt'],
           'ids': _snapshotIds(result.snapshot.payload),
           'recordHashes': await _merge.recordHashes(result.snapshot.payload),
           'tombstones': result.snapshot.tombstones,
@@ -758,16 +772,6 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
     );
   }
 
-  Future<void> disconnectGoogle() async {
-    _operationGeneration++;
-    _debounce?.cancel();
-    _retryTimer?.cancel();
-    await _googleSession.disconnect();
-    await _local.disconnect(provider: CloudSyncProviderKind.googleDrive);
-    if (!ref.mounted) return;
-    state = const CloudSyncStatus();
-  }
-
   /// Forces the next upload to rotate a backup even inside the hourly window.
   Future<void> backUpNow() async {
     _forceBackup = true;
@@ -778,7 +782,14 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
     _operationGeneration++;
     _debounce?.cancel();
     _retryTimer?.cancel();
-    await _local.disconnect(provider: config?.provider);
+    final provider = config?.provider;
+    // Disconnecting Drive signs the shared Google session out too (design:
+    // Mail and Drive share one account); S3 keeps no session to clear.
+    if (provider == CloudSyncProviderKind.googleDrive) {
+      await _googleSession.disconnect();
+    }
+    await _local.disconnect(provider: provider);
+    if (!ref.mounted) return;
     state = const CloudSyncStatus();
   }
 }

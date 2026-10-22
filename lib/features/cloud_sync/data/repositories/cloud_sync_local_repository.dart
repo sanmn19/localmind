@@ -41,8 +41,12 @@ class CloudSyncLocalRepository {
     }
   }
 
-  Future<void> saveConfig(S3SyncConfig config) =>
-      _preferences.setString(_configKey, jsonEncode(config.toJson()));
+  /// Writes the v2 config and drops the pre-port v1 key, so a later
+  /// [disconnect] cannot resurrect the old backend through the fallback.
+  Future<void> saveConfig(S3SyncConfig config) async {
+    await _preferences.setString(_configKey, jsonEncode(config.toJson()));
+    await _preferences.remove(_legacyConfigKey);
+  }
 
   String _masterKeyKey(CloudSyncProviderKind provider) =>
       'cloudSync.${provider.name}.masterKey.v1';
@@ -162,6 +166,7 @@ class CloudSyncLocalRepository {
   Future<void> disconnect({CloudSyncProviderKind? provider}) async {
     final active = loadConfig()?.provider;
     await _preferences.remove(_configKey);
+    await _preferences.remove(_legacyConfigKey);
     await _preferences.remove(_journalKey);
     await _preferences.remove(_lastSyncKey);
     final journal = await _journalFile();

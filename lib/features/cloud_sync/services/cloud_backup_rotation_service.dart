@@ -25,6 +25,16 @@ class CloudBackupRotationService {
   /// Backups are written at most once per hour unless explicitly forced.
   static const minimumInterval = Duration(hours: 1);
 
+  /// Whether the remote state is due for a snapshot before it is replaced.
+  static bool shouldRotate({
+    required bool forced,
+    required DateTime? lastBackupAt,
+    required DateTime now,
+  }) =>
+      forced ||
+      lastBackupAt == null ||
+      now.difference(lastBackupAt) >= minimumInterval;
+
   Future<RotationResult> rotateBeforeWrite({
     required CloudSyncStorage storage,
     required List<int> existingState,

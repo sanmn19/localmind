@@ -2,7 +2,13 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 
+import '../data/models/cloud_sync_models.dart';
+
 /// Minimal Drive v3 REST client (JSON metadata + media upload/download).
+///
+/// Every transport failure is surfaced as a [CloudSyncFailure] so the controller
+/// treats Drive like S3: expired authorization, a missing backup folder, a stale
+/// write and an unreachable server each map to their own kind.
 class GoogleDriveApi {
   GoogleDriveApi(this._dio, this._accessToken);
 
@@ -12,43 +18,42 @@ class GoogleDriveApi {
   final Dio _dio;
   final Future<String?> Function({bool interactive}) _accessToken;
 
-  Future<List<Map<String, dynamic>>> listFiles(String query) async {
-    final token = await _token();
-    final response = await _dio.get<Map<String, dynamic>>(
-      '$_api/files',
-      queryParameters: {
-        'q': query,
-        'fields': 'files(id,name,mimeType,md5Checksum,modifiedTime)',
-        'pageSize': 1000,
-        'spaces': 'drive',
-      },
-      options: _options(token),
-    );
-    _ensureSuccess(response);
-    final files = response.data?['files'];
-    return files is List
-        ? files.whereType<Map<String, dynamic>>().toList()
-        : [];
-  }
+  Future<List<Map<String, dynamic>>> listFiles(String query) =>
+      _guard(() async {
+        final token = await _token();
+        final response = await _dio.get<Map<String, dynamic>>(
+          '$_api/files',
+          queryParameters: {
+            'q': query,
+            'fields': 'files(id,name,mimeType,md5Checksum,modifiedTime)',
+            'pageSize': 1000,
+            'spaces': 'drive',
+          },
+          options: _options(token),
+        );
+        _ensureSuccess(response);
+        final files = response.data?['files'];
+        return files is List
+            ? files.whereType<Map<String, dynamic>>().toList()
+            : [];
+      });
 
-  Future<Map<String, dynamic>> createFolder(
-    String name, {
-    String? parentId,
-  }) async {
-    final token = await _token();
-    final response = await _dio.post<Map<String, dynamic>>(
-      '$_api/files',
-      data: {
-        'name': name,
-        'mimeType': 'application/vnd.google-apps.folder',
-        if (parentId != null) 'parents': [parentId],
-      },
-      queryParameters: {'fields': 'id,name,md5Checksum,modifiedTime'},
-      options: _options(token),
-    );
-    _ensureSuccess(response);
-    return response.data ?? const {};
-  }
+  Future<Map<String, dynamic>> createFolder(String name, {String? parentId}) =>
+      _guard(() async {
+        final token = await _token();
+        final response = await _dio.post<Map<String, dynamic>>(
+          '$_api/files',
+          data: {
+            'name': name,
+            'mimeType': 'application/vnd.google-apps.folder',
+            if (parentId != null) 'parents': [parentId],
+          },
+          queryParameters: {'fields': 'id,name,md5Checksum,modifiedTime'},
+          options: _options(token),
+        );
+        _ensureSuccess(response);
+        return response.data ?? const {};
+      });
 
   /// Creates ([fileId] null) or replaces the content of an existing file.
   Future<Map<String, dynamic>> upload({
@@ -56,7 +61,7 @@ class GoogleDriveApi {
     required String name,
     required String parentId,
     required List<int> bytes,
-  }) async {
+  }) => _guard(() async {
     final token = await _token();
     final Response<Map<String, dynamic>> response;
     if (fileId == null) {
@@ -100,9 +105,9 @@ class GoogleDriveApi {
     }
     _ensureSuccess(response);
     return response.data ?? const {};
-  }
+  });
 
-  Future<List<int>> download(String fileId) async {
+  Future<List<int>> download(String fileId) => _guard(() async {
     final token = await _token();
     final response = await _dio.get<List<int>>(
       '$_api/files/$fileId',
@@ -111,9 +116,9 @@ class GoogleDriveApi {
     );
     _ensureSuccess(response);
     return response.data ?? const [];
-  }
+  });
 
-  Future<void> delete(String fileId) async {
+  Future<void> delete(String fileId) => _guard(() async {
     final token = await _token();
     final response = await _dio.delete<void>(
       '$_api/files/$fileId',
@@ -121,14 +126,78 @@ class GoogleDriveApi {
     );
     if (response.statusCode == 404) return;
     _ensureSuccess(response);
+  });
+
+  Future<T> _guard<T>(Future<T> Function() request) async {
+    try {
+      return await request();
+    } on CloudSyncFailure {
+      rethrow;
+    } on DioException catch (error) {
+      throw _failureFor(error);
+    }
+  }
+
+  CloudSyncFailure _failureFor(DioException error) {
+    final status = error.response?.statusCode;
+    if (status == null) {
+      final unreachable =
+          error.type == DioExceptionType.connectionTimeout ||
+          error.type == DioExceptionType.sendTimeout ||
+          error.type == DioExceptionType.receiveTimeout ||
+          error.type == DioExceptionType.connectionError;
+      if (unreachable) {
+        return const CloudSyncFailure(
+          CloudSyncFailureKind.connectivity,
+          'Could not reach Google Drive.',
+        );
+      }
+      return CloudSyncFailure(
+        CloudSyncFailureKind.unknown,
+        error.message ?? 'Drive request failed.',
+      );
+    }
+    return _failureForStatus(status, error.response?.data);
+  }
+
+  CloudSyncFailure _failureForStatus(int status, dynamic data) {
+    if (status == 401 || status == 403) {
+      return CloudSyncFailure(
+        CloudSyncFailureKind.credentials,
+        'Google Drive authorization expired. Connect the account again.',
+        statusCode: status,
+      );
+    }
+    if (status == 404) {
+      return CloudSyncFailure(
+        CloudSyncFailureKind.corruptedData,
+        'The Drive backup folder or file was not found.',
+        statusCode: status,
+      );
+    }
+    if (status == 409 || status == 412) {
+      return CloudSyncFailure(
+        CloudSyncFailureKind.conflict,
+        'Another device changed the Drive backup. Retry the sync.',
+        statusCode: status,
+      );
+    }
+    final apiMessage = data is Map && data['error'] is Map
+        ? (data['error'] as Map)['message']?.toString()
+        : null;
+    return CloudSyncFailure(
+      CloudSyncFailureKind.unknown,
+      'Drive request failed ($status${apiMessage == null ? '' : ': $apiMessage'}).',
+      statusCode: status,
+    );
   }
 
   Future<String> _token() async {
     final token = await _accessToken(interactive: false);
     if (token == null || token.isEmpty) {
-      throw DioException(
-        requestOptions: RequestOptions(path: _api),
-        message: 'Google Drive is not authorized.',
+      throw const CloudSyncFailure(
+        CloudSyncFailureKind.credentials,
+        'Google Drive is not authorized. Connect the account again.',
       );
     }
     return token;
@@ -149,20 +218,6 @@ class GoogleDriveApi {
   void _ensureSuccess(Response response) {
     final status = response.statusCode ?? 0;
     if (status >= 200 && status < 300) return;
-    final data = response.data;
-    final apiMessage = data is Map && data['error'] is Map
-        ? (data['error'] as Map)['message']?.toString()
-        : null;
-    final detail = switch (status) {
-      401 || 403 => 'Google Drive authorization expired.',
-      404 => 'The Drive backup folder or file was not found.',
-      _ =>
-        'Drive request failed ($status${apiMessage == null ? '' : ': $apiMessage'}).',
-    };
-    throw DioException(
-      requestOptions: response.requestOptions,
-      response: response,
-      message: detail,
-    );
+    throw _failureForStatus(status, response.data);
   }
 }
