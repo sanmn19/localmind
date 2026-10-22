@@ -201,7 +201,7 @@ class _DesktopTabState extends State<_DesktopTab> {
                       padding: const EdgeInsets.only(left: AppSizes.md),
                       child: Row(
                         children: [
-                          Flexible(
+                          Expanded(
                             child: Text(
                               widget.window.title,
                               maxLines: 1,
