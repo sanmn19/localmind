@@ -72,3 +72,28 @@ scroll), C2–C6, D2–D4, E2–E4, F2–F7, G, H, I, J, K, L, M.
 - Selected tab: tinted background, bold label and a 2 pt accent bar.
 - Close `×` appears on hover; the selected tab keeps it visible.
 - Covered by `test/features/desktop/desktop_shell_test.dart` ("an inactive tab reveals its close button on hover", "the focused tab is highlighted").
+
+## Pass 4 — crash fixes and settings
+
+| Case | Result |
+|------|--------|
+| MCP Tools: Calendar Access toggle | **PASS** — no crash after the desktop shell gained a `Scaffold`; the toggle stays off through the macOS permission-denied path |
+| Settings tab | **PASS** — General (theme, language, font size, haptics, code themes, Skills link) and Chat (streaming) render |
+| Crash screen "Try again" | **PASS after fix** — the ObjectBox store is reused instead of opened twice |
+| History / Saved messages / Personas tabs | **PASS** — each opens as its own tab |
+| Enter sends | **PASS (widget test)** — `chat_input_bar_enter_test.dart` |
+| Shift+Enter newline | **PASS (widget test)** — the draft survives and nothing is sent |
+
+Root causes fixed in `09db13c`:
+- Desktop shell had no `Scaffold`, so any hosted screen's `showSnackBar`
+  (`mcp_tools_screen.dart:134`, server list) asserted
+  `_scaffolds.isNotEmpty` and replaced the app with the crash screen.
+- `CalendarService` constructed `DeviceCalendar.instance` eagerly; it is now lazy.
+- Contacts permissions use the same macOS guard.
+- "Try again" re-ran bootstrap and opened a second ObjectBox store; the store is
+  now reused.
+
+Still unverified in this pass (sidebar clicks did not always open the tab before
+the screenshot): Servers add/edit/default/delete in the rebuilt binary, History
+search/sort/select/delete, Saved message actions, Persona create/edit/delete,
+Local Models, TTS, Cloud Sync interactions, Skills, Background.
