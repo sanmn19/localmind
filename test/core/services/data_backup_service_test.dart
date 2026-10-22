@@ -194,6 +194,72 @@ void main() {
     expect(payload['settings'], isNot(contains('futureSecret')));
   });
 
+  test('exports timestamps in UTC so devices agree on ordering', () {
+    ConversationEntity conversation(DateTime createdAt, DateTime updatedAt) =>
+        ConversationEntity.fromDomain(
+          Conversation(
+            id: 'conv-1',
+            title: 'Chat',
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+          ),
+        );
+    MessageEntity message(DateTime createdAt, DateTime updatedAt) =>
+        MessageEntity.fromDomain(
+          Message(
+            id: 'm1',
+            conversationId: 'conv-1',
+            role: MessageRole.user,
+            content: 'Hello',
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+          ),
+        );
+    _FakeStore storeFor(DateTime createdAt, DateTime updatedAt) => _FakeStore({
+      ConversationEntity: _FakeBox([conversation(createdAt, updatedAt)]),
+      MessageEntity: _FakeBox([message(createdAt, updatedAt)]),
+      PersonaEntity: _FakeBox<PersonaEntity>(const []),
+      SavedMessageEntity: _FakeBox<SavedMessageEntity>(const []),
+      SavedMessageFolderEntity: _FakeBox<SavedMessageFolderEntity>(const []),
+      ServerEntity: _FakeBox<ServerEntity>(const []),
+      ConversationFolderEntity: _FakeBox<ConversationFolderEntity>(const []),
+    });
+
+    // The same instants, stored once with a local offset and once in UTC.
+    final withOffset = DataBackupService().exportAll(
+      storeFor(
+        DateTime.parse('2026-01-01T10:00:00+02:00'),
+        DateTime.parse('2026-01-01T11:00:00+02:00'),
+      ),
+    );
+    final utc = DataBackupService().exportAll(
+      storeFor(
+        DateTime.parse('2026-01-01T08:00:00Z'),
+        DateTime.parse('2026-01-01T09:00:00Z'),
+      ),
+    );
+
+    final offsetMessage = (withOffset['messages'] as List).single as Map;
+    final utcMessage = (utc['messages'] as List).single as Map;
+    final offsetConversation =
+        (withOffset['conversations'] as List).single as Map;
+    final utcConversation = (utc['conversations'] as List).single as Map;
+
+    for (final value in [
+      offsetMessage['createdAt'],
+      offsetMessage['updatedAt'],
+      offsetConversation['createdAt'],
+      offsetConversation['updatedAt'],
+    ]) {
+      expect(value, isA<String>());
+      expect(value as String, endsWith('Z'));
+    }
+    expect(offsetMessage['createdAt'], utcMessage['createdAt']);
+    expect(offsetMessage['updatedAt'], utcMessage['updatedAt']);
+    expect(offsetConversation['createdAt'], utcConversation['createdAt']);
+    expect(offsetConversation['updatedAt'], utcConversation['updatedAt']);
+  });
+
   test(
     'cloud import rejects incomplete replacement payloads before mutation',
     () {

@@ -3228,7 +3228,10 @@ class ChatNotifier extends Notifier<ChatState> {
     if (newContent.trim().isEmpty) return;
     if (newContent == message.content) return;
 
-    final updated = message.copyWith(content: newContent);
+    final updated = message.copyWith(
+      content: newContent,
+      updatedAt: DateTime.now().toUtc(),
+    );
     await _saveMessage(updated);
     _replaceMessageInAll(updated);
   }
@@ -3387,7 +3390,7 @@ class ChatNotifier extends Notifier<ChatState> {
     if (persist == false) return;
     if (persist == null && _isInMemoryChat) return;
     await persistMessage(
-      message.copyWith(updatedAt: message.updatedAt ?? DateTime.now()),
+      message.copyWith(updatedAt: message.updatedAt ?? DateTime.now().toUtc()),
     );
   }
 
