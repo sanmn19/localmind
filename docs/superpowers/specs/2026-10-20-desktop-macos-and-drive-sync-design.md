@@ -68,8 +68,9 @@ only replied in.
 ### Platform and runner
 
 The macOS runner is generated in place (`flutter create --platforms=macos`), bundle id
-`pro.momin.localmind`, display name `LocalMind`. It uses Swift Package Manager (one
-dependency, `llamadart_llama_cpp_flutter`, is SPM-only), so there is no Podfile.
+`pro.momin.localmind`, display name `LocalMind`. It uses Swift Package Manager for the
+SPM-only plugin (`llamadart_llama_cpp_flutter`) and CocoaPods for the rest, with
+`macos/Podfile` pinned to `platform :osx, '14.0'`.
 Entitlements: network client (Drive,
 model servers), network server (the local web/MCP server), user-selected read/write files
 (imports, attachments), audio input (STT, voice mode). Hardened runtime stays on.

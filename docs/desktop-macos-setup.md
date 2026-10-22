@@ -46,17 +46,15 @@ Verify:
 xcodebuild -version   # Xcode 15.x or newer
 ```
 
-## 3. CocoaPods (only if the runner falls back to CocoaPods)
+## 3. CocoaPods
 
 
-The generated runner uses Swift Package Manager and has **no `macos/Podfile`**; every
-current macOS plugin (including `llamadart_llama_cpp_flutter`, which is
-Swift-Package-Manager-only) resolves through
-`macos/Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage`.
-
-If you add a plugin without Swift Package Manager support, Flutter switches the runner
-to CocoaPods. In that case install CocoaPods and add a `macos/Podfile` with
-`platform :osx, '14.0'`:
+The runner uses both package managers: `llamadart_llama_cpp_flutter` is
+Swift-Package-Manager-only and resolves through
+`macos/Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage`, while
+`flutter_tts`, `objectbox_flutter_libs` and `sherpa_onnx_macos` are CocoaPods-only.
+`macos/Podfile` pins `platform :osx, '14.0'`; raising it lower than 11.0 makes
+`objectbox_flutter_libs` fail to resolve.
 
 ```bash
 brew install cocoapods

@@ -20,7 +20,7 @@ Use FVM so development matches `.fvmrc` (Flutter 3.44.2):
 
 ### Desktop (macOS)
 
-- `flutter config --enable-swift-package-manager` once per machine: the macOS runner uses SPM (`llamadart_llama_cpp_flutter` is SPM-only) and has no Podfile.
+- `flutter config --enable-swift-package-manager` once per machine: the macOS runner uses SPM for `llamadart_llama_cpp_flutter` and CocoaPods for the rest, with `macos/Podfile` pinned to macOS 14.0.
 - A full Xcode install is required for `flutter run -d macos` / `flutter build macos`; `flutter analyze` and `flutter test` run without it.
 - Desktop-only work lives in `lib/features/desktop/` (window manager, shell, dock, palette). Cross-feature composition, including `DesktopChatWindow`, stays in `lib/app.dart`.
 - See `docs/desktop-macos-setup.md` for setup and the multi-device sync policy.
