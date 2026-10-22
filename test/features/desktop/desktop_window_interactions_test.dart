@@ -258,6 +258,89 @@ void main() {
     await flushSaves(tester);
   });
 
+  testWidgets('resizing at the workspace edges keeps the anchored edge', (
+    tester,
+  ) async {
+    final container = createContainer();
+    final controller = container.read(desktopWindowControllerProvider.notifier);
+    final id = controller.open(
+      kind: DesktopWindowKind.settings,
+      title: 'Settings',
+      rect: const Rect.fromLTWH(100, 100, 400, 340),
+    );
+    await pumpShell(tester, container);
+
+    /// Drags [handle] by [delta] and returns the resulting rect.
+    Future<Rect> resizeBy(String handle, Offset delta) async {
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(ValueKey('desktop-resize-$handle-$id'))),
+      );
+      await tester.pump();
+      await gesture.moveBy(delta);
+      await tester.pumpAndSettle();
+      await gesture.up();
+      await tester.pumpAndSettle();
+      return windowOf(container, id).rect;
+    }
+
+    // Left edge pushed past the workspace edge: the right edge stays at 500.
+    expect(
+      await resizeBy('left', const Offset(-200, 0)),
+      const Rect.fromLTWH(0, 100, 500, 340),
+    );
+    // Top edge pushed past the workspace edge: the bottom edge stays at 440.
+    expect(
+      await resizeBy('top', const Offset(0, -200)),
+      const Rect.fromLTWH(0, 0, 500, 440),
+    );
+
+    // Right edge pushed past the workspace edge: the left edge stays at 700.
+    controller.move(id, const Rect.fromLTWH(700, 100, 400, 340));
+    await tester.pumpAndSettle();
+    expect(
+      await resizeBy('right', const Offset(200, 0)),
+      const Rect.fromLTWH(700, 100, 500, 340),
+    );
+    // Bottom edge pushed past the workspace edge: the top edge stays at 400.
+    controller.move(id, const Rect.fromLTWH(700, 400, 400, 340));
+    await tester.pumpAndSettle();
+    expect(
+      await resizeBy('bottom', const Offset(0, 200)),
+      const Rect.fromLTWH(700, 400, 400, 436),
+    );
+
+    await flushSaves(tester);
+  });
+
+  testWidgets('dragging a maximised window leaves it maximised and unmoved', (
+    tester,
+  ) async {
+    final container = createContainer();
+    final controller = container.read(desktopWindowControllerProvider.notifier);
+    final id = controller.open(
+      kind: DesktopWindowKind.settings,
+      title: 'Settings',
+      rect: const Rect.fromLTWH(300, 100, 400, 340),
+    );
+    controller.toggleMaximize(id);
+    await pumpShell(tester, container);
+
+    final gesture = await beginTitleDrag(
+      tester,
+      find.byKey(ValueKey('desktop-title-$id')),
+    );
+    await gesture.moveBy(const Offset(-500, 0));
+    await tester.pumpAndSettle();
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    final window = windowOf(container, id);
+    expect(window.isMaximized, isTrue);
+    expect(window.rect, const Rect.fromLTWH(300, 100, 400, 340));
+
+    await flushSaves(tester);
+  });
+
   testWidgets('every resize handle shows its resize cursor', (tester) async {
     final container = createContainer();
     final controller = container.read(desktopWindowControllerProvider.notifier);

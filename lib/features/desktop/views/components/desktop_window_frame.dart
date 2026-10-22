@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -196,6 +198,9 @@ class _DesktopWindowFrameState extends ConsumerState<DesktopWindowFrame> {
   void _focus() => _controller.focus(widget.window.id);
 
   void _startMove() {
+    // A maximised window has no free rect to move: dragging it must not shift
+    // the rect it would restore to, nor un-maximise it on an edge drop.
+    if (widget.window.isMaximized) return;
     _startGesture(null);
     _focus();
   }
@@ -222,7 +227,10 @@ class _DesktopWindowFrameState extends ConsumerState<DesktopWindowFrame> {
         start.translate(_dragDelta.dx, _dragDelta.dy),
       );
     } else {
-      _controller.resize(widget.window.id, handle.resize(start, _dragDelta));
+      _controller.resize(
+        widget.window.id,
+        handle.resize(start, _dragDelta, widget.workspace),
+      );
     }
   }
 
@@ -306,18 +314,22 @@ enum _ResizeHandle {
 
   /// Returns [start] resized by [delta] from this handle.
   ///
-  /// The dragged edge stops once the window reaches
+  /// The moving edges stop at the [workspace] boundary so the anchored edge can
+  /// never shift: the controller clamps the whole rect afterwards by moving its
+  /// left/top only, which would drag an anchored edge with it.
+  ///
+  /// The dragged edge also stops once the window reaches
   /// [WindowGeometry.minWidth] / [WindowGeometry.minHeight] so a resize never
   /// flips the rect inside out.
-  Rect resize(Rect start, Offset delta) {
+  Rect resize(Rect start, Offset delta, Rect workspace) {
     var left = start.left;
     var top = start.top;
     var right = start.right;
     var bottom = start.bottom;
-    if (_movesLeft) left += delta.dx;
-    if (_movesRight) right += delta.dx;
-    if (_movesTop) top += delta.dy;
-    if (_movesBottom) bottom += delta.dy;
+    if (_movesLeft) left = math.max(workspace.left, left + delta.dx);
+    if (_movesRight) right = math.min(workspace.right, right + delta.dx);
+    if (_movesTop) top = math.max(workspace.top, top + delta.dy);
+    if (_movesBottom) bottom = math.min(workspace.bottom, bottom + delta.dy);
     if (right - left < WindowGeometry.minWidth) {
       if (_movesLeft) {
         left = right - WindowGeometry.minWidth;
