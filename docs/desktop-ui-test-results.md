@@ -64,3 +64,11 @@ Still open from pass 1: two `⌘N` drafts now open two tabs, but both are titled
 
 B4–B12 (thinking, smart replies, attach, message actions, mic, voice mode, TTS,
 scroll), C2–C6, D2–D4, E2–E4, F2–F7, G, H, I, J, K, L, M.
+
+## Pass 3 — tab strip polish
+
+- Equal tab widths that shrink as tabs are added, then scroll at the 140 pt minimum.
+- Vertical separators between tabs.
+- Selected tab: tinted background, bold label and a 2 pt accent bar.
+- Close `×` appears on hover; the selected tab keeps it visible.
+- Covered by `test/features/desktop/desktop_shell_test.dart` ("an inactive tab reveals its close button on hover", "the focused tab is highlighted").
