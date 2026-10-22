@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:objectbox/objectbox.dart';
 import '../models/enums.dart';
 import '../../features/chat/data/models/background_task.dart';
@@ -848,6 +849,168 @@ class ManualModelEntity {
     required this.serverId,
     required this.modelId,
     this.displayName,
+    required this.createdAt,
+  });
+}
+
+
+/// One remembered fact: a passive context row, never an instruction.
+@Entity()
+class MemoryEntity {
+  @Id()
+  int internalId = 0;
+
+  @Index()
+  String id;
+
+  int kindIndex;
+
+  String title;
+
+  String content;
+
+  int importance;
+
+  @Property(type: PropertyType.date)
+  DateTime createdAt;
+
+  @Property(type: PropertyType.date)
+  DateTime updatedAt;
+
+  @Property(type: PropertyType.date)
+  DateTime? lastUsedAt;
+
+  int useCount;
+
+  String? scopeConversationId;
+
+  String? sourceConversationId;
+
+  String? sourceMessageId;
+
+  String? supersededById;
+
+  bool archived;
+
+  List<String> tags;
+
+  String shortSummary;
+
+  @Property(type: PropertyType.date)
+  DateTime? expiresAt;
+
+  String? sourceApp;
+
+  MemoryEntity({
+    this.internalId = 0,
+    required this.id,
+    required this.kindIndex,
+    required this.title,
+    required this.content,
+    this.importance = 50,
+    required this.createdAt,
+    required this.updatedAt,
+    this.lastUsedAt,
+    this.useCount = 0,
+    this.scopeConversationId,
+    this.sourceConversationId,
+    this.sourceMessageId,
+    this.supersededById,
+    this.archived = false,
+    this.tags = const [],
+    this.shortSummary = '',
+    this.expiresAt,
+    this.sourceApp,
+  });
+}
+
+/// One short-lived sample of another app's visible text, waiting for a batch.
+///
+/// Rows are plaintext in the local ObjectBox store, consumed by the batch
+/// processor, pruned after 24 hours, and never exported.
+@Entity()
+class ScreenSampleEntity {
+  @Id()
+  int internalId = 0;
+
+  @Property(type: PropertyType.date)
+  DateTime capturedAt;
+
+  @Index()
+  String packageName;
+
+  String text;
+
+  @Index()
+  String hash;
+
+  @Property(type: PropertyType.date)
+  DateTime? processedAt;
+
+  ScreenSampleEntity({
+    this.internalId = 0,
+    required this.capturedAt,
+    required this.packageName,
+    required this.text,
+    required this.hash,
+    this.processedAt,
+  });
+}
+
+/// One directed, labelled edge between two memories.
+@Entity()
+class MemoryRelationEntity {
+  @Id()
+  int internalId = 0;
+
+  @Index()
+  String id;
+
+  @Index()
+  String fromMemoryId;
+
+  @Index()
+  String toMemoryId;
+
+  String label;
+
+  @Property(type: PropertyType.date)
+  DateTime createdAt;
+
+  MemoryRelationEntity({
+    this.internalId = 0,
+    required this.id,
+    required this.fromMemoryId,
+    required this.toMemoryId,
+    required this.label,
+    required this.createdAt,
+  });
+}
+
+/// The stored embedding vector of one memory for one embedding model.
+@Entity()
+class MemoryEmbeddingEntity {
+  @Id()
+  int internalId = 0;
+
+  @Index()
+  String memoryId;
+
+  String modelId;
+
+  int dims;
+
+  Float32List vector;
+
+  @Property(type: PropertyType.date)
+  DateTime createdAt;
+
+  MemoryEmbeddingEntity({
+    this.internalId = 0,
+    required this.memoryId,
+    required this.modelId,
+    required this.dims,
+    required this.vector,
     required this.createdAt,
   });
 }

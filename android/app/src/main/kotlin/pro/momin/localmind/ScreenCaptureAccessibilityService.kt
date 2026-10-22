@@ -2,6 +2,11 @@ package pro.momin.localmind
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
+import android.app.KeyguardManager
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -11,8 +16,11 @@ import android.hardware.HardwareBuffer
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.util.Log
 import android.view.Display
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import java.io.File
 import java.io.FileOutputStream
 
@@ -26,20 +34,122 @@ class ScreenCaptureAccessibilityService : AccessibilityService() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    // Event-driven screen-memory sampling. The accessibility event is the
+    // trigger; a short debounce coalesces content-change bursts into one read.
+    private val sampleRing = ArrayDeque<ScreenTextSample>()
+    private var samplingEnabled = false
+    private var sampleIntervalMs = 500L
+    private var screenOn = true
+    private var lastSampleSignature: String? = null
+    private val debounceSample = Runnable { captureSample() }
+
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                Intent.ACTION_SCREEN_OFF -> {
+                    screenOn = false
+                    mainHandler.removeCallbacks(debounceSample)
+                }
+                Intent.ACTION_SCREEN_ON -> {
+                    screenOn = true
+                    scheduleSample()
+                }
+            }
+        }
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         Log.i(TAG, "Screen capture accessibility service connected")
         instance = this
+        val power = getSystemService(Context.POWER_SERVICE) as? PowerManager
+        screenOn = power?.isInteractive == true
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_SCREEN_OFF)
+        }
+        registerReceiver(screenReceiver, filter)
     }
 
-    override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) = Unit
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (!samplingEnabled) return
+        when (event?.eventType) {
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> scheduleSample()
+        }
+    }
 
     override fun onInterrupt() = Unit
 
-    override fun onUnbind(intent: android.content.Intent?): Boolean {
+    override fun onUnbind(intent: Intent?): Boolean {
         Log.i(TAG, "Screen capture accessibility service unbound")
+        stopSampling()
+        try {
+            unregisterReceiver(screenReceiver)
+        } catch (_: IllegalArgumentException) {
+            // Already unregistered (service re-created).
+        }
         instance = null
         return super.onUnbind(intent)
+    }
+
+    /** Starts event-driven sampling with [intervalMs] debounce. */
+    fun startSampling(intervalMs: Long) {
+        samplingEnabled = true
+        sampleIntervalMs = intervalMs.coerceIn(MIN_SAMPLE_INTERVAL_MS, MAX_SAMPLE_INTERVAL_MS)
+        scheduleSample()
+    }
+
+    /** Stops sampling and drops any queued text. */
+    fun stopSampling() {
+        samplingEnabled = false
+        mainHandler.removeCallbacks(debounceSample)
+        sampleRing.clear()
+        lastSampleSignature = null
+    }
+
+    /** Drains and clears the queued samples for the Dart batch. */
+    fun drainSamples(): List<Map<String, Any>> {
+        val out = sampleRing.map {
+            mapOf(
+                "packageName" to it.packageName,
+                "text" to it.text,
+                "capturedAtMillis" to it.capturedAtMillis
+            )
+        }
+        sampleRing.clear()
+        return out
+    }
+
+    /** Number of changed-screen samples waiting for the next batch. */
+    fun pendingSampleCount(): Int = sampleRing.size
+
+    private fun scheduleSample() {
+        if (!samplingEnabled || !screenOn) return
+        mainHandler.removeCallbacks(debounceSample)
+        mainHandler.postDelayed(debounceSample, sampleIntervalMs)
+    }
+
+    private fun captureSample() {
+        if (!samplingEnabled || !screenOn) return
+        val screen = readScreenTextNow() ?: return
+        // Cheap dirty check: package + window + text fingerprint. The event
+        // already told us something changed, but a burst of layout events can
+        // still resolve to the same text.
+        val signature = "${screen.packageName}|${screen.windowId}|${screen.text.hashCode()}"
+        if (signature == lastSampleSignature) return
+        lastSampleSignature = signature
+        sampleRing.addLast(
+            ScreenTextSample(
+                packageName = screen.packageName,
+                text = screen.text,
+                capturedAtMillis = System.currentTimeMillis()
+            )
+        )
+        while (sampleRing.size > MAX_SAMPLE_RING) {
+            sampleRing.removeFirst()
+        }
     }
 
     /**
@@ -142,6 +252,110 @@ class ScreenCaptureAccessibilityService : AccessibilityService() {
         }
 
         captureNext(null)
+    }
+
+    /**
+     * Reads the visible text of the foreground app for the screen-memory
+     * sampler. Null while the screen is off or locked, when no readable
+     * window belongs to another app, and when the readable window carries no
+     * text. Only the active/focused window is read, so a window behind it (a
+     * blocked app, say) can never contribute text. Password fields (and their
+     * subtrees), LocalMind's own windows, keyboards, and the system UI are
+     * skipped; the collected text is capped at [MAX_SCREEN_TEXT_CHARS].
+     */
+    fun readScreenText(onResult: (ScreenText?) -> Unit) {
+        onResult(readScreenTextNow())
+    }
+
+    /** One synchronous read of the active/focused window, or null. */
+    private fun readScreenTextNow(): ScreenText? {
+        val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+        val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+        val interactive = powerManager?.isInteractive == true
+        if (!interactive || keyguardManager?.isKeyguardLocked == true) {
+            Log.i(TAG, "Screen text read skipped: interactive=$interactive")
+            return null
+        }
+
+        // The active/focused window only: a window behind it (for example a
+        // blocked app under an overlay) must not contribute its package or text.
+        val root = rootInActiveWindow
+            ?: windows.orEmpty().firstOrNull { it.isFocused || it.isActive }?.root
+        val packageName = root?.packageName?.toString()
+        if (root == null || packageName == null || isSkippedPackage(packageName)) {
+            Log.i(TAG, "Screen text read found nothing (package=$packageName)")
+            return null
+        }
+
+        val collected = StringBuilder()
+        collectNodeText(root, collected)
+        val text = collected.take(MAX_SCREEN_TEXT_CHARS).toString()
+        if (text.isBlank()) {
+            Log.i(TAG, "Screen text read found nothing (package=$packageName)")
+            return null
+        }
+        return ScreenText(
+            packageName = packageName,
+            text = text,
+            isInteractive = interactive,
+            windowId = root.windowId
+        )
+    }
+
+    /** Own windows, keyboards, and the system UI never describe the user's
+     *  foreground app, so their text is skipped. */
+    private fun isSkippedPackage(packageName: String): Boolean {
+        if (packageName == this.packageName || packageName == SYSTEM_UI_PACKAGE) {
+            return true
+        }
+        return KEYBOARD_PACKAGE_PREFIXES.any { packageName.startsWith(it) }
+    }
+
+    /** Depth-first walk in reading order; password nodes take their whole
+     *  subtree with them, and collection stops at the character cap. Nodes are
+     *  recycled after use on API 26-32; recycle is a no-op from API 33. */
+    private fun collectNodeText(root: AccessibilityNodeInfo, out: StringBuilder) {
+        val stack = ArrayDeque<AccessibilityNodeInfo>()
+        stack.addLast(root)
+        try {
+            while (stack.isNotEmpty() && out.length < MAX_SCREEN_TEXT_CHARS) {
+                val node = stack.removeLast()
+                try {
+                    if (!node.isPassword) {
+                        val nodeText = node.text
+                        appendNodeText(out, nodeText)
+                        val description = node.contentDescription
+                        if (description != null && description.toString() != nodeText?.toString()) {
+                            appendNodeText(out, description)
+                        }
+                        for (index in node.childCount - 1 downTo 0) {
+                            node.getChild(index)?.let(stack::addLast)
+                        }
+                    }
+                } finally {
+                    recycleNode(node)
+                }
+            }
+        } finally {
+            // The character cap can leave acquired nodes on the stack.
+            while (stack.isNotEmpty()) {
+                recycleNode(stack.removeLast())
+            }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun recycleNode(node: AccessibilityNodeInfo) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            node.recycle()
+        }
+    }
+
+    private fun appendNodeText(out: StringBuilder, value: CharSequence?) {
+        val text = value?.toString()?.trim()
+        if (text.isNullOrEmpty()) return
+        if (out.isNotEmpty()) out.append('\n')
+        out.append(text)
     }
 
     /**
@@ -342,6 +556,25 @@ class ScreenCaptureAccessibilityService : AccessibilityService() {
         /** Stride of the row-average pixel sampling for stitch alignment. */
         private const val SCROLL_ROW_SAMPLE_STRIDE = 4
 
+        /** Character cap on one foreground-app text read. */
+        private const val MAX_SCREEN_TEXT_CHARS = 8000
+
+        /** Bounded in-memory queue drained by the Dart batch. */
+        private const val MAX_SAMPLE_RING = 200
+
+        /** Debounce bounds for event-driven sampling. */
+        private const val MIN_SAMPLE_INTERVAL_MS = 250L
+        private const val MAX_SAMPLE_INTERVAL_MS = 5000L
+
+        /** System UI windows never count as the foreground app. */
+        private const val SYSTEM_UI_PACKAGE = "com.android.systemui"
+
+        /** Keyboard windows never count as the foreground app. */
+        private val KEYBOARD_PACKAGE_PREFIXES = listOf(
+            "com.google.android.inputmethod",
+            "com.android.inputmethod"
+        )
+
         /**
          * Set while the service is connected, cleared on unbind.
          */
@@ -407,3 +640,19 @@ class ScreenCaptureAccessibilityService : AccessibilityService() {
         }
     }
 }
+
+/** One on-demand foreground-app text read: the app that owned the window,
+ *  the concatenated visible text, and whether the screen was on and unlocked. */
+data class ScreenText(
+    val packageName: String,
+    val text: String,
+    val isInteractive: Boolean,
+    val windowId: Int
+)
+
+/** One changed-screen sample waiting for the Dart batch. */
+data class ScreenTextSample(
+    val packageName: String,
+    val text: String,
+    val capturedAtMillis: Long
+)

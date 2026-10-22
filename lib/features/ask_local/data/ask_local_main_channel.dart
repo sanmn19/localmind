@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:localmind/core/logger/app_logger.dart';
 import 'package:localmind/core/providers/app_providers.dart';
+import 'package:localmind/core/providers/screen_memory_providers.dart';
 import 'package:localmind/core/providers/storage_providers.dart';
 import 'package:localmind/core/storage/objectbox_store.dart';
 import 'package:localmind/core/utils/uuid.dart';
@@ -131,12 +132,15 @@ resolveAskLocalCardBootstrap(ProviderContainer container) async {
 
   String? conversationId;
   try {
+    // "New chat per popup": every handoff creates its OWN conversation;
+    // history keeps the previous asks as separate threads. The envelope
+    // pins the fresh id so the card never re-ensures a stale shared row.
     final conversation = await container
         .read(askLocalConversationServiceProvider)
-        .ensure();
+        .create();
     conversationId = conversation.id;
   } catch (error) {
-    Log.error('Ask Local conversation ensure failed: $error');
+    Log.error('Ask Local conversation create failed: $error');
   }
 
   return AskLocalCardBootstrapPayload(
@@ -225,9 +229,15 @@ class AskLocalMainChannel {
   ) async {
     switch (call.method) {
       case AskLocalRequestPayload.askLocalRequestArrivedMethod:
+        // ignore: avoid_print
+        print('DBG askLocalRequestArrived: args=${call.arguments}');
         final payload = AskLocalRequestPayload.fromMap(call.arguments);
+        // ignore: avoid_print
+        print('DBG askLocalRequestArrived: decoded=${payload != null}');
         if (payload == null) return true;
         final opened = await _openWithEnvelope(payload, container);
+        // ignore: avoid_print
+        print('DBG askLocalRequestArrived: opened=$opened');
         // Truthy ack clears Kotlin's stash; null keeps it for the pull.
         return opened ? true : null;
       case AskLocalCardBootstrapKeys.executeToolMainMethod:
@@ -311,11 +321,32 @@ class AskLocalMainChannel {
       Log.error('Ask Local envelope resolve crashed: $error');
       bootstrap = null;
     }
-    return openOverlay(
+    final opened = await openOverlay(
       capturePath: payload.capturePath,
       selectedText: payload.selectedText,
       bootstrap:
           bootstrap == null ? const <String, Object?>{} : bootstrapToWire(bootstrap),
     );
+    if (opened) _batchScreenMemories(container);
+    return opened;
+  }
+
+  /// The overlay being shown is a batch trigger: queued samples are drained so
+  /// an inferred memory is ready for the next ask. Best-effort — a provider
+  /// hiccup must never block the overlay itself.
+  void _batchScreenMemories(ProviderContainer container) {
+    try {
+      if (!container.read(settingsProvider).screenMemoryEnabled) return;
+      unawaited(
+        container
+            .read(screenMemorySchedulerProvider)
+            .batchNow()
+            .catchError((Object error, StackTrace stack) {
+              Log.warning('Screen memory batch on overlay open failed: $error');
+            }),
+      );
+    } catch (error) {
+      Log.warning('Screen memory batch on overlay open failed: $error');
+    }
   }
 }

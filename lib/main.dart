@@ -13,6 +13,15 @@ import 'core/logger/app_logger.dart';
 import 'core/services/crash_report_service.dart';
 import 'core/widgets/crash_error_widget.dart';
 import 'core/widgets/inline_build_error.dart';
+import 'features/ask_local/ask_local_entrypoint.dart';
+
+/// The Ask Local card's custom engine entrypoint. The Flutter engine
+/// resolves custom entrypoints ONLY against the root library
+/// (lib/main.dart), so the pragma'd declaration MUST live here — a
+/// declaration in a feature file is unresolvable at runtime
+/// ("Could not resolve main entrypoint function" → a dead, blank card).
+@pragma('vm:entry-point')
+void askLocalCardMain() => runAskLocalCardMain();
 
 Future<void> main() async {
   await runZonedGuarded<Future<void>>(

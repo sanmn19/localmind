@@ -786,10 +786,245 @@
         }
       ],
       "relations": []
+    },
+    {
+      "id": "11:344570830110125797",
+      "lastPropertyId": "6:1741312766451779504",
+      "name": "MemoryEmbeddingEntity",
+      "properties": [
+        {
+          "id": "1:3739910779584128296",
+          "name": "internalId",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:7592414719667282777",
+          "name": "memoryId",
+          "indexId": "20:4064235471376385509",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "3:104906701710319834",
+          "name": "modelId",
+          "type": 9
+        },
+        {
+          "id": "4:1761409342601601762",
+          "name": "dims",
+          "type": 6
+        },
+        {
+          "id": "5:4325817375072488009",
+          "name": "vector",
+          "type": 28
+        },
+        {
+          "id": "6:1741312766451779504",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "12:1157530772597595285",
+      "lastPropertyId": "19:2641398600035886234",
+      "name": "MemoryEntity",
+      "properties": [
+        {
+          "id": "1:6626835057537217192",
+          "name": "internalId",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:4373282373379323540",
+          "name": "id",
+          "indexId": "21:2012758969991147949",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "3:4550052434022580920",
+          "name": "kindIndex",
+          "type": 6
+        },
+        {
+          "id": "4:2033625437709155446",
+          "name": "title",
+          "type": 9
+        },
+        {
+          "id": "5:5852007063018317528",
+          "name": "content",
+          "type": 9
+        },
+        {
+          "id": "6:3506563999153151734",
+          "name": "importance",
+          "type": 6
+        },
+        {
+          "id": "7:9149886955336759779",
+          "name": "createdAt",
+          "type": 10
+        },
+        {
+          "id": "8:3380424357586532831",
+          "name": "updatedAt",
+          "type": 10
+        },
+        {
+          "id": "9:5339625394738406733",
+          "name": "lastUsedAt",
+          "type": 10
+        },
+        {
+          "id": "10:8918486341619991709",
+          "name": "useCount",
+          "type": 6
+        },
+        {
+          "id": "11:9003486325753782994",
+          "name": "sourceConversationId",
+          "type": 9
+        },
+        {
+          "id": "12:3570397396766524340",
+          "name": "sourceMessageId",
+          "type": 9
+        },
+        {
+          "id": "13:3280964599812132135",
+          "name": "supersededById",
+          "type": 9
+        },
+        {
+          "id": "14:991201696784785310",
+          "name": "archived",
+          "type": 1
+        },
+        {
+          "id": "15:6525833735150016625",
+          "name": "scopeConversationId",
+          "type": 9
+        },
+        {
+          "id": "16:2128569499334731958",
+          "name": "tags",
+          "type": 30
+        },
+        {
+          "id": "17:5707979345040627879",
+          "name": "shortSummary",
+          "type": 9
+        },
+        {
+          "id": "18:423563684729519270",
+          "name": "expiresAt",
+          "type": 10
+        },
+        {
+          "id": "19:2641398600035886234",
+          "name": "sourceApp",
+          "type": 9
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "13:8613029486712728898",
+      "lastPropertyId": "6:5210792842061974525",
+      "name": "MemoryRelationEntity",
+      "properties": [
+        {
+          "id": "1:1878717035168539030",
+          "name": "internalId",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:3443386797861147441",
+          "name": "fromMemoryId",
+          "indexId": "22:8338107769014504188",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "3:7186694290044862110",
+          "name": "toMemoryId",
+          "indexId": "23:2622125567475855692",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:419881938285970356",
+          "name": "label",
+          "type": 9
+        },
+        {
+          "id": "5:7047900427854367103",
+          "name": "createdAt",
+          "type": 10
+        },
+        {
+          "id": "6:5210792842061974525",
+          "name": "id",
+          "indexId": "24:3734785072290076025",
+          "type": 9,
+          "flags": 2048
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "14:7290961308421388323",
+      "lastPropertyId": "6:1543794969499748401",
+      "name": "ScreenSampleEntity",
+      "properties": [
+        {
+          "id": "1:2914463186436894855",
+          "name": "internalId",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:3749610397584863900",
+          "name": "capturedAt",
+          "type": 10
+        },
+        {
+          "id": "3:8785051406051049327",
+          "name": "packageName",
+          "indexId": "25:7334307555973898391",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:5001260089664176565",
+          "name": "text",
+          "type": 9
+        },
+        {
+          "id": "5:622846149103655308",
+          "name": "hash",
+          "indexId": "26:3638442091653412889",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "6:1543794969499748401",
+          "name": "processedAt",
+          "type": 10
+        }
+      ],
+      "relations": []
     }
   ],
-  "lastEntityId": "10:7335998010881530624",
-  "lastIndexId": "19:9141168625428584864",
+  "lastEntityId": "14:7290961308421388323",
+  "lastIndexId": "26:3638442091653412889",
   "lastRelationId": "0:0",
   "lastSequenceId": "0:0",
   "modelVersion": 5,

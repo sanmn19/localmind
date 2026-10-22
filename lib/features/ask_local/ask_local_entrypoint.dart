@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:localmind/core/logger/app_logger.dart';
 import 'package:localmind/core/providers/app_providers.dart';
@@ -32,20 +33,51 @@ import 'package:localmind/l10n/app_localizations.dart';
 /// 4. every later payload re-push (new ask while shown) flows through the
 ///    SAME applied channel callback into the live notifier (re-delivery
 ///    idempotent there).
-@pragma('vm:entry-point')
-void askLocalCardMain() {
+/// The real card boot. Declared separately because the Flutter engine
+/// resolves custom entrypoints ONLY in the root library (lib/main.dart);
+/// `main.dart` declares the pragma'd `askLocalCardMain` that delegates here.
+void runAskLocalCardMain() {
   WidgetsFlutterBinding.ensureInitialized();
+  // ignore: avoid_print
+  print('DBG askLocalCardMain: entrypoint reached');
+  _runCardFrameProbe();
   unawaited(_bootAskLocalCard());
+}
+
+/// TEMP diagnostics: frame-pump telemetry for the overlay typing issue —
+/// distinguishes "IME updates arrive but frames don't render" (chunky text)
+/// from an input-connection stall. Remove once typing is verified on device.
+void _runCardFrameProbe() {
+  var frames = 0;
+  var last = DateTime.now();
+  SchedulerBinding.instance.addTimingsCallback((timings) {
+    frames += timings.length;
+    final now = DateTime.now();
+    if (now.difference(last).inMilliseconds >= 1000) {
+      // ignore: avoid_print
+      print('DBG card frames: $frames in the last second');
+      frames = 0;
+      last = now;
+    }
+  });
 }
 
 Future<void> _bootAskLocalCard() async {
   final channel = AskLocalCardChannel();
   final director = CardBootDirector(channel: channel);
   channel.manage(
-    (delivery) => unawaited(director.apply(delivery)),
+    (delivery, forceReanchor) =>
+        unawaited(director.apply(delivery, forceReanchor: forceReanchor)),
     director.reapClosed,
+    onExternalInput: (text) => unawaited(
+      director.container
+          ?.read(askLocalCardNotifierProvider.notifier)
+          .send(text),
+    ),
   );
   runApp(const _AskLocalCardProgressPlaceholder());
+  // ignore: avoid_print
+  print('DBG askLocalCardMain: placeholder runApp done');
   unawaited(director.injectInitial(channel));
 }
 
@@ -111,19 +143,39 @@ class CardBootDirector {
   }
 
   Future<void> injectInitial(AskLocalCardChannel channel) async {
-    final delivery = await channel.requestInitialPayload();
+    // The Kotlin handler registers microseconds after the entrypoint spawns,
+    // but isolate-spawn jitter can outlast this pull's internal retries AND
+    // the host's own re-push (dropped when the Dart handler is still
+    // installing) — so retry in outer rounds before declaring the boot
+    // failed. An eternal spinner is never acceptable: the final null
+    // surfaces the typed boot-failure banner and a later re-delivery
+    // re-arms the boot.
+    AskLocalCardDelivery? delivery;
+    for (var round = 0; round < 4; round++) {
+      delivery = await channel.requestInitialPayload();
+      // ignore: avoid_print
+      print('DBG card boot: round $round delivery=${delivery != null}');
+      if (delivery != null) break;
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
     if (delivery != null) {
       await apply(delivery);
+      return;
     }
+    _failBoot(StateError('card boot: no payload after retry rounds'));
   }
 
-  Future<void> apply(AskLocalCardDelivery delivery) async {
+  Future<void> apply(
+    AskLocalCardDelivery delivery, {
+    bool forceReanchor = false,
+  }) async {
     try {
       final container = await _containerFor(delivery.bootstrap);
       _failureUp = false;
       unawaited(
         container.read(askLocalCardNotifierProvider.notifier).applyDelivery(
               delivery,
+              forceReanchor: forceReanchor,
             ),
       );
     } catch (error) {
@@ -169,8 +221,12 @@ class CardBootDirector {
       // boot failure (rethrown below through [apply]'s typed banner) — the
       // card would otherwise silently run with NO history persistence, which
       // is worse than an honest typed error + a retry on the next delivery.
+      // ignore: avoid_print
+      print('DBG card boot: attaching store at ${bootstrap.storeDir}');
       db = await (attachAt ?? ObjectBoxStore.attachAsSecondaryIsolateAt)
           .call(bootstrap.storeDir);
+      // ignore: avoid_print
+      print('DBG card boot: store attached');
       try {
         if (bootstrap.settingsJson.isNotEmpty) {
           settings = AppSettings.fromJson(bootstrap.settingsJson);
@@ -180,6 +236,8 @@ class CardBootDirector {
       }
     }
 
+    // ignore: avoid_print
+    print('DBG card boot: building container');
     _container = ProviderContainer(
       overrides: [
         if (db != null) databaseProvider.overrideWithValue(db),
@@ -195,6 +253,8 @@ class CardBootDirector {
             captureNow: () => channel.captureNow(),
             closeCard: () => channel.closeCard(),
             resizeCard: (heightDp) => channel.resizeFloatingCard(heightDp),
+            openCardInput: () => channel.openCardInput(),
+            dragCard: (dx, dy) => channel.dragFloatingCard(dx, dy),
           ),
         ),
       ],
@@ -203,6 +263,8 @@ class CardBootDirector {
       container: _container!,
       child: const AskLocalCardApp(),
     ));
+    // ignore: avoid_print
+    print('DBG card boot: real card shown');
     return _container!;
   }
 

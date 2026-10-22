@@ -104,24 +104,64 @@ class AskLocalCardChannel {
   /// registration wins semantics are irrelevant since only the entrypoint
   /// registers).
   void manage(
-    void Function(AskLocalCardDelivery delivery) onPayloadUpdate,
-    void Function() onCardClosed,
-  ) {
+    void Function(AskLocalCardDelivery delivery, bool forceReanchor)
+    onPayloadUpdate,
+    void Function() onCardClosed, {
+    void Function(String text)? onExternalInput,
+  }) {
     if (_handlerInstalled) return;
     _handlerInstalled = true;
     _channel.setMethodCallHandler((call) async {
       switch (call.method) {
         case AskLocalCardBootstrapKeys.payloadUpdateCardMethod:
+          final force = call.arguments is Map &&
+              call.arguments['forceReanchor'] == true;
+          // ignore: avoid_print
+          print('DBG card channel: payloadUpdate force=$force');
           final delivery = AskLocalCardDelivery.fromMap(call.arguments);
-          if (delivery != null) onPayloadUpdate(delivery);
+          if (delivery != null) onPayloadUpdate(delivery, force);
           return null;
         case 'askLocalCardClosed':
           onCardClosed();
+          return null;
+        case 'askLocalCardInput':
+          final text = call.arguments is Map
+              ? (call.arguments['text'] as String? ?? '')
+              : (call.arguments as String? ?? '');
+          onExternalInput?.call(text);
           return null;
         default:
           return null;
       }
     });
+  }
+
+  /// Drag-to-move deltas from the header's pan gesture: the host applies
+  /// them to the window position (dp units; the host converts using the
+  /// display density) and clamps the card on-screen.
+  Future<bool> dragFloatingCard(double dx, double dy) async {
+    try {
+      final ok = await _channel.invokeMethod<bool>(
+        'moveFloatingCard',
+        {'dx': dx, 'dy': dy},
+      );
+      return ok ?? false;
+    } on Exception {
+      return false;
+    }
+  }
+
+  /// Opens the host's transparent input activity — a real activity window
+  /// hosts the IME (an overlay window cannot hold the keyboard without
+  /// stealing OS-wide focus). Typed text returns via the `askLocalCardInput`
+  /// push handled in [manage].
+  Future<bool> openCardInput() async {
+    try {
+      final ok = await _channel.invokeMethod<bool>('openCardInput');
+      return ok ?? false;
+    } on Exception {
+      return false;
+    }
   }
 
   /// Single-frame re-capture (spec UX #3): resolves null when the capture
@@ -157,6 +197,23 @@ class AskLocalCardChannel {
     try {
       final closed = await _channel.invokeMethod<bool>('closeCard');
       return closed ?? false;
+    } on Exception {
+      return false;
+    }
+  }
+
+  /// Flips the overlay window between input-gated and keyboard modes.
+  /// True when the card's text field gains focus (the IME may attach to
+  /// the overlay), false when it loses focus — restoring the foreground
+  /// app's keyboard. Best-effort: failure degrades to the input-gated
+  /// default (no keyboard, no OS-wide focus theft).
+  Future<bool> setWindowFocusable(bool focusable) async {
+    try {
+      final ok = await _channel.invokeMethod<bool>(
+        'setWindowFocusable',
+        {'focusable': focusable},
+      );
+      return ok ?? false;
     } on Exception {
       return false;
     }

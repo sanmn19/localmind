@@ -33,6 +33,7 @@ class MainActivity : AudioServiceActivity() {
     private val ASK_LOCAL_EVENTS_CHANNEL = "localmind/ask_local/events"
     private val DEVICE_TOOLS_CHANNEL = "localmind/device_tools"
     private val NOTIFICATIONS_CHANNEL = "localmind/notifications"
+    private val SCREEN_CHANNEL = "localmind/screen"
 
     private var assistantChannel: MethodChannel? = null
     private var pendingAssistantInvocation = false
@@ -198,6 +199,26 @@ class MainActivity : AudioServiceActivity() {
                         )
                     }
                 }
+                else -> result.notImplemented()
+            }
+        }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SCREEN_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "readText" -> readScreenText(result)
+                "startSampling" -> {
+                    val interval = ((call.arguments as? Map<*, *>)?.get("intervalMs") as? Number)?.toLong() ?: 500L
+                    ScreenCaptureAccessibilityService.instance?.startSampling(interval)
+                    result.success(null)
+                }
+                "stopSampling" -> {
+                    ScreenCaptureAccessibilityService.instance?.stopSampling()
+                    result.success(null)
+                }
+                "drainSamples" ->
+                    result.success(ScreenCaptureAccessibilityService.instance?.drainSamples() ?: emptyList<Map<String, Any>>())
+                "pendingSampleCount" ->
+                    result.success(ScreenCaptureAccessibilityService.instance?.pendingSampleCount() ?: 0)
                 else -> result.notImplemented()
             }
         }
@@ -415,9 +436,16 @@ class MainActivity : AudioServiceActivity() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false
         val manager = getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
         if (manager == null) return false
-        val expected = ComponentName(this, ScreenCaptureAccessibilityService::class.java).flattenToString()
+        // AccessibilityServiceInfo.id is reported in short form on some
+        // Android builds ("pkg/.Service") and full form on others
+        // ("pkg/pkg.Service"). Compare the parsed components, not strings.
+        val expected = ComponentName(this, ScreenCaptureAccessibilityService::class.java)
         return manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-            .any { it.id == expected }
+            .any { info ->
+                val actual = ComponentName.unflattenFromString(info.id) ?: return@any false
+                actual.packageName == expected.packageName &&
+                    actual.className == expected.className
+            }
     }
 
     private fun getAssistantStatus(): String {
@@ -889,6 +917,27 @@ class MainActivity : AudioServiceActivity() {
             } catch (error: Exception) {
                 Log.w("LocalMindAskLocal", "Card-closed event dropped: $error")
             }
+        }
+    }
+
+    /** `localmind/screen` "readText": one on-demand foreground-app text
+     *  read through the accessibility service. A missing service (or the screen
+     *  off/locked) answers success(null) so Dart just skips the tick. */
+    private fun readScreenText(result: MethodChannel.Result) {
+        val service = ScreenCaptureAccessibilityService.instance
+        if (service == null) {
+            result.success(null)
+            return
+        }
+        service.readScreenText { screen ->
+            result.success(
+                if (screen != null) mapOf(
+                    "packageName" to screen.packageName,
+                    "text" to screen.text,
+                    "isInteractive" to screen.isInteractive,
+                    "windowId" to screen.windowId
+                ) else null
+            )
         }
     }
 

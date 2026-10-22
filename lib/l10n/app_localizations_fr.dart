@@ -3794,4 +3794,258 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get model_load_confirm_streaming =>
       'A reply is streaming and will be stopped.';
+
+  @override
+  String get cloud_sync_provider => 'Backup destination';
+
+  @override
+  String get cloud_sync_provider_s3 => 'S3-compatible';
+
+  @override
+  String get cloud_sync_provider_google_drive => 'Google Drive';
+
+  @override
+  String get cloud_sync_connect_google => 'Connect Google Drive';
+
+  @override
+  String cloud_sync_connected_as(String email) {
+    return 'Connected as $email';
+  }
+
+  @override
+  String get cloud_sync_backup_now => 'Back up now';
+
+  @override
+  String get memories_title => 'Memories';
+
+  @override
+  String get memories_enabled => 'Remember facts';
+
+  @override
+  String get memories_enabled_desc =>
+      'Facts you ask LocalMind to remember are injected as context, never as instructions.';
+
+  @override
+  String get auto_memory_enabled => 'Auto-remember';
+
+  @override
+  String get auto_memory_enabled_desc =>
+      'After each reply, a hidden prompt asks the model whether anything in the conversation is worth remembering. Facts are saved silently; only explicit memory writes ask for approval.';
+
+  @override
+  String get screen_memories_title => 'Screen memories';
+
+  @override
+  String get screen_memories_enabled => 'Watch my screen';
+
+  @override
+  String get screen_memories_enabled_desc =>
+      'Reads the visible text of the app you are using and turns durable details into inferred memories. Only changed screens are stored, and samples stay on this device.';
+
+  @override
+  String get screen_memories_batch_interval => 'Summarize every';
+
+  @override
+  String get screen_memories_blocked_apps => 'Blocked apps';
+
+  @override
+  String screen_memories_blocked_apps_desc(int count) {
+    return '$count packages are never sampled';
+  }
+
+  @override
+  String get screen_memories_blocked_apps_hint =>
+      'Package names, separated by commas';
+
+  @override
+  String get screen_memories_blocked_apps_search => 'Search installed apps';
+
+  @override
+  String get screen_memories_blocked_apps_empty => 'No apps found';
+
+  @override
+  String get screen_memories_blocked_apps_not_installed => 'Not installed';
+
+  @override
+  String get screen_memories_processing_model => 'Processing model';
+
+  @override
+  String get screen_memories_processing_model_desc =>
+      'Server and model used to turn screen samples into memories.';
+
+  @override
+  String get screen_memories_processing_model_chat => 'Same as chat';
+
+  @override
+  String get screen_memories_processing_model_empty =>
+      'No models found on this server';
+
+  @override
+  String get screen_memories_processing_model_reset => 'Use chat model';
+
+  @override
+  String get screen_memories_footer =>
+      'Samples are pruned at the next batch or app open after 24 hours, and whenever you turn Screen memories off. They are never exported. Screen text is sent only to the model server you selected.';
+
+  @override
+  String get screen_memories_service => 'Screen capture service';
+
+  @override
+  String get screen_memories_service_desc =>
+      'LocalMind needs the accessibility service to read on-screen text.';
+
+  @override
+  String get screen_memories_service_enabled => 'Enabled';
+
+  @override
+  String get screen_memories_service_disabled => 'Disabled';
+
+  @override
+  String get screen_memories_service_checking => 'Checking…';
+
+  @override
+  String get screen_memories_service_open_settings =>
+      'Open accessibility settings';
+
+  @override
+  String get screen_memory_status_title => 'Screen memories';
+
+  @override
+  String screen_memory_status_pending(int count) {
+    return '$count waiting';
+  }
+
+  @override
+  String get screen_memory_status_processing => 'Processing screen samples…';
+
+  @override
+  String screen_memory_status_last(int count, String when) {
+    return 'Last batch: $count memories · $when';
+  }
+
+  @override
+  String screen_memory_status_error(String error) {
+    return 'Last batch failed: $error';
+  }
+
+  @override
+  String get screen_memory_status_process_now => 'Process now';
+
+  @override
+  String get screen_memory_status_no_model =>
+      'Select a model to process samples';
+
+  @override
+  String get screen_memory_status_off => 'Screen memories are off';
+
+  @override
+  String get screen_memory_status_backoff => 'Retrying after an error';
+
+  @override
+  String get screen_memory_status_cap => 'Hourly limit reached';
+
+  @override
+  String get screen_memories_service_error =>
+      'Could not open accessibility settings.';
+
+  @override
+  String get memory_add => 'Add memory';
+
+  @override
+  String get memory_edit => 'Edit memory';
+
+  @override
+  String get memory_delete => 'Delete memory';
+
+  @override
+  String get memory_archive => 'Archive memory';
+
+  @override
+  String get memory_kind => 'Kind';
+
+  @override
+  String get memory_kind_fact => 'Fact';
+
+  @override
+  String get memory_kind_preference => 'Preference';
+
+  @override
+  String get memory_kind_entity => 'Entity';
+
+  @override
+  String get memory_kind_event => 'Event';
+
+  @override
+  String get memory_kind_inferred => 'Inferred';
+
+  @override
+  String get memory_importance => 'Importance';
+
+  @override
+  String get memory_title_label => 'Title';
+
+  @override
+  String get memory_content_label => 'What should LocalMind remember?';
+
+  @override
+  String get memory_save => 'Save';
+
+  @override
+  String get memory_required => 'This field is required';
+
+  @override
+  String get memory_search_hint => 'Search memories';
+
+  @override
+  String get memory_graph_view => 'Graph view';
+
+  @override
+  String get memory_list_view => 'List view';
+
+  @override
+  String get memory_filter_all => 'All';
+
+  @override
+  String get memory_tags_hint => 'Tags, separated by commas';
+
+  @override
+  String get memory_summary => 'Short summary';
+
+  @override
+  String get memory_expiry => 'Expires';
+
+  @override
+  String get memory_no_expiry => 'No expiry';
+
+  @override
+  String get memory_expired => 'Expired';
+
+  @override
+  String memory_expires_in_days(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Expires in $count days',
+      one: 'Expires in 1 day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get memory_clear => 'Clear';
+
+  @override
+  String get remember_this => 'Remember this';
+
+  @override
+  String get memory_saved => 'Saved to memories';
+
+  @override
+  String get skills_memories_label => 'Skills & memories';
+
+  @override
+  String get export_skills_memories => 'Export skills & memories';
+
+  @override
+  String get import_skills_memories => 'Import skills & memories';
 }

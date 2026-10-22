@@ -2,6 +2,8 @@ import 'dart:convert';
 
 enum CloudSyncPhase { disabled, ready, syncing, synced, error, locked }
 
+enum CloudSyncProviderKind { s3, googleDrive }
+
 enum CloudSyncFailureKind {
   validation,
   credentials,
@@ -34,6 +36,8 @@ class S3SyncConfig {
     this.pathStyle = true,
     this.allowInsecureHttp = false,
     this.enabled = false,
+    this.provider = CloudSyncProviderKind.s3,
+    this.googleAccount,
   });
 
   final String endpoint;
@@ -43,6 +47,12 @@ class S3SyncConfig {
   final bool pathStyle;
   final bool allowInsecureHttp;
   final bool enabled;
+
+  /// Which backend the sync uses; S3 fields are ignored for Drive.
+  final CloudSyncProviderKind provider;
+
+  /// The connected Google account email (non-secret metadata).
+  final String? googleAccount;
 
   Uri get endpointUri => Uri.parse(endpoint);
 
@@ -71,6 +81,8 @@ class S3SyncConfig {
     bool? pathStyle,
     bool? allowInsecureHttp,
     bool? enabled,
+    CloudSyncProviderKind? provider,
+    String? googleAccount,
   }) {
     return S3SyncConfig(
       endpoint: endpoint ?? this.endpoint,
@@ -80,6 +92,8 @@ class S3SyncConfig {
       pathStyle: pathStyle ?? this.pathStyle,
       allowInsecureHttp: allowInsecureHttp ?? this.allowInsecureHttp,
       enabled: enabled ?? this.enabled,
+      provider: provider ?? this.provider,
+      googleAccount: googleAccount ?? this.googleAccount,
     );
   }
 
@@ -91,6 +105,11 @@ class S3SyncConfig {
     pathStyle: json['pathStyle'] as bool? ?? true,
     allowInsecureHttp: json['allowInsecureHttp'] as bool? ?? false,
     enabled: json['enabled'] as bool? ?? false,
+    provider: CloudSyncProviderKind.values.firstWhere(
+      (kind) => kind.name == json['provider'],
+      orElse: () => CloudSyncProviderKind.s3,
+    ),
+    googleAccount: json['googleAccount'] as String?,
   );
 
   Map<String, dynamic> toJson() => {
@@ -101,6 +120,8 @@ class S3SyncConfig {
     'pathStyle': pathStyle,
     'allowInsecureHttp': allowInsecureHttp,
     'enabled': enabled,
+    'provider': provider.name,
+    'googleAccount': googleAccount,
   };
 }
 
@@ -205,56 +226,24 @@ class CloudSyncSnapshot {
     'conversationFolders',
   };
 
-  static const _settingKeys = {
-    'temperature',
-    'topP',
-    'maxTokens',
-    'contextLength',
-    'themeMode',
-    'fontSize',
-    'showSystemMessages',
-    'hapticFeedbackEnabled',
-    'sendOnEnter',
-    'showDataIndicator',
-    'autoGenerateTitle',
-    'streamingEnabled',
-    'defaultPersonaId',
-    'defaultModelId',
-    'defaultModelServerId',
-    'mcpEnabled',
-    'newChatMcpEnabled',
-    'codeThemeDark',
-    'codeThemeLight',
-    'preferredBackend',
-    'ttsEngine',
-    'ttsVoiceId',
-    'ttsSpeed',
-    'kittenTtsModelVariant',
-    'autoSpeakEnabled',
-    'conciseVoiceResponsesEnabled',
-    'ttsProcessMarkdown',
-    'ttsSkipSeconds',
-    'smartReplyEnabled',
-    'aiUserResponseEnabled',
-    'localeCode',
-    'unloadModelsBeforeLoad',
-    'tempChatKeyboardIncognito',
-    'resumeLastChat',
-    'imageCompressionEnabled',
-    'imageCompressionLevel',
-    'smartRepliesUsePersona',
-    'keepPersonaOnNewChat',
-    'roleSwapButtonEnabled',
-    'showSystemMessagesInChat',
+  static const _rejectedSettingKeys = {
+    'huggingFaceToken',
+    'webSearchApiKey',
   };
 
   static void _validatePayload(Map<String, dynamic> payload) {
     if (payload['version'] != 1 ||
         payload['type'] != 'cloudSync' ||
         payload['settings'] is! Map ||
-        !(payload['settings'] as Map).keys.every(
-          (key) => key is String && _settingKeys.contains(key),
+        !(payload['settings'] as Map).entries.every(
+          (entry) =>
+              entry.key is String &&
+              !_rejectedSettingKeys.contains(entry.key),
         )) {
+      // Unknown setting keys are tolerated: older snapshots may contain keys
+      // that were removed from the synchronized set (for example the
+      // screen-memory device settings). AppSettings.fromMap ignores them;
+      // secret keys are still rejected.
       throw const FormatException('Invalid cloud sync payload');
     }
     for (final collection in _collections) {
@@ -359,4 +348,28 @@ class CloudSyncRemoteState {
 
   final List<int> bytes;
   final String? etag;
+}
+
+
+/// The single-device sync lease (Drive): the holder owns writes until the
+/// heartbeat goes stale.
+class CloudSyncLease {
+  const CloudSyncLease({required this.deviceId, required this.heartbeatAt});
+
+  final String deviceId;
+
+  final DateTime heartbeatAt;
+
+  factory CloudSyncLease.fromJson(Map<String, dynamic> json) => CloudSyncLease(
+        deviceId: json['deviceId'] as String? ?? '',
+        heartbeatAt: DateTime.tryParse(
+              json['heartbeatAt'] as String? ?? '',
+            )?.toUtc() ??
+            DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      );
+
+  String encode() => jsonEncode({
+        'deviceId': deviceId,
+        'heartbeatAt': heartbeatAt.toUtc().toIso8601String(),
+      });
 }

@@ -39,6 +39,7 @@ import 'features/skills/data/skills_store.dart';
 import 'features/background/views/background_tasks_page.dart';
 import 'features/skills/views/skill_editor_screen.dart';
 import 'features/skills/views/skills_screen.dart';
+import 'features/memories/views/memories_screen.dart';
 import 'features/cloud_sync/views/cloud_sync_screen.dart';
 import 'features/lm_studio_catalog/views/lm_studio_model_browser_screen.dart';
 import 'features/sidebar/sidebar_drawer.dart';
@@ -181,6 +182,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             pageBuilder: (context, state) => const NoTransitionPage(
               child: ShellBackScope(child: McpToolsScreen()),
             ),
+          ),
+          GoRoute(
+            path: AppRoutes.memories,
+            builder: (context, state) => const MemoriesScreen(),
           ),
           GoRoute(
             path: AppRoutes.skills,

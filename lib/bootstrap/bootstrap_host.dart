@@ -12,6 +12,7 @@ import '../core/providers/app_providers.dart';
 import '../core/providers/highlighter_provider.dart';
 import '../core/providers/storage_providers.dart';
 import '../core/storage/objectbox_store.dart';
+import '../core/widgets/screen_memory_lifecycle_host.dart';
 import '../features/on_device/data/on_device_gemma_service.dart';
 import '../features/on_device/providers/on_device_providers.dart';
 import '../core/models/enums.dart';
@@ -254,7 +255,9 @@ class _BootstrapHostState extends State<BootstrapHost> {
         container: _container!,
         child: SafeRiverpodScopeHost(
           container: _container!,
-          child: const CloudSyncLifecycleHost(child: App()),
+          child: const ScreenMemoryLifecycleHost(
+            child: CloudSyncLifecycleHost(child: App()),
+          ),
         ),
       );
     }

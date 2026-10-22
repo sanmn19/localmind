@@ -1,0 +1,310 @@
+import 'dart:typed_data';
+
+import '../../../core/storage/entities.dart';
+import '../../../objectbox.g.dart';
+import 'models/memory.dart';
+
+/// Persistence seam for the memory graph. Unit tests use
+/// [InMemoryMemoryStore]; the app uses [ObjectBoxMemoryStore].
+abstract class MemoryStore {
+  List<Memory> list();
+
+  List<MemoryRelation> listRelations();
+
+  List<MemoryEmbedding> listEmbeddings();
+
+  void put(Memory memory);
+
+  void putRelation(MemoryRelation relation);
+
+  void putEmbedding(MemoryEmbedding embedding);
+
+  void delete(String memoryId);
+
+  void deleteRelationsTouching(String memoryId);
+
+  void deleteRelation(String relationId);
+
+  /// One-time repair: removes duplicate rows sharing a domain id (keeps the
+  /// newest internalId), e.g. rows duplicated before the upsert fix.
+  void dedupeById();
+}
+
+class ObjectBoxMemoryStore implements MemoryStore {
+  ObjectBoxMemoryStore({
+    required this.memories,
+    required this.relations,
+    required this.embeddings,
+  });
+
+  final Box<MemoryEntity> memories;
+  final Box<MemoryRelationEntity> relations;
+  final Box<MemoryEmbeddingEntity> embeddings;
+
+  @override
+  List<Memory> list() =>
+      memories.getAll().map(_toDomain).toList();
+
+  @override
+  List<MemoryRelation> listRelations() =>
+      relations.getAll().map(_relationToDomain).toList();
+
+  @override
+  List<MemoryEmbedding> listEmbeddings() => embeddings
+      .getAll()
+      .map(
+        (entity) => MemoryEmbedding(
+          memoryId: entity.memoryId,
+          modelId: entity.modelId,
+          vector: List<double>.from(entity.vector),
+          createdAt: entity.createdAt,
+        ),
+      )
+      .toList();
+
+  @override
+  void putEmbedding(MemoryEmbedding embedding) {
+    // One vector per (memory, model): replace rather than append.
+    final query = embeddings
+        .query(
+          MemoryEmbeddingEntity_.memoryId
+              .equals(embedding.memoryId)
+              .and(
+                MemoryEmbeddingEntity_.modelId.equals(embedding.modelId),
+              ),
+        )
+        .build();
+    try {
+      embeddings.removeMany(query.findIds());
+    } finally {
+      query.close();
+    }
+    embeddings.put(
+      MemoryEmbeddingEntity(
+        memoryId: embedding.memoryId,
+        modelId: embedding.modelId,
+        dims: embedding.vector.length,
+        vector: Float32List.fromList(embedding.vector),
+        createdAt: embedding.createdAt,
+      ),
+    );
+  }
+
+  @override
+  void put(Memory memory) {
+    // Upsert by the domain id: imports run on every cloud sync, so a blind
+    // put (internalId = 0) would duplicate every memory on every sync.
+    final entity = _toEntity(memory);
+    final query = memories
+        .query(MemoryEntity_.id.equals(memory.id))
+        .build();
+    try {
+      final existing = query.findFirst();
+      if (existing != null) entity.internalId = existing.internalId;
+    } finally {
+      query.close();
+    }
+    memories.put(entity);
+  }
+
+  @override
+  void putRelation(MemoryRelation relation) {
+    final entity = _relationToEntity(relation);
+    final query = relations
+        .query(MemoryRelationEntity_.id.equals(relation.id))
+        .build();
+    try {
+      final existing = query.findFirst();
+      if (existing != null) entity.internalId = existing.internalId;
+    } finally {
+      query.close();
+    }
+    relations.put(entity);
+  }
+
+  @override
+  void delete(String memoryId) {
+    final query = memories
+        .query(MemoryEntity_.id.equals(memoryId))
+        .build();
+    try {
+      memories.removeMany(query.findIds());
+    } finally {
+      query.close();
+    }
+  }
+
+  @override
+  void deleteRelationsTouching(String memoryId) {
+    final query = relations
+        .query(
+          MemoryRelationEntity_.fromMemoryId
+              .equals(memoryId)
+              .or(MemoryRelationEntity_.toMemoryId.equals(memoryId)),
+        )
+        .build();
+    try {
+      relations.removeMany(query.findIds());
+    } finally {
+      query.close();
+    }
+  }
+
+  @override
+  void deleteRelation(String relationId) {
+    final query = relations
+        .query(MemoryRelationEntity_.id.equals(relationId))
+        .build();
+    try {
+      relations.removeMany(query.findIds());
+    } finally {
+      query.close();
+    }
+  }
+
+  @override
+  void dedupeById() {
+    final seen = <String>{};
+    final duplicates = <int>[];
+    for (final entity in memories.getAll()) {
+      if (!seen.add(entity.id)) duplicates.add(entity.internalId);
+    }
+    if (duplicates.isNotEmpty) memories.removeMany(duplicates);
+    final seenRelations = <String>{};
+    final duplicateRelations = <int>[];
+    for (final entity in relations.getAll()) {
+      if (!seenRelations.add(entity.id)) {
+        duplicateRelations.add(entity.internalId);
+      }
+    }
+    if (duplicateRelations.isNotEmpty) {
+      relations.removeMany(duplicateRelations);
+    }
+  }
+
+  Memory _toDomain(MemoryEntity entity) => Memory(
+        id: entity.id,
+        kind: MemoryKind.values[entity.kindIndex.clamp(0, MemoryKind.values.length - 1)],
+        title: entity.title,
+        content: entity.content,
+        importance: entity.importance,
+        createdAt: entity.createdAt,
+        updatedAt: entity.updatedAt,
+        lastUsedAt: entity.lastUsedAt,
+        useCount: entity.useCount,
+        scopeConversationId: entity.scopeConversationId,
+        sourceConversationId: entity.sourceConversationId,
+        sourceMessageId: entity.sourceMessageId,
+        supersededById: entity.supersededById,
+        archived: entity.archived,
+        tags: List<String>.from(entity.tags),
+        shortSummary: entity.shortSummary,
+        expiresAt: entity.expiresAt,
+        sourceApp: entity.sourceApp,
+      );
+
+  MemoryEntity _toEntity(Memory memory) => MemoryEntity(
+        id: memory.id,
+        kindIndex: memory.kind.index,
+        title: memory.title,
+        content: memory.content,
+        importance: memory.importance,
+        createdAt: memory.createdAt,
+        updatedAt: memory.updatedAt,
+        lastUsedAt: memory.lastUsedAt,
+        useCount: memory.useCount,
+        scopeConversationId: memory.scopeConversationId,
+        sourceConversationId: memory.sourceConversationId,
+        sourceMessageId: memory.sourceMessageId,
+        supersededById: memory.supersededById,
+        archived: memory.archived,
+        tags: memory.tags,
+        shortSummary: memory.shortSummary,
+        expiresAt: memory.expiresAt,
+        sourceApp: memory.sourceApp,
+      );
+
+  MemoryRelation _relationToDomain(MemoryRelationEntity entity) =>
+      MemoryRelation(
+        id: entity.id,
+        fromMemoryId: entity.fromMemoryId,
+        toMemoryId: entity.toMemoryId,
+        label: entity.label,
+        createdAt: entity.createdAt,
+      );
+
+  MemoryRelationEntity _relationToEntity(MemoryRelation relation) =>
+      MemoryRelationEntity(
+        id: relation.id,
+        fromMemoryId: relation.fromMemoryId,
+        toMemoryId: relation.toMemoryId,
+        label: relation.label,
+        createdAt: relation.createdAt,
+      );
+}
+
+class InMemoryMemoryStore implements MemoryStore {
+  final List<Memory> _memories = [];
+  final List<MemoryRelation> _relations = [];
+  final List<MemoryEmbedding> _embeddings = [];
+
+  @override
+  List<Memory> list() => List<Memory>.from(_memories);
+
+  @override
+  List<MemoryRelation> listRelations() =>
+      List<MemoryRelation>.from(_relations);
+
+  @override
+  void put(Memory memory) {
+    final index = _memories.indexWhere((m) => m.id == memory.id);
+    if (index >= 0) {
+      _memories[index] = memory;
+    } else {
+      _memories.add(memory);
+    }
+  }
+
+  @override
+  void putRelation(MemoryRelation relation) {
+    final index = _relations.indexWhere((r) => r.id == relation.id);
+    if (index >= 0) {
+      _relations[index] = relation;
+    } else {
+      _relations.add(relation);
+    }
+  }
+
+  @override
+  List<MemoryEmbedding> listEmbeddings() =>
+      List<MemoryEmbedding>.from(_embeddings);
+
+  @override
+  void putEmbedding(MemoryEmbedding embedding) {
+    _embeddings.removeWhere(
+      (e) => e.memoryId == embedding.memoryId && e.modelId == embedding.modelId,
+    );
+    _embeddings.add(embedding);
+  }
+
+  @override
+  void delete(String memoryId) =>
+      _memories.removeWhere((m) => m.id == memoryId);
+
+  @override
+  void deleteRelationsTouching(String memoryId) => _relations.removeWhere(
+        (r) => r.fromMemoryId == memoryId || r.toMemoryId == memoryId,
+      );
+
+  @override
+  void deleteRelation(String relationId) =>
+      _relations.removeWhere((r) => r.id == relationId);
+
+  @override
+  void dedupeById() {
+    final seen = <String>{};
+    _memories.removeWhere((memory) => !seen.add(memory.id));
+    final seenRelations = <String>{};
+    _relations.removeWhere((relation) => !seenRelations.add(relation.id));
+  }
+}

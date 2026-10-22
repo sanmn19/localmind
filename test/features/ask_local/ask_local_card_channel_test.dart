@@ -69,9 +69,9 @@ void main() {
       'closed pushes call the reap callback; malformed pushes dropped',
       () async {
     final channel = AskLocalCardChannel();
-    final updates = <AskLocalCardDelivery>[];
+    final updates = <(AskLocalCardDelivery, bool)>[];
     var reaps = 0;
-    channel.manage(updates.add, () => reaps++);
+    channel.manage((delivery, force) => updates.add((delivery, force)), () => reaps++);
 
     Future<void> push(String method, Object? args) async {
       await messenger.handlePlatformMessage(
@@ -93,7 +93,8 @@ void main() {
 
     await Future<void>.delayed(Duration.zero);
     expect(updates, hasLength(1));
-    expect(updates.single.payload.selectedText, 'fresh pick');
+    expect(updates.single.$1.payload.selectedText, 'fresh pick');
+    expect(updates.single.$2, isFalse);
     expect(reaps, 1);
   });
 

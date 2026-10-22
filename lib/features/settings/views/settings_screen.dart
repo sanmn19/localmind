@@ -15,6 +15,7 @@ import '../../../core/routes/app_routes.dart';
 import '../../../core/services/android_assistant_service.dart';
 import '../../../core/services/app_haptics.dart';
 import '../../../core/services/crash_report_service.dart';
+import '../../../core/services/device_tools_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/system_insets.dart';
 import '../../chat/providers/chat_providers.dart';
@@ -28,6 +29,7 @@ import '../../models/utils/default_model_pick.dart';
 import '../../models/views/rig_load_dialog.dart';
 import '../../on_device/providers/on_device_providers.dart';
 import '../../personas/providers/personas_providers.dart';
+import '../../servers/data/models/server.dart';
 import '../../servers/providers/server_providers.dart';
 import '../data/models/app_settings.dart';
 import 'data_backup_actions.dart';
@@ -161,6 +163,53 @@ class _SettingsViewsState extends ConsumerState<SettingsViews> {
           label: l10n.skills_name,
           onPressed: () => context.push(AppRoutes.skills),
         ),
+        _SectionActionButton(
+          icon: HugeIcons.strokeRoundedBrain01,
+          label: l10n.memories_title,
+          onPressed: () => context.push(AppRoutes.memories),
+        ),
+        _ToggleSetting(
+          label: l10n.memories_enabled,
+          description: l10n.memories_enabled_desc,
+          value: settings.memoriesEnabled,
+          onChanged: notifier.setMemoriesEnabled,
+        ),
+        _ToggleSetting(
+          label: l10n.auto_memory_enabled,
+          description: l10n.auto_memory_enabled_desc,
+          value: settings.autoMemoryEnabled,
+          onChanged: notifier.setAutoMemoryEnabled,
+        ),
+      ],
+    );
+
+    final screenMemories = _SettingsSectionCard(
+      title: l10n.screen_memories_title,
+      footer: l10n.screen_memories_footer,
+      children: [
+        _ToggleSetting(
+          label: l10n.screen_memories_enabled,
+          description: l10n.screen_memories_enabled_desc,
+          value: settings.screenMemoryEnabled,
+          onChanged: notifier.setScreenMemoryEnabled,
+        ),
+        if (assistantService.isSupportedPlatform)
+          const _ScreenCaptureServiceSetting(),
+        if (settings.screenMemoryEnabled) ...[
+          // Sampling is event-driven; the native reader debounces accessibility
+          // events, so there is no polling interval for the user to tune.
+          _ScreenIntervalSetting(
+            label: l10n.screen_memories_batch_interval,
+            value: settings.screenMemoryBatchIntervalSeconds,
+            options: const [(60, '1 min'), (120, '2 min'), (300, '5 min')],
+            onChanged: notifier.setScreenMemoryBatchInterval,
+          ),
+          _ScreenBlockedAppsSetting(
+            blocked: settings.screenMemoryBlockedApps,
+            onChanged: notifier.setScreenMemoryBlockedApps,
+          ),
+          const _ScreenMemoryModelSetting(),
+        ],
       ],
     );
 
@@ -497,6 +546,7 @@ class _SettingsViewsState extends ConsumerState<SettingsViews> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       general,
+                      screenMemories,
                       chat,
                       voice,
                       ?assistant,
@@ -946,6 +996,151 @@ class _AndroidAssistantSettingState
   }
 }
 
+class _ScreenCaptureServiceSetting extends ConsumerStatefulWidget
+    implements _Searchable {
+  const _ScreenCaptureServiceSetting();
+
+  @override
+  List<String> searchTerms(AppLocalizations l10n) => [
+    l10n.screen_memories_service,
+    l10n.screen_memories_service_desc,
+  ];
+
+  @override
+  ConsumerState<_ScreenCaptureServiceSetting> createState() =>
+      _ScreenCaptureServiceSettingState();
+}
+
+class _ScreenCaptureServiceSettingState
+    extends ConsumerState<_ScreenCaptureServiceSetting>
+    with WidgetsBindingObserver {
+  bool? _enabled;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _refreshStatus();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshStatus();
+    }
+  }
+
+  Future<void> _refreshStatus() async {
+    try {
+      final enabled = await ref
+          .read(androidAssistantServiceProvider)
+          .isScreenCaptureEnabled();
+      if (mounted) setState(() => _enabled = enabled);
+    } on PlatformException {
+      if (mounted) setState(() => _enabled = false);
+    } on MissingPluginException {
+      if (mounted) setState(() => _enabled = false);
+    }
+  }
+
+  Future<void> _openSettings() async {
+    if (_busy) return;
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(androidAssistantServiceProvider)
+          .openScreenCaptureSettings();
+    } on PlatformException {
+      messenger?.showSnackBar(
+        SnackBar(content: Text(l10n.screen_memories_service_error)),
+      );
+    } on MissingPluginException {
+      messenger?.showSnackBar(
+        SnackBar(content: Text(l10n.screen_memories_service_error)),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+    if (!mounted) return;
+    await _refreshStatus();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final enabled = _enabled;
+    final statusLabel = switch (enabled) {
+      true => l10n.screen_memories_service_enabled,
+      false => l10n.screen_memories_service_disabled,
+      null => l10n.screen_memories_service_checking,
+    };
+    final statusColor = enabled == true
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurfaceVariant;
+
+    return _SettingPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _RowLabel(
+                  label: l10n.screen_memories_service,
+                  description: l10n.screen_memories_service_desc,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.09),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  statusLabel,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: statusColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ShadButton.outline(
+            onPressed: _busy ? null : _openSettings,
+            width: double.infinity,
+            leading: _busy
+                ? const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const HugeIcon(
+                    icon: HugeIcons.strokeRoundedSettings01,
+                    size: 16,
+                  ),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(l10n.screen_memories_service_open_settings),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 abstract interface class _Searchable {
   List<String> searchTerms(AppLocalizations l10n);
 }
@@ -1349,6 +1544,376 @@ class _ToggleSetting extends StatelessWidget implements _Searchable {
               Switch.adaptive(value: value, onChanged: onChanged),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A fixed-choice cadence row for screen sampling or batching.
+class _ScreenIntervalSetting extends StatelessWidget implements _Searchable {
+  const _ScreenIntervalSetting({
+    required this.label,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+
+  final String label;
+  final int value;
+  final List<(int value, String text)> options;
+  final ValueChanged<int> onChanged;
+
+  @override
+  List<String> searchTerms(AppLocalizations l10n) => [label];
+
+  @override
+  Widget build(BuildContext context) {
+    final items = [...options];
+    // A stored value outside the offered choices must still render instead of
+    // tripping the dropdown's value check.
+    if (!items.any((option) => option.$1 == value)) {
+      items.add((value, '$value'));
+    }
+    return _InlineDropdown<int>(
+      label: label,
+      value: value,
+      onChanged: (next) {
+        if (next != null) onChanged(next);
+      },
+      items: [for (final item in items) (item.$1, item.$2, null)],
+    );
+  }
+}
+
+/// Opens a comma-separated package list dialog; blocked packages (and their
+/// subpackages) are never sampled.
+class _ScreenBlockedAppsSetting extends StatelessWidget implements _Searchable {
+  const _ScreenBlockedAppsSetting({
+    required this.blocked,
+    required this.onChanged,
+  });
+
+  final List<String> blocked;
+  final ValueChanged<List<String>> onChanged;
+
+  @override
+  List<String> searchTerms(AppLocalizations l10n) => [
+    l10n.screen_memories_blocked_apps,
+    l10n.screen_memories_blocked_apps_desc(blocked.length),
+  ];
+
+  Future<void> _edit(BuildContext context) async {
+    final result = await showDialog<List<String>>(
+      context: context,
+      builder: (_) => _BlockedAppsPickerDialog(initial: blocked),
+    );
+    if (result == null) return;
+    onChanged(result);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return InkWell(
+      onTap: () => _edit(context),
+      child: _SettingPanel(
+        child: Row(
+          children: [
+            HugeIcon(
+              icon: HugeIcons.strokeRoundedShield01,
+              size: 20,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _RowLabel(
+                label: l10n.screen_memories_blocked_apps,
+                description: l10n.screen_memories_blocked_apps_desc(
+                  blocked.length,
+                ),
+              ),
+            ),
+            HugeIcon(
+              icon: HugeIcons.strokeRoundedArrowRight01,
+              size: 16,
+              color: _mutedColor(context),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Installed-app picker for the screen-memory blocklist. Current entries that
+/// are no longer installed stay visible so the user can uncheck them.
+class _BlockedAppsPickerDialog extends StatefulWidget {
+  const _BlockedAppsPickerDialog({required this.initial});
+
+  final List<String> initial;
+
+  @override
+  State<_BlockedAppsPickerDialog> createState() =>
+      _BlockedAppsPickerDialogState();
+}
+
+class _BlockedAppsPickerDialogState extends State<_BlockedAppsPickerDialog> {
+  final _search = TextEditingController();
+  final _selected = <String>{};
+  List<DeviceAppEntry> _apps = const [];
+  bool _loading = true;
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _selected.addAll(widget.initial);
+    _load();
+  }
+
+  Future<void> _load() async {
+    List<DeviceAppEntry> apps;
+    try {
+      apps = await const MethodChannelDeviceAppLauncher().listInstalled();
+    } on Exception {
+      apps = const [];
+    }
+    if (!mounted) return;
+    final known = {for (final app in apps) app.package};
+    final missing = widget.initial
+        .where((package) => !known.contains(package))
+        .map((package) => DeviceAppEntry(label: package, package: package));
+    setState(() {
+      _apps = [...apps, ...missing]
+        ..sort((a, b) => a.label.toLowerCase().compareTo(b.label.toLowerCase()));
+      _loading = false;
+    });
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final query = _query.trim().toLowerCase();
+    final rows = query.isEmpty
+        ? _apps
+        : _apps
+              .where(
+                (app) =>
+                    app.label.toLowerCase().contains(query) ||
+                    app.package.toLowerCase().contains(query),
+              )
+              .toList();
+    final installed = {for (final app in _apps) app.package};
+    return AlertDialog(
+      title: Text(l10n.screen_memories_blocked_apps),
+      content: SizedBox(
+        width: double.maxFinite,
+        height: 480,
+        child: Column(
+          children: [
+            TextField(
+              controller: _search,
+              onChanged: (value) => setState(() => _query = value),
+              decoration: InputDecoration(
+                prefixIcon: const HugeIcon(
+                  icon: HugeIcons.strokeRoundedSearch01,
+                ),
+                hintText: l10n.screen_memories_blocked_apps_search,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : rows.isEmpty
+                  ? Center(child: Text(l10n.screen_memories_blocked_apps_empty))
+                  : ListView.builder(
+                      itemCount: rows.length,
+                      itemBuilder: (context, index) {
+                        final app = rows[index];
+                        final selected = _selected.contains(app.package);
+                        final isInstalled = installed.contains(app.package);
+                        return CheckboxListTile(
+                          key: ValueKey('blocked_app_${app.package}'),
+                          value: selected,
+                          onChanged: (value) {
+                            setState(() {
+                              if (value == true) {
+                                _selected.add(app.package);
+                              } else {
+                                _selected.remove(app.package);
+                              }
+                            });
+                          },
+                          title: Text(app.label),
+                          subtitle: Text(
+                            isInstalled
+                                ? app.package
+                                : l10n.screen_memories_blocked_apps_not_installed,
+                          ),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.cancel),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(_selected.toList()),
+          child: Text(l10n.save),
+        ),
+      ],
+    );
+  }
+}
+
+/// Chooses the server/model that turns screen samples into memories. The
+/// default follows the active chat model; a dedicated choice lets the user point
+/// screen processing at a provider that is actually serving the model.
+class _ScreenMemoryModelSetting extends ConsumerWidget implements _Searchable {
+  const _ScreenMemoryModelSetting();
+
+  @override
+  List<String> searchTerms(AppLocalizations l10n) => [
+    l10n.screen_memories_processing_model,
+    l10n.screen_memories_processing_model_desc,
+  ];
+
+  Future<void> _pick(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context)!;
+    final servers = ref.read(serversProvider).value ?? const <Server>[];
+    final server = await showDialog<Server>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: Text(l10n.screen_memories_processing_model),
+        children: [
+          for (final server in servers)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(dialogContext).pop(server),
+              child: Text(server.name),
+            ),
+        ],
+      ),
+    );
+    if (server == null || !context.mounted) return;
+    final model = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(server.name),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 360,
+          child: Consumer(
+            builder: (context, ref, _) {
+              final models = ref.watch(availableModelsProvider(server.id));
+              return models.when(
+                loading: () => const Center(
+                  child: CircularProgressIndicator(),
+                ),
+                error: (error, _) => Center(
+                  child: Text(l10n.screen_memories_processing_model_empty),
+                ),
+                data: (items) => items.isEmpty
+                    ? Center(
+                        child: Text(
+                          l10n.screen_memories_processing_model_empty,
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: items.length,
+                        itemBuilder: (context, index) {
+                          final item = items[index];
+                          return ListTile(
+                            title: Text(item.id),
+                            onTap: () =>
+                                Navigator.of(dialogContext).pop(item.id),
+                          );
+                        },
+                      ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(l10n.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(''),
+            child: Text(l10n.screen_memories_processing_model_reset),
+          ),
+        ],
+      ),
+    );
+    if (model == null || !context.mounted) return;
+    final notifier = ref.read(settingsProvider.notifier);
+    if (model.isEmpty) {
+      notifier.setScreenMemoryModel();
+    } else {
+      notifier.setScreenMemoryModel(serverId: server.id, modelId: model);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final settings = ref.watch(settingsProvider);
+    final servers = ref.watch(serversProvider).value ?? const <Server>[];
+    Server? selected;
+    if (settings.screenMemoryServerId != null) {
+      for (final server in servers) {
+        if (server.id == settings.screenMemoryServerId) selected = server;
+      }
+    }
+    final value = selected == null || settings.screenMemoryModelId == null
+        ? l10n.screen_memories_processing_model_chat
+        : '${selected.name} · ${settings.screenMemoryModelId}';
+    return InkWell(
+      onTap: () => _pick(context, ref),
+      child: _SettingPanel(
+        child: Row(
+          children: [
+            HugeIcon(
+              icon: HugeIcons.strokeRoundedAiNetwork,
+              size: 20,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _RowLabel(
+                label: l10n.screen_memories_processing_model,
+                description: l10n.screen_memories_processing_model_desc,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                value,
+                textAlign: TextAlign.right,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+            HugeIcon(
+              icon: HugeIcons.strokeRoundedArrowRight01,
+              size: 16,
+              color: _mutedColor(context),
+            ),
+          ],
         ),
       ),
     );

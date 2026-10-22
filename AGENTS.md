@@ -18,6 +18,13 @@ Use FVM so development matches `.fvmrc` (Flutter 3.44.2):
 - `fvm flutter gen-l10n` regenerates localization output.
 - `fvm dart run build_runner build --delete-conflicting-outputs` refreshes ObjectBox output after entity changes.
 
+Verify UI and flow changes on the local Android emulator first, using
+`.agents/skills/android-emulator-testing/SKILL.md` (AVD `localmind-test`): build,
+`emulator.sh install`, `launch`, screenshot, tap, read logcat, repeat. Taildrop
+to the phone only after the emulator pass is clean, or when the change needs
+something the emulator cannot provide (Google OAuth, notifications, real sensors,
+performance, final acceptance).
+
 ## Architecture, Style & UI Libraries
 
 Follow `.agents/skills/flutter-feature-based-architecture/SKILL.md` for every feature or refactor. A feature may import itself and `core/`, never a sibling feature. Keep views thin; place business rules, async work, persistence, and mutations in Riverpod notifiers or repositories. Extract UI sections into named `StatelessWidget` classes under `views/components/`, not private `_build...` helpers. Keep models and providers handwritten; ObjectBox is the existing generation exception.

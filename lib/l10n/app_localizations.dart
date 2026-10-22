@@ -6962,6 +6962,456 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'A reply is streaming and will be stopped.'**
   String get model_load_confirm_streaming;
+
+  /// Cloud Sync screen: provider selector label
+  ///
+  /// In en, this message translates to:
+  /// **'Backup destination'**
+  String get cloud_sync_provider;
+
+  /// Cloud Sync screen: S3 provider option
+  ///
+  /// In en, this message translates to:
+  /// **'S3-compatible'**
+  String get cloud_sync_provider_s3;
+
+  /// Cloud Sync screen: Google Drive provider option
+  ///
+  /// In en, this message translates to:
+  /// **'Google Drive'**
+  String get cloud_sync_provider_google_drive;
+
+  /// Cloud Sync screen: Google OAuth connect button
+  ///
+  /// In en, this message translates to:
+  /// **'Connect Google Drive'**
+  String get cloud_sync_connect_google;
+
+  /// Cloud Sync screen: connected Google account
+  ///
+  /// In en, this message translates to:
+  /// **'Connected as {email}'**
+  String cloud_sync_connected_as(String email);
+
+  /// Cloud Sync screen: force a backup rotation and upload
+  ///
+  /// In en, this message translates to:
+  /// **'Back up now'**
+  String get cloud_sync_backup_now;
+
+  /// Drawer/settings row and screen title
+  ///
+  /// In en, this message translates to:
+  /// **'Memories'**
+  String get memories_title;
+
+  /// Settings toggle for the memories feature
+  ///
+  /// In en, this message translates to:
+  /// **'Remember facts'**
+  String get memories_enabled;
+
+  /// Settings toggle description
+  ///
+  /// In en, this message translates to:
+  /// **'Facts you ask LocalMind to remember are injected as context, never as instructions.'**
+  String get memories_enabled_desc;
+
+  /// No description provided for @auto_memory_enabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-remember'**
+  String get auto_memory_enabled;
+
+  /// No description provided for @auto_memory_enabled_desc.
+  ///
+  /// In en, this message translates to:
+  /// **'After each reply, a hidden prompt asks the model whether anything in the conversation is worth remembering. Facts are saved silently; only explicit memory writes ask for approval.'**
+  String get auto_memory_enabled_desc;
+
+  /// Settings card title for screen sampling
+  ///
+  /// In en, this message translates to:
+  /// **'Screen memories'**
+  String get screen_memories_title;
+
+  /// Settings toggle: sample other apps' visible text
+  ///
+  /// In en, this message translates to:
+  /// **'Watch my screen'**
+  String get screen_memories_enabled;
+
+  /// Settings toggle description for screen sampling
+  ///
+  /// In en, this message translates to:
+  /// **'Reads the visible text of the app you are using and turns durable details into inferred memories. Only changed screens are stored, and samples stay on this device.'**
+  String get screen_memories_enabled_desc;
+
+  /// Screen memories: batch cadence setting
+  ///
+  /// In en, this message translates to:
+  /// **'Summarize every'**
+  String get screen_memories_batch_interval;
+
+  /// Screen memories: blocked package list row and dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Blocked apps'**
+  String get screen_memories_blocked_apps;
+
+  /// Screen memories: blocked package count
+  ///
+  /// In en, this message translates to:
+  /// **'{count} packages are never sampled'**
+  String screen_memories_blocked_apps_desc(int count);
+
+  /// Screen memories: blocked apps text field hint
+  ///
+  /// In en, this message translates to:
+  /// **'Package names, separated by commas'**
+  String get screen_memories_blocked_apps_hint;
+
+  /// No description provided for @screen_memories_blocked_apps_search.
+  ///
+  /// In en, this message translates to:
+  /// **'Search installed apps'**
+  String get screen_memories_blocked_apps_search;
+
+  /// No description provided for @screen_memories_blocked_apps_empty.
+  ///
+  /// In en, this message translates to:
+  /// **'No apps found'**
+  String get screen_memories_blocked_apps_empty;
+
+  /// No description provided for @screen_memories_blocked_apps_not_installed.
+  ///
+  /// In en, this message translates to:
+  /// **'Not installed'**
+  String get screen_memories_blocked_apps_not_installed;
+
+  /// No description provided for @screen_memories_processing_model.
+  ///
+  /// In en, this message translates to:
+  /// **'Processing model'**
+  String get screen_memories_processing_model;
+
+  /// No description provided for @screen_memories_processing_model_desc.
+  ///
+  /// In en, this message translates to:
+  /// **'Server and model used to turn screen samples into memories.'**
+  String get screen_memories_processing_model_desc;
+
+  /// No description provided for @screen_memories_processing_model_chat.
+  ///
+  /// In en, this message translates to:
+  /// **'Same as chat'**
+  String get screen_memories_processing_model_chat;
+
+  /// No description provided for @screen_memories_processing_model_empty.
+  ///
+  /// In en, this message translates to:
+  /// **'No models found on this server'**
+  String get screen_memories_processing_model_empty;
+
+  /// No description provided for @screen_memories_processing_model_reset.
+  ///
+  /// In en, this message translates to:
+  /// **'Use chat model'**
+  String get screen_memories_processing_model_reset;
+
+  /// Screen memories card footer
+  ///
+  /// In en, this message translates to:
+  /// **'Samples are pruned at the next batch or app open after 24 hours, and whenever you turn Screen memories off. They are never exported. Screen text is sent only to the model server you selected.'**
+  String get screen_memories_footer;
+
+  /// Screen memories: accessibility service status row
+  ///
+  /// In en, this message translates to:
+  /// **'Screen capture service'**
+  String get screen_memories_service;
+
+  /// Screen memories: accessibility service explanation
+  ///
+  /// In en, this message translates to:
+  /// **'LocalMind needs the accessibility service to read on-screen text.'**
+  String get screen_memories_service_desc;
+
+  /// Screen memories: accessibility service is on
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled'**
+  String get screen_memories_service_enabled;
+
+  /// Screen memories: accessibility service is off
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get screen_memories_service_disabled;
+
+  /// Screen memories: accessibility service status is loading
+  ///
+  /// In en, this message translates to:
+  /// **'Checking…'**
+  String get screen_memories_service_checking;
+
+  /// Screen memories: open Android accessibility settings button
+  ///
+  /// In en, this message translates to:
+  /// **'Open accessibility settings'**
+  String get screen_memories_service_open_settings;
+
+  /// No description provided for @screen_memory_status_title.
+  ///
+  /// In en, this message translates to:
+  /// **'Screen memories'**
+  String get screen_memory_status_title;
+
+  /// Unprocessed screen samples
+  ///
+  /// In en, this message translates to:
+  /// **'{count} waiting'**
+  String screen_memory_status_pending(int count);
+
+  /// No description provided for @screen_memory_status_processing.
+  ///
+  /// In en, this message translates to:
+  /// **'Processing screen samples…'**
+  String get screen_memory_status_processing;
+
+  /// Last screen batch result
+  ///
+  /// In en, this message translates to:
+  /// **'Last batch: {count} memories · {when}'**
+  String screen_memory_status_last(int count, String when);
+
+  /// Last screen batch error
+  ///
+  /// In en, this message translates to:
+  /// **'Last batch failed: {error}'**
+  String screen_memory_status_error(String error);
+
+  /// No description provided for @screen_memory_status_process_now.
+  ///
+  /// In en, this message translates to:
+  /// **'Process now'**
+  String get screen_memory_status_process_now;
+
+  /// No description provided for @screen_memory_status_no_model.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a model to process samples'**
+  String get screen_memory_status_no_model;
+
+  /// No description provided for @screen_memory_status_off.
+  ///
+  /// In en, this message translates to:
+  /// **'Screen memories are off'**
+  String get screen_memory_status_off;
+
+  /// No description provided for @screen_memory_status_backoff.
+  ///
+  /// In en, this message translates to:
+  /// **'Retrying after an error'**
+  String get screen_memory_status_backoff;
+
+  /// No description provided for @screen_memory_status_cap.
+  ///
+  /// In en, this message translates to:
+  /// **'Hourly limit reached'**
+  String get screen_memory_status_cap;
+
+  /// Screen memories: accessibility settings open failure
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open accessibility settings.'**
+  String get screen_memories_service_error;
+
+  /// Memories screen: add button/dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Add memory'**
+  String get memory_add;
+
+  /// Memories screen: edit sheet title
+  ///
+  /// In en, this message translates to:
+  /// **'Edit memory'**
+  String get memory_edit;
+
+  /// Memories screen: delete action
+  ///
+  /// In en, this message translates to:
+  /// **'Delete memory'**
+  String get memory_delete;
+
+  /// Memories screen: archive action
+  ///
+  /// In en, this message translates to:
+  /// **'Archive memory'**
+  String get memory_archive;
+
+  /// Memories screen: kind field label
+  ///
+  /// In en, this message translates to:
+  /// **'Kind'**
+  String get memory_kind;
+
+  /// Memory kind: fact
+  ///
+  /// In en, this message translates to:
+  /// **'Fact'**
+  String get memory_kind_fact;
+
+  /// Memory kind: preference
+  ///
+  /// In en, this message translates to:
+  /// **'Preference'**
+  String get memory_kind_preference;
+
+  /// Memory kind: entity
+  ///
+  /// In en, this message translates to:
+  /// **'Entity'**
+  String get memory_kind_entity;
+
+  /// Memory kind: event
+  ///
+  /// In en, this message translates to:
+  /// **'Event'**
+  String get memory_kind_event;
+
+  /// Memory kind: inferred
+  ///
+  /// In en, this message translates to:
+  /// **'Inferred'**
+  String get memory_kind_inferred;
+
+  /// Memories screen: importance label
+  ///
+  /// In en, this message translates to:
+  /// **'Importance'**
+  String get memory_importance;
+
+  /// Memory editor: title field
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get memory_title_label;
+
+  /// Memory editor: content field
+  ///
+  /// In en, this message translates to:
+  /// **'What should LocalMind remember?'**
+  String get memory_content_label;
+
+  /// Memory editor: save button
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get memory_save;
+
+  /// Memory editor: empty field error
+  ///
+  /// In en, this message translates to:
+  /// **'This field is required'**
+  String get memory_required;
+
+  /// Memories screen: search field hint
+  ///
+  /// In en, this message translates to:
+  /// **'Search memories'**
+  String get memory_search_hint;
+
+  /// Memories screen: switch to the relational graph
+  ///
+  /// In en, this message translates to:
+  /// **'Graph view'**
+  String get memory_graph_view;
+
+  /// Memories screen: switch to the list
+  ///
+  /// In en, this message translates to:
+  /// **'List view'**
+  String get memory_list_view;
+
+  /// Memories screen: clear the kind filter
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get memory_filter_all;
+
+  /// Memory editor: tags field label
+  ///
+  /// In en, this message translates to:
+  /// **'Tags, separated by commas'**
+  String get memory_tags_hint;
+
+  /// Memory editor: short summary field label
+  ///
+  /// In en, this message translates to:
+  /// **'Short summary'**
+  String get memory_summary;
+
+  /// Memory editor: expiry date field label
+  ///
+  /// In en, this message translates to:
+  /// **'Expires'**
+  String get memory_expiry;
+
+  /// Memory editor: expiry date is unset
+  ///
+  /// In en, this message translates to:
+  /// **'No expiry'**
+  String get memory_no_expiry;
+
+  /// Memories screen: expiry badge for a past expiry
+  ///
+  /// In en, this message translates to:
+  /// **'Expired'**
+  String get memory_expired;
+
+  /// Memories screen: expiry badge
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Expires in 1 day} other{Expires in {count} days}}'**
+  String memory_expires_in_days(int count);
+
+  /// Memory editor: clear the expiry date
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get memory_clear;
+
+  /// Chat message action: remember this message
+  ///
+  /// In en, this message translates to:
+  /// **'Remember this'**
+  String get remember_this;
+
+  /// Snackbar after remembering
+  ///
+  /// In en, this message translates to:
+  /// **'Saved to memories'**
+  String get memory_saved;
+
+  /// Settings Data row: export/import skills and memories
+  ///
+  /// In en, this message translates to:
+  /// **'Skills & memories'**
+  String get skills_memories_label;
+
+  /// Export skills and memories to JSON
+  ///
+  /// In en, this message translates to:
+  /// **'Export skills & memories'**
+  String get export_skills_memories;
+
+  /// Import skills and memories from JSON
+  ///
+  /// In en, this message translates to:
+  /// **'Import skills & memories'**
+  String get import_skills_memories;
 }
 
 class _AppLocalizationsDelegate

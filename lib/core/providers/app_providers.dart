@@ -157,6 +157,24 @@ class SettingsNotifier extends Notifier<AppSettings> {
       _update(state.copyWith(toolWhitelist: value));
   void setSkillsEnabled(bool value) =>
       _update(state.copyWith(skillsEnabled: value));
+  void setMemoriesEnabled(bool value) =>
+      _update(state.copyWith(memoriesEnabled: value));
+  void setAutoMemoryEnabled(bool value) =>
+      _update(state.copyWith(autoMemoryEnabled: value));
+  void setScreenMemoryEnabled(bool value) =>
+      _update(state.copyWith(screenMemoryEnabled: value));
+  void setScreenMemorySampleInterval(int value) =>
+      _update(state.copyWith(screenMemorySampleIntervalMs: value));
+  void setScreenMemoryBatchInterval(int value) =>
+      _update(state.copyWith(screenMemoryBatchIntervalSeconds: value));
+  void setScreenMemoryModel({String? serverId, String? modelId}) => _update(
+    state.copyWith(
+      screenMemoryServerId: serverId,
+      screenMemoryModelId: modelId,
+    ),
+  );
+  void setScreenMemoryBlockedApps(List<String> value) =>
+      _update(state.copyWith(screenMemoryBlockedApps: value));
   void setBackgroundTasksEnabled(bool value) =>
       _update(state.copyWith(backgroundTasksEnabled: value));
   void setNotificationToolsEnabled(bool value) =>

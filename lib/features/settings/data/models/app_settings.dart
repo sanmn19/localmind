@@ -13,6 +13,41 @@ enum SyntaxThemeName { light, dark }
 class AppSettings {
   static const Object _unset = Object();
 
+  /// Known password-manager, authenticator, and banking packages blocked by
+  /// default. The banking entries are best-effort: package names vary by region,
+  /// and the list stays user-editable in the blocked-apps dialog.
+  static const List<String> defaultScreenMemoryBlockedApps = [
+    // Password managers and authenticators.
+    'com.onepassword.android',
+    'com.x8bit.bitwarden',
+    'com.dashlane',
+    'com.lastpass.lpandroid',
+    'com.google.android.apps.authenticator2',
+    // Banking apps and common regional variants.
+    'com.chase.sig.android', // Chase (US)
+    'com.chase.intl', // Chase (international)
+    'com.infonow.bofa', // Bank of America
+    'com.wf.wellsfargomobile', // Wells Fargo
+    'com.citi.citimobile', // Citi
+    'com.konylabs.capitalone', // Capital One
+    'com.htsu.hsbcpersonalbanking', // HSBC
+    'com.barclays.android.barclaysmobilebanking', // Barclays
+    'com.revolut.revolut', // Revolut
+    'co.uk.getmondo', // Monzo
+    'de.number26.android', // N26
+    'com.ing.mobile', // ING
+    'com.santander.app', // Santander
+    'uk.co.santander.santanderUK', // Santander UK
+    'com.db.mobile', // Deutsche Bank
+    'com.rbs.mobile.android.natwest', // NatWest
+    'com.lloydsbank.mobile', // Lloyds
+    'com.grppl.android.shell.halifax', // Halifax
+    'com.usaa.mobile.android.usaa', // USAA
+    'com.pnc.ecommerce.mobile', // PNC
+    'com.ally.MobileBanking', // Ally
+    'com.td.bbmobilenew', // TD Canada
+  ];
+
   final double temperature;
   final double topP;
   final int maxTokens;
@@ -93,6 +128,33 @@ class AppSettings {
   /// into every chat's system prompt. Default ON — the injection is the
   /// feature.
   final bool skillsEnabled;
+
+  /// Kill switch for remembered facts (injected as passive context).
+  final bool memoriesEnabled;
+
+  /// Whether a hidden post-reply call asks the model what is worth
+  /// remembering automatically. Off by default so it never spends tokens
+  /// unless the user opts in.
+  final bool autoMemoryEnabled;
+
+  /// Whether the foreground screen is sampled into short-lived, on-device
+  /// samples that a batch turns into inferred memories. Off by default: screen
+  /// capture is opt-in.
+  final bool screenMemoryEnabled;
+
+  /// Sampling cadence in milliseconds (500 ms by default).
+  final int screenMemorySampleIntervalMs;
+
+  /// Batch cadence in seconds (60 s by default).
+  final int screenMemoryBatchIntervalSeconds;
+
+  /// Server/model used to turn screen samples into memories. Null means
+  /// "same as the active chat model".
+  final String? screenMemoryServerId;
+  final String? screenMemoryModelId;
+
+  /// Package names whose text is never sampled, including their subpackages.
+  final List<String> screenMemoryBlockedApps;
 
   /// Whether the in-process `local://background` MCP server (bg.spawn +
   /// bg.status + bg.cancel) is registered at all. Default OFF: autonomous
@@ -176,6 +238,14 @@ class AppSettings {
     this.shareTargetEnabled = true,
     this.toolWhitelist = const [],
     this.skillsEnabled = true,
+    this.memoriesEnabled = true,
+    this.autoMemoryEnabled = false,
+    this.screenMemoryEnabled = false,
+    this.screenMemorySampleIntervalMs = 500,
+    this.screenMemoryBatchIntervalSeconds = 60,
+    this.screenMemoryServerId,
+    this.screenMemoryModelId,
+    this.screenMemoryBlockedApps = defaultScreenMemoryBlockedApps,
     this.backgroundTasksEnabled = false,
     this.notificationToolsEnabled = false,
     this.mailConnectorAccounts = const [],
@@ -242,6 +312,14 @@ class AppSettings {
     bool? shareTargetEnabled,
     List<String>? toolWhitelist,
     bool? skillsEnabled,
+    bool? memoriesEnabled,
+    bool? autoMemoryEnabled,
+    bool? screenMemoryEnabled,
+    int? screenMemorySampleIntervalMs,
+    int? screenMemoryBatchIntervalSeconds,
+    Object? screenMemoryServerId = _unset,
+    Object? screenMemoryModelId = _unset,
+    List<String>? screenMemoryBlockedApps,
     bool? backgroundTasksEnabled,
     bool? notificationToolsEnabled,
     List<Map<String, dynamic>>? mailConnectorAccounts,
@@ -334,6 +412,22 @@ class AppSettings {
       shareTargetEnabled: shareTargetEnabled ?? this.shareTargetEnabled,
       toolWhitelist: toolWhitelist ?? this.toolWhitelist,
       skillsEnabled: skillsEnabled ?? this.skillsEnabled,
+      memoriesEnabled: memoriesEnabled ?? this.memoriesEnabled,
+      autoMemoryEnabled: autoMemoryEnabled ?? this.autoMemoryEnabled,
+      screenMemoryEnabled: screenMemoryEnabled ?? this.screenMemoryEnabled,
+      screenMemorySampleIntervalMs:
+          screenMemorySampleIntervalMs ?? this.screenMemorySampleIntervalMs,
+      screenMemoryBatchIntervalSeconds:
+          screenMemoryBatchIntervalSeconds ??
+          this.screenMemoryBatchIntervalSeconds,
+      screenMemoryServerId: identical(screenMemoryServerId, _unset)
+          ? this.screenMemoryServerId
+          : screenMemoryServerId as String?,
+      screenMemoryModelId: identical(screenMemoryModelId, _unset)
+          ? this.screenMemoryModelId
+          : screenMemoryModelId as String?,
+      screenMemoryBlockedApps:
+          screenMemoryBlockedApps ?? this.screenMemoryBlockedApps,
       backgroundTasksEnabled:
           backgroundTasksEnabled ?? this.backgroundTasksEnabled,
       notificationToolsEnabled:
@@ -405,6 +499,14 @@ class AppSettings {
       'shareTargetEnabled': shareTargetEnabled,
       'toolWhitelist': toolWhitelist,
       'skillsEnabled': skillsEnabled,
+      'memoriesEnabled': memoriesEnabled,
+      'autoMemoryEnabled': autoMemoryEnabled,
+      'screenMemoryEnabled': screenMemoryEnabled,
+      'screenMemorySampleIntervalMs': screenMemorySampleIntervalMs,
+      'screenMemoryBatchIntervalSeconds': screenMemoryBatchIntervalSeconds,
+      'screenMemoryServerId': screenMemoryServerId,
+      'screenMemoryModelId': screenMemoryModelId,
+      'screenMemoryBlockedApps': screenMemoryBlockedApps,
       'backgroundTasksEnabled': backgroundTasksEnabled,
       'notificationToolsEnabled': notificationToolsEnabled,
       'mailConnectorAccounts': mailConnectorAccounts,
@@ -478,6 +580,18 @@ class AppSettings {
       toolWhitelist:
           (map['toolWhitelist'] as List?)?.cast<String>() ?? const [],
       skillsEnabled: map['skillsEnabled'] ?? true,
+      memoriesEnabled: map['memoriesEnabled'] ?? true,
+      autoMemoryEnabled: map['autoMemoryEnabled'] ?? false,
+      screenMemoryEnabled: map['screenMemoryEnabled'] ?? false,
+      screenMemorySampleIntervalMs:
+          map['screenMemorySampleIntervalMs']?.toInt() ?? 500,
+      screenMemoryBatchIntervalSeconds:
+          map['screenMemoryBatchIntervalSeconds']?.toInt() ?? 60,
+      screenMemoryServerId: map['screenMemoryServerId'] as String?,
+      screenMemoryModelId: map['screenMemoryModelId'] as String?,
+      screenMemoryBlockedApps:
+          (map['screenMemoryBlockedApps'] as List?)?.cast<String>() ??
+          defaultScreenMemoryBlockedApps,
       backgroundTasksEnabled: map['backgroundTasksEnabled'] ?? false,
       notificationToolsEnabled: map['notificationToolsEnabled'] ?? false,
       mailConnectorAccounts:

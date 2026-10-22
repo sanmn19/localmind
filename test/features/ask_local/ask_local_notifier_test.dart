@@ -536,6 +536,13 @@ class _DiscardingLogOutput extends LogOutput {
 }
 
 class _FakeConversationService implements AskLocalConversationService {
+  @override
+  Future<Conversation> create() async => conversation;
+
+  @override
+  Future<Conversation> resolve(String? conversationId) async => conversation;
+
+
   final Conversation conversation = Conversation(
     id: 'ask-local-conv',
     title: askLocalConversationTitle,

@@ -30,6 +30,26 @@ void main() {
     expect(restored.webSearchApiKey, 'k123');
   });
 
+  test('screen processing model survives toMap/fromMap', () {
+    final settings = AppSettings().copyWith(
+      screenMemoryServerId: 'server-1',
+      screenMemoryModelId: 'model-1',
+    );
+    final restored = AppSettings.fromMap(settings.toMap());
+    expect(restored.screenMemoryServerId, 'server-1');
+    expect(restored.screenMemoryModelId, 'model-1');
+    expect(AppSettings.fromMap({}).screenMemoryServerId, isNull);
+  });
+
+  test('auto-remember defaults off and survives toMap/fromMap', () {
+    expect(AppSettings().autoMemoryEnabled, isFalse);
+    final restored = AppSettings.fromMap(
+      AppSettings().copyWith(autoMemoryEnabled: true).toMap(),
+    );
+    expect(restored.autoMemoryEnabled, isTrue);
+    expect(AppSettings.fromMap({}).autoMemoryEnabled, isFalse);
+  });
+
   test('fromMap tolerates missing web fields (upgrade path)', () {
     final restored = AppSettings.fromMap({'themeMode': 2});
     expect(restored.webToolsEnabled, isFalse);
@@ -103,14 +123,16 @@ void main() {
     expect(AppSettings.fromMap(off.toMap()).skillsEnabled, isFalse);
   });
 
-  test('backgroundTasksEnabled defaults to false and survives the round-trip',
-      () {
-    expect(AppSettings().backgroundTasksEnabled, isFalse);
-    final restored = AppSettings.fromMap({'themeMode': 2});
-    expect(restored.backgroundTasksEnabled, isFalse);
-    final on = AppSettings().copyWith(backgroundTasksEnabled: true);
-    expect(AppSettings.fromMap(on.toMap()).backgroundTasksEnabled, isTrue);
-  });
+  test(
+    'backgroundTasksEnabled defaults to false and survives the round-trip',
+    () {
+      expect(AppSettings().backgroundTasksEnabled, isFalse);
+      final restored = AppSettings.fromMap({'themeMode': 2});
+      expect(restored.backgroundTasksEnabled, isFalse);
+      final on = AppSettings().copyWith(backgroundTasksEnabled: true);
+      expect(AppSettings.fromMap(on.toMap()).backgroundTasksEnabled, isTrue);
+    },
+  );
 
   test('device tool settings default to disabled', () {
     final settings = AppSettings();
@@ -180,5 +202,43 @@ void main() {
       MailAccount.fromMap({'provider': 'yahoo', 'email': 'x@y'}).provider,
       MailProvider.gmail,
     );
+  });
+
+  test('screen settings default off at 500 ms and 60 s', () {
+    final settings = AppSettings();
+    expect(settings.screenMemoryEnabled, isFalse);
+    expect(settings.screenMemorySampleIntervalMs, 500);
+    expect(settings.screenMemoryBatchIntervalSeconds, 60);
+    expect(settings.screenMemoryBlockedApps, isNotEmpty);
+  });
+
+  test('screen settings survive the toMap/fromMap round-trip', () {
+    final settings = AppSettings().copyWith(
+      screenMemoryEnabled: true,
+      screenMemorySampleIntervalMs: 1000,
+      screenMemoryBatchIntervalSeconds: 120,
+      screenMemoryBlockedApps: const ['com.bank', 'com.wallet'],
+    );
+    final map = settings.toMap();
+    expect(map['screenMemoryEnabled'], isTrue);
+    final restored = AppSettings.fromMap(map);
+    expect(restored.screenMemoryEnabled, isTrue);
+    expect(restored.screenMemorySampleIntervalMs, 1000);
+    expect(restored.screenMemoryBatchIntervalSeconds, 120);
+    expect(restored.screenMemoryBlockedApps, ['com.bank', 'com.wallet']);
+  });
+
+  test('fromMap tolerates missing screen settings (upgrade path)', () {
+    final restored = AppSettings.fromMap({'themeMode': 2});
+    expect(restored.screenMemoryEnabled, isFalse);
+    expect(restored.screenMemorySampleIntervalMs, 500);
+    expect(restored.screenMemoryBatchIntervalSeconds, 60);
+    expect(restored.screenMemoryBlockedApps, isNotEmpty);
+  });
+
+  test('an empty blocked-apps list can be saved and restored', () {
+    final settings = AppSettings().copyWith(screenMemoryBlockedApps: const []);
+    final restored = AppSettings.fromMap(settings.toMap());
+    expect(restored.screenMemoryBlockedApps, isEmpty);
   });
 }
