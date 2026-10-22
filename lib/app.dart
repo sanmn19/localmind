@@ -20,6 +20,7 @@ import 'features/conversations/providers/conversation_providers.dart' as conv;
 import 'features/chat/views/chat_screen.dart';
 import 'features/conversations/views/chat_history_screen.dart';
 import 'features/desktop/data/models/desktop_window.dart';
+import 'features/desktop/views/components/desktop_command_palette.dart';
 import 'features/desktop/views/desktop_host.dart';
 import 'features/mcp/views/mcp_tools_screen.dart';
 import 'features/on_device/views/model_manager_screen.dart';
@@ -391,6 +392,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         initialRoute: location,
         sidebar: const SidebarWidget(),
         screenBuilder: _buildDesktopScreen,
+        conversationCommands: () => _desktopConversationCommands(ref),
       );
     }
 
@@ -485,4 +487,23 @@ class _DesktopLmStudioBrowser extends ConsumerWidget {
     }
     return LmStudioModelBrowserScreen(server: server);
   }
+}
+
+/// How many of the most recent conversations the palette lists.
+const int _recentDesktopConversations = 8;
+
+/// The most recent conversations as command-palette commands.
+///
+/// The desktop feature does not import conversations, so the app builds these
+/// commands and the palette only lists them.
+List<DesktopCommand> _desktopConversationCommands(WidgetRef ref) {
+  final conversations = ref.watch(conv.conversationsProvider).value ?? const [];
+  return [
+    for (final conversation in conversations.take(_recentDesktopConversations))
+      DesktopCommand(
+        id: '${DesktopCommand.conversationPrefix}${conversation.id}',
+        label: conversation.title,
+        kind: DesktopWindowKind.chat,
+      ),
+  ];
 }

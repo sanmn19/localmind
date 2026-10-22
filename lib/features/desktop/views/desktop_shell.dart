@@ -19,12 +19,14 @@ import 'components/desktop_window_frame.dart';
 ///
 /// It also owns the keyboard shortcuts and the command palette. The palette is an
 /// overlay inside the workspace, so it is part of the same focus scope as the
-/// windows it searches.
+/// windows it searches. Minimise is ⌥⌘M because macOS keeps ⌘M for the native
+/// window.
 class DesktopShell extends ConsumerStatefulWidget {
   const DesktopShell({
     super.key,
     required this.sidebar,
     required this.screenBuilder,
+    this.conversationCommands,
   });
 
   /// The navigation sidebar shown left of the workspace.
@@ -32,6 +34,9 @@ class DesktopShell extends ConsumerStatefulWidget {
 
   /// Builds the screen hosted by one window.
   final DesktopScreenBuilder screenBuilder;
+
+  /// Builds the recent-conversation commands listed by the palette.
+  final List<DesktopCommand> Function()? conversationCommands;
 
   @override
   ConsumerState<DesktopShell> createState() => _DesktopShellState();
@@ -114,7 +119,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
             _togglePalette,
         const SingleActivator(LogicalKeyboardKey.keyW, meta: true):
             _closeFocused,
-        const SingleActivator(LogicalKeyboardKey.keyM, meta: true):
+        const SingleActivator(LogicalKeyboardKey.keyM, meta: true, alt: true):
             _minimizeFocused,
         const SingleActivator(LogicalKeyboardKey.comma, meta: true):
             _openSettings,
@@ -137,7 +142,10 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
                 ),
               ),
               Positioned.fill(
-                child: DesktopCommandPalette(onSelected: _selectCommand),
+                child: DesktopCommandPalette(
+                  onSelected: _selectCommand,
+                  conversationCommands: widget.conversationCommands,
+                ),
               ),
             ],
           ],

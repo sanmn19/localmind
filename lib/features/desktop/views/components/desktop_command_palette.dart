@@ -4,7 +4,6 @@ import 'package:hugeicons/hugeicons.dart';
 
 import '../../../../core/components/app_sizes.dart';
 import '../../../../core/components/app_text_field.dart';
-import '../../../conversations/providers/conversation_providers.dart';
 import '../../data/models/desktop_window.dart';
 import '../../providers/desktop_window_providers.dart';
 import '../../utils/desktop_routes.dart';
@@ -38,9 +37,19 @@ class DesktopCommand {
 /// The palette only builds commands and reports the chosen one; the shell decides
 /// whether that means focusing a window or opening a new one.
 class DesktopCommandPalette extends ConsumerStatefulWidget {
-  const DesktopCommandPalette({super.key, required this.onSelected});
+  const DesktopCommandPalette({
+    super.key,
+    required this.onSelected,
+    this.conversationCommands,
+  });
 
   final ValueChanged<DesktopCommand> onSelected;
+
+  /// Builds the recent-conversation commands.
+  ///
+  /// Conversation knowledge belongs to the app, so the desktop feature stays
+  /// free of a sibling-feature import and only lists what it is given.
+  final List<DesktopCommand> Function()? conversationCommands;
 
   @override
   ConsumerState<DesktopCommandPalette> createState() =>
@@ -48,9 +57,6 @@ class DesktopCommandPalette extends ConsumerStatefulWidget {
 }
 
 class _DesktopCommandPaletteState extends ConsumerState<DesktopCommandPalette> {
-  /// How many of the most recent conversations the palette offers.
-  static const int _recentConversationLimit = 8;
-
   final _controller = TextEditingController();
   String _query = '';
 
@@ -147,7 +153,8 @@ class _DesktopCommandPaletteState extends ConsumerState<DesktopCommandPalette> {
   /// The commands of the three sources, open windows first.
   List<DesktopCommand> _commands() {
     final layout = ref.watch(desktopWindowControllerProvider);
-    final conversations = ref.watch(conversationsProvider).value ?? const [];
+    final conversationCommands =
+        widget.conversationCommands?.call() ?? const <DesktopCommand>[];
     return [
       for (final window in layout.windows)
         DesktopCommand(
@@ -163,12 +170,7 @@ class _DesktopCommandPaletteState extends ConsumerState<DesktopCommandPalette> {
           kind: desktopWindowKindForRoute(route),
           route: route,
         ),
-      for (final conversation in conversations.take(_recentConversationLimit))
-        DesktopCommand(
-          id: '${DesktopCommand.conversationPrefix}${conversation.id}',
-          label: conversation.title,
-          kind: DesktopWindowKind.chat,
-        ),
+      ...conversationCommands,
     ];
   }
 
