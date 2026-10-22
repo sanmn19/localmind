@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+
 import '../../features/chat/data/models/message.dart';
 import '../../objectbox.g.dart';
 import '../logger/app_logger.dart';
@@ -100,6 +102,9 @@ class MessageSaveService {
       final entity = MessageEntity.fromDomain(message);
       if (existing != null) {
         entity.internalId = existing.internalId;
+        // A later checkpoint must never erase a completion timestamp that a
+        // full-row save already wrote.
+        entity.updatedAt ??= existing.updatedAt;
       }
 
       // Re-establish the ToOne relation to the parent conversation.
@@ -119,6 +124,12 @@ class MessageSaveService {
       box.put(entity);
     }
   }
+
+  /// Test-only hook that exposes [_writeBatch] so timestamp preservation can be
+  /// verified without a real store.
+  @visibleForTesting
+  static void debugWriteBatchForTest(Store store, List<Message> messages) =>
+      _writeBatch(store, messages);
 
   void dispose() {
     _disposed = true;

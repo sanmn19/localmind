@@ -938,6 +938,17 @@ Future<List<Message>> _backgroundRows(ObjectBoxStore db, String convId) {
 }
 
 Future<void> _persistBackgroundRow(ObjectBoxStore db, Message row) {
-  db.messageBox.put(MessageEntity.fromDomain(row));
+  final query = db.messageBox
+      .query(MessageEntity_.id.equals(row.id))
+      .build();
+  final existing = query.findFirst();
+  query.close();
+  final entity = MessageEntity.fromDomain(row);
+  if (existing != null) {
+    entity.internalId = existing.internalId;
+    // A full-row save must never erase an existing completion timestamp.
+    entity.updatedAt ??= existing.updatedAt;
+  }
+  db.messageBox.put(entity);
   return Future.value();
 }

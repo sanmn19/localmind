@@ -1,13 +1,16 @@
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:localmind/core/models/enums.dart';
+import 'package:localmind/core/providers/storage_providers.dart';
 import 'package:localmind/core/services/data_backup_service.dart';
 import 'package:localmind/core/services/message_save_service.dart';
 import 'package:localmind/core/storage/entities.dart';
 import 'package:localmind/core/storage/objectbox_store.dart';
 import 'package:localmind/features/chat/data/models/message.dart';
+import 'package:localmind/features/chat/providers/chat_notifier.dart';
 import 'package:localmind/features/conversations/data/models/conversation.dart';
 import 'package:localmind/objectbox.g.dart';
 
@@ -63,7 +66,7 @@ void main() {
       ),
     );
     final store = _FakeStore({
-      MessageEntity: _FakeBox<MessageEntity>([stamped, legacy]),
+      MessageEntity: _FakeBox<MessageEntity>([stamped, legacy], (m) => m.id),
     });
 
     final payload =
@@ -94,8 +97,8 @@ void main() {
           updatedAt: DateTime.utc(2026, 1, 1),
         ),
       ),
-    ]);
-    final messages = _FakeBox<MessageEntity>();
+    ], (c) => c.id);
+    final messages = _FakeBox<MessageEntity>([], (m) => m.id);
     final store = _FakeStore({
       ConversationEntity: conversations,
       MessageEntity: messages,
@@ -140,17 +143,17 @@ void main() {
       }),
     );
 
-    final imported = {for (final m in messages.items) m.id: m};
+    final imported = {for (final m in messages.rows) m.id: m};
     expect(imported['m1']!.updatedAt, DateTime.utc(2026, 1, 1));
     expect(imported['m2']!.updatedAt, DateTime.utc(2026, 1, 1, 0, 0, 5));
     expect(imported['m3']!.updatedAt, DateTime.utc(2026, 1, 2));
   });
 
   test('enqueue stamps the saved message with a completion time', () async {
-    final box = _FakeBox<MessageEntity>();
+    final box = _FakeBox<MessageEntity>([], (m) => m.id);
     final store = _FakeStore({
       MessageEntity: box,
-      ConversationEntity: _FakeBox<ConversationEntity>(),
+      ConversationEntity: _FakeBox<ConversationEntity>([], (c) => c.id),
     });
     final service = MessageSaveService(_FakeDb(store));
     addTearDown(service.dispose);
@@ -167,10 +170,124 @@ void main() {
     );
     await service.flush();
 
-    final saved = box.items.single;
+    final saved = box.rows.single;
     expect(saved.updatedAt, isNotNull);
     expect(saved.updatedAt!.isBefore(before), isFalse);
     expect(saved.toDomain().effectiveUpdatedAt, saved.updatedAt);
+  });
+
+  test('the final full-row save keeps the checkpoint timestamp', () async {
+    final box = _FakeBox<MessageEntity>([], (m) => m.id);
+    final store = _FakeStore({
+      MessageEntity: box,
+      ConversationEntity: _FakeBox<ConversationEntity>([], (c) => c.id),
+    });
+    final db = _FakeDb(store);
+    final service = MessageSaveService(db);
+    addTearDown(service.dispose);
+    final container = ProviderContainer(
+      overrides: [
+        databaseProvider.overrideWithValue(db),
+        chatProvider.overrideWith(_TestChatNotifier.new),
+      ],
+    );
+    addTearDown(container.dispose);
+    final notifier = container.read(chatProvider.notifier);
+
+    service.enqueue(
+      Message(
+        id: 'm1',
+        conversationId: 'c1',
+        role: MessageRole.assistant,
+        content: 'partial',
+        createdAt: DateTime.utc(2026, 1, 1),
+      ),
+    );
+    await service.flush();
+    final checkpoint = box.rows.single;
+    expect(checkpoint.content, 'partial');
+    expect(checkpoint.updatedAt, isNotNull);
+
+    await notifier.debugSaveMessageForTest(
+      Message(
+        id: 'm1',
+        conversationId: 'c1',
+        role: MessageRole.assistant,
+        content: 'done',
+        createdAt: DateTime.utc(2026, 1, 1),
+      ),
+    );
+
+    final saved = box.rows.single;
+    expect(saved.content, 'done');
+    expect(saved.updatedAt, isNotNull);
+  });
+
+  test('a null-stamp full-row save does not clear an existing stamp', () {
+    final stamp = DateTime.utc(2026, 1, 1, 0, 0, 5);
+    final box = _FakeBox<MessageEntity>([
+      MessageEntity(
+        id: 'm1',
+        conversationUid: 'c1',
+        roleIndex: MessageRole.assistant.index,
+        content: 'old',
+        createdAt: DateTime.utc(2026, 1, 1),
+        updatedAt: stamp,
+        statusIndex: MessageStatus.complete.index,
+      ),
+    ], (m) => m.id);
+    final store = _FakeStore({
+      MessageEntity: box,
+      ConversationEntity: _FakeBox<ConversationEntity>([], (c) => c.id),
+    });
+
+    ChatNotifier.debugSaveMessageInBackgroundForTest(
+      store,
+      Message(
+        id: 'm1',
+        conversationId: 'c1',
+        role: MessageRole.assistant,
+        content: 'edited',
+        createdAt: DateTime.utc(2026, 1, 1),
+      ),
+    );
+
+    final saved = box.rows.single;
+    expect(saved.content, 'edited');
+    expect(saved.updatedAt, stamp);
+  });
+
+  test('a null-stamp checkpoint does not clear an existing stamp', () {
+    final stamp = DateTime.utc(2026, 1, 1, 0, 0, 5);
+    final box = _FakeBox<MessageEntity>([
+      MessageEntity(
+        id: 'm1',
+        conversationUid: 'c1',
+        roleIndex: MessageRole.assistant.index,
+        content: 'old',
+        createdAt: DateTime.utc(2026, 1, 1),
+        updatedAt: stamp,
+        statusIndex: MessageStatus.complete.index,
+      ),
+    ], (m) => m.id);
+    final store = _FakeStore({
+      MessageEntity: box,
+      ConversationEntity: _FakeBox<ConversationEntity>([], (c) => c.id),
+    });
+
+    MessageSaveService.debugWriteBatchForTest(store, [
+      Message(
+        id: 'm1',
+        conversationId: 'c1',
+        role: MessageRole.assistant,
+        content: 'edited',
+        createdAt: DateTime.utc(2026, 1, 1),
+      ),
+    ]);
+
+    final saved = box.rows.single;
+    expect(saved.content, 'edited');
+    expect(saved.updatedAt, stamp);
   });
 }
 
@@ -210,20 +327,27 @@ class _FakeStore extends Fake implements Store {
 }
 
 class _FakeBox<T> extends Fake implements Box<T> {
-  _FakeBox([List<T>? items]) : items = items ?? <T>[];
+  _FakeBox([List<T>? items, String Function(T)? idOf]) : _idOf = idOf {
+    for (final item in items ?? <T>[]) {
+      _rows[_idOf!(item)] = item;
+    }
+  }
 
-  final List<T> items;
+  final String Function(T)? _idOf;
+  final Map<String, T> _rows = {};
+
+  List<T> get rows => _rows.values.toList();
 
   @override
-  List<T> getAll() => List<T>.of(items);
+  List<T> getAll() => _rows.values.toList();
 
   @override
   QueryBuilder<T> query([Condition<T>? qc]) => _FakeQueryBuilder<T>(this);
 
   @override
   int put(T object, {PutMode mode = PutMode.put}) {
-    items.add(object);
-    return items.length;
+    _rows[_idOf!(object)] = object;
+    return 1;
   }
 }
 
@@ -242,7 +366,7 @@ class _FakeQuery<T> extends Fake implements Query<T> {
   final _FakeBox<T> _box;
 
   @override
-  T? findFirst() => _box.items.isEmpty ? null : _box.items.first;
+  T? findFirst() => _box.rows.isEmpty ? null : _box.rows.first;
 
   @override
   void close() {}
@@ -255,4 +379,9 @@ class _FakeDb extends Fake implements ObjectBoxStore {
 
   @override
   Store get store => _store;
+}
+
+class _TestChatNotifier extends ChatNotifier {
+  @override
+  ChatState build() => const ChatState();
 }

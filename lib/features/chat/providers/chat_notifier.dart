@@ -3371,7 +3371,9 @@ class ChatNotifier extends Notifier<ChatState> {
     if (!ref.mounted) return;
     if (persist == false) return;
     if (persist == null && _isInMemoryChat) return;
-    await persistMessage(message);
+    await persistMessage(
+      message.copyWith(updatedAt: message.updatedAt ?? DateTime.now()),
+    );
   }
 
   /// Reads a conversation's messages from ObjectBox. Overridden in tests.
@@ -3404,6 +3406,14 @@ class ChatNotifier extends Notifier<ChatState> {
   Future<void> debugSaveMessageForTest(Message message) =>
       _saveMessage(message);
 
+  /// Test-only hook that exposes [_saveMessageInBackground] so persistence
+  /// timestamp preservation can be verified without a real store.
+  @visibleForTesting
+  static void debugSaveMessageInBackgroundForTest(
+    Store store,
+    Message message,
+  ) => _saveMessageInBackground(store, message);
+
   static void _saveMessageInBackground(Store store, Message message) {
     final box = store.box<MessageEntity>();
     final convBox = store.box<ConversationEntity>();
@@ -3415,6 +3425,9 @@ class ChatNotifier extends Notifier<ChatState> {
     final entity = MessageEntity.fromDomain(message);
     if (existing != null) {
       entity.internalId = existing.internalId;
+      // A full-row save must never erase a completion timestamp written by an
+      // earlier streaming checkpoint.
+      entity.updatedAt ??= existing.updatedAt;
     }
 
     final convQuery = convBox

@@ -797,6 +797,9 @@ class ForkChatNotifier extends Notifier<ForkChatState> {
     final entity = MessageEntity.fromDomain(message);
     if (existing != null) {
       entity.internalId = existing.internalId;
+      // A full-row save must never erase a completion timestamp written by an
+      // earlier streaming checkpoint.
+      entity.updatedAt ??= existing.updatedAt;
     }
 
     final convQuery = convBox
