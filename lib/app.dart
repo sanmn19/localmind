@@ -12,12 +12,15 @@ import 'core/routes/app_routes.dart';
 import 'core/routes/shell_back_scope.dart';
 import 'core/theme/app_theme.dart';
 import 'core/utils/locale_utils.dart';
+import 'core/utils/platform_support.dart';
 import 'core/widgets/android_assistant_invocation_host.dart';
 import 'core/widgets/web_server_registration_host.dart';
 import 'features/chat/providers/chat_providers.dart';
 import 'features/conversations/providers/conversation_providers.dart' as conv;
 import 'features/chat/views/chat_screen.dart';
 import 'features/conversations/views/chat_history_screen.dart';
+import 'features/desktop/data/models/desktop_window.dart';
+import 'features/desktop/views/desktop_host.dart';
 import 'features/mcp/views/mcp_tools_screen.dart';
 import 'features/on_device/views/model_manager_screen.dart';
 import 'features/os_widget/views/os_widget_invocation_host.dart';
@@ -30,6 +33,7 @@ import 'features/onboarding/screens/onboarding_theme_screen.dart';
 import 'features/personas/views/create_persona_screen.dart';
 import 'features/personas/views/persona_list_screen.dart';
 import 'features/servers/data/models/server.dart';
+import 'features/servers/providers/server_providers.dart';
 import 'features/servers/views/add_server_screen.dart';
 import 'features/servers/views/server_list_screen.dart';
 import 'features/tts/views/tts_model_manager_screen.dart';
@@ -377,9 +381,21 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   @override
   Widget build(BuildContext context) {
+    final location = GoRouterState.of(context).uri.path;
+    _isHome = location == AppRoutes.home;
+
+    // macOS runs one native window with an in-app window manager. Every other
+    // platform keeps the router-driven shell.
+    if (isMacDesktop) {
+      return DesktopHost(
+        initialRoute: location,
+        sidebar: const SidebarWidget(),
+        screenBuilder: _buildDesktopScreen,
+      );
+    }
+
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    _isHome = GoRouterState.of(context).uri.path == AppRoutes.home;
     _hasActiveChat = ref.watch(conv.activeConversationProvider) != null;
     final hasOverride = ShellBackOverride.maybeOf(context) != null;
 
@@ -423,5 +439,50 @@ class _AppShellState extends ConsumerState<AppShell> {
         );
       },
     );
+  }
+}
+
+/// Builds the screen hosted by one desktop window.
+///
+/// This is the only place that maps windows onto feature screens, so the desktop
+/// feature never imports a sibling feature. Windows that need router `extra`
+/// (add-server, persona, skill editor, model browser) open without one after a
+/// relaunch and fall back to their create state.
+Widget _buildDesktopScreen(DesktopWindowState window) {
+  return switch (window.kind) {
+    DesktopWindowKind.chat => const ChatScreen(),
+    DesktopWindowKind.history => const ChatHistoryScreen(),
+    DesktopWindowKind.savedMessages => const SavedMessagesScreen(),
+    DesktopWindowKind.servers => const ServerListScreen(),
+    DesktopWindowKind.addServer => const AddServerScreen(),
+    DesktopWindowKind.personas => const PersonaListScreen(),
+    DesktopWindowKind.createPersona => const CreatePersonaScreen(),
+    DesktopWindowKind.settings => const SettingsViews(),
+    DesktopWindowKind.cloudSync => const CloudSyncScreen(),
+    DesktopWindowKind.mcpTools => const McpToolsScreen(),
+    DesktopWindowKind.skills => const SkillsScreen(),
+    DesktopWindowKind.skillEditor => const SkillEditorScreen(),
+    DesktopWindowKind.background => const BackgroundTasksPage(),
+    DesktopWindowKind.onDeviceModels => const OnDeviceModelManagerScreen(),
+    DesktopWindowKind.ttsModels => const TtsModelManagerScreen(),
+    DesktopWindowKind.lmStudioModels => const _DesktopLmStudioBrowser(),
+    DesktopWindowKind.onboarding => const OnboardingLanguageScreen(),
+  };
+}
+
+/// The LM Studio model browser for the active server.
+///
+/// The browser needs a server, which the router used to pass as `extra`. A window
+/// keeps no extra after a relaunch, so it falls back to the active server.
+class _DesktopLmStudioBrowser extends ConsumerWidget {
+  const _DesktopLmStudioBrowser();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final server = ref.watch(activeServerProvider);
+    if (server == null || server.type != ServerType.lmStudio) {
+      return const SizedBox.shrink();
+    }
+    return LmStudioModelBrowserScreen(server: server);
   }
 }
