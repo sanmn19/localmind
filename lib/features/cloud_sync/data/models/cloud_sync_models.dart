@@ -184,7 +184,9 @@ class CloudSyncSnapshot {
   final int revision;
   final DateTime updatedAt;
   final Map<String, dynamic> payload;
-  final Map<String, dynamic> tombstones;
+
+  /// Collection → id → ISO-8601 deletion time.
+  final Map<String, Map<String, String>> tombstones;
 
   factory CloudSyncSnapshot.fromJson(Map<String, dynamic> json) {
     if (json['schema'] != 1 ||
@@ -198,14 +200,13 @@ class CloudSyncSnapshot {
     }
     final payload = Map<String, dynamic>.from(json['payload'] as Map);
     _validatePayload(payload);
-    final tombstones = json['tombstones'] is Map
-        ? Map<String, dynamic>.from(json['tombstones'] as Map)
-        : <String, dynamic>{};
-    for (final entry in tombstones.entries) {
-      if (!_collections.contains(entry.key) ||
-          entry.value is! List ||
-          !(entry.value as List).every((value) => value is String)) {
-        throw const FormatException('Invalid cloud sync tombstones');
+    final tombstones = <String, Map<String, String>>{};
+    if (json['tombstones'] is Map) {
+      for (final entry in (json['tombstones'] as Map).entries) {
+        if (!_collections.contains(entry.key)) {
+          throw const FormatException('Invalid cloud sync tombstones');
+        }
+        tombstones[entry.key as String] = _readTombstoneIds(entry.value);
       }
     }
     return CloudSyncSnapshot(
@@ -216,6 +217,36 @@ class CloudSyncSnapshot {
       tombstones: tombstones,
     );
   }
+
+  /// Reads the timestamped map shape, falling back to legacy id lists, whose
+  /// deletions are dated at the epoch.
+  static Map<String, String> _readTombstoneIds(Object? value) {
+    if (value is Map) {
+      final ids = <String, String>{};
+      for (final entry in value.entries) {
+        if (entry.key is! String ||
+            entry.value is! String ||
+            DateTime.tryParse(entry.value as String) == null) {
+          throw const FormatException('Invalid cloud sync tombstones');
+        }
+        ids[entry.key as String] = entry.value as String;
+      }
+      return ids;
+    }
+    if (value is List) {
+      final ids = <String, String>{};
+      for (final id in value) {
+        if (id is! String) {
+          throw const FormatException('Invalid cloud sync tombstones');
+        }
+        ids[id] = _legacyTombstoneTime;
+      }
+      return ids;
+    }
+    throw const FormatException('Invalid cloud sync tombstones');
+  }
+
+  static final _legacyTombstoneTime = DateTime.utc(1970).toIso8601String();
 
   static const _collections = {
     'conversations',

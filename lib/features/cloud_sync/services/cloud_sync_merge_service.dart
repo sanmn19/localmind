@@ -304,16 +304,14 @@ class CloudSyncMergeService {
     payload['conversations'] = conflictConversations.values.toList();
     payload['messages'] = conflictMessages.values.toList();
 
-    final tombstones = <String, dynamic>{};
+    final tombstones = <String, Map<String, String>>{};
     for (final source in [remote.tombstones, local.tombstones]) {
       for (final entry in source.entries) {
-        final values =
-            (tombstones[entry.key] as List?)?.whereType<String>().toSet() ??
-            <String>{};
-        if (entry.value is List) {
-          values.addAll((entry.value as List).whereType<String>());
+        final values = tombstones[entry.key] ?? <String, String>{};
+        for (final tombstone in entry.value.entries) {
+          values.putIfAbsent(tombstone.key, () => tombstone.value);
         }
-        tombstones[entry.key] = values.toList();
+        tombstones[entry.key] = values;
       }
     }
     _applyTombstones(payload, tombstones);
@@ -335,9 +333,7 @@ class CloudSyncMergeService {
       '$id-conflict-${local.deviceId.substring(0, 8)}-${local.revision}';
 
   Set<String> _tombstoneIds(CloudSyncSnapshot snapshot, String collection) =>
-      snapshot.tombstones[collection] is List
-      ? (snapshot.tombstones[collection] as List).whereType<String>().toSet()
-      : <String>{};
+      snapshot.tombstones[collection]?.keys.toSet() ?? <String>{};
 
   void _cloneConversationBranch({
     required Map<String, dynamic> conversation,
@@ -400,18 +396,17 @@ class CloudSyncMergeService {
 
   void _applyTombstones(
     Map<String, dynamic> payload,
-    Map<String, dynamic> tombstones,
+    Map<String, Map<String, String>> tombstones,
   ) {
     for (final entry in tombstones.entries) {
-      if (payload[entry.key] is! List || entry.value is! List) continue;
-      final ids = (entry.value as List).whereType<String>().toSet();
+      if (payload[entry.key] is! List) continue;
+      final ids = entry.value.keys.toSet();
       payload[entry.key] = (payload[entry.key] as List)
           .where((item) => item is! Map || !ids.contains(item['id']))
           .toList();
     }
-    final deletedConversations = tombstones['conversations'] is List
-        ? (tombstones['conversations'] as List).whereType<String>().toSet()
-        : <String>{};
+    final deletedConversations =
+        tombstones['conversations']?.keys.toSet() ?? <String>{};
     if (deletedConversations.isNotEmpty && payload['messages'] is List) {
       payload['messages'] = (payload['messages'] as List)
           .where(

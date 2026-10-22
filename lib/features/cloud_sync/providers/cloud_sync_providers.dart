@@ -450,21 +450,45 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
     return warnings;
   }
 
-  Map<String, dynamic> _buildTombstones(
+  /// Retains tombstones for this long so peers can still learn about deletes.
+  static const _tombstoneRetention = Duration(days: 30);
+
+  @visibleForTesting
+  static Map<String, Map<String, String>> debugBuildTombstones(
+    Map<String, dynamic> payload,
+    Map<String, dynamic> journal,
+  ) => _buildTombstones(payload, journal);
+
+  static Map<String, Map<String, String>> _buildTombstones(
     Map<String, dynamic> payload,
     Map<String, dynamic> journal,
   ) {
+    final now = DateTime.now().toUtc();
+    final deletedAt = now.toIso8601String();
+    final cutoff = now.subtract(_tombstoneRetention);
     final previous = journal['ids'] is Map
         ? Map<String, dynamic>.from(journal['ids'] as Map)
         : const <String, dynamic>{};
     final current = _snapshotIds(payload);
-    final result = <String, dynamic>{
-      if (journal['tombstones'] is Map)
-        for (final entry in (journal['tombstones'] as Map).entries)
-          entry.key.toString(): entry.value is List
-              ? List<String>.from((entry.value as List).whereType<String>())
-              : <String>[],
-    };
+    final result = <String, Map<String, String>>{};
+    final retained = journal['tombstones'];
+    if (retained is Map) {
+      for (final entry in retained.entries) {
+        if (!current.containsKey(entry.key)) continue;
+        final ids = <String, String>{};
+        if (entry.value is Map) {
+          for (final tombstone in (entry.value as Map).entries) {
+            if (tombstone.key is! String || tombstone.value is! String) {
+              continue;
+            }
+            final at = DateTime.tryParse(tombstone.value as String);
+            if (at != null && at.isBefore(cutoff)) continue;
+            ids[tombstone.key as String] = tombstone.value as String;
+          }
+        }
+        if (ids.isNotEmpty) result[entry.key as String] = ids;
+      }
+    }
     for (final collection in current.keys) {
       final oldIds = previous[collection] is List
           ? (previous[collection] as List).whereType<String>().toSet()
@@ -473,18 +497,16 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
           .whereType<String>()
           .toSet();
       final deleted = oldIds.difference(currentIds);
-      if (deleted.isNotEmpty) {
-        final cumulative =
-            (result[collection] as List?)?.whereType<String>().toSet() ??
-            <String>{};
-        cumulative.addAll(deleted);
-        result[collection] = cumulative.toList();
+      if (deleted.isEmpty) continue;
+      final ids = result[collection] ??= <String, String>{};
+      for (final id in deleted) {
+        ids.putIfAbsent(id, () => deletedAt);
       }
     }
     return result;
   }
 
-  Map<String, dynamic> _snapshotIds(Map<String, dynamic> payload) => {
+  static Map<String, dynamic> _snapshotIds(Map<String, dynamic> payload) => {
     for (final collection in const [
       'conversations',
       'messages',
