@@ -26,7 +26,8 @@ only replied in.
   servers, personas, MCP tools, skills, on-device models, TTS models, background tasks,
   settings and cloud sync.
 - Google Drive sign-in as the primary sync path, reusing the existing encrypted
-  backup transport (Drive `appDataFolder`, encrypted snapshot, rotation).
+  backup transport (app-created `LocalMind` folder in My Drive (`drive.file` scope),
+  encrypted snapshot, rotation).
 - Message-level merge: conversations that only exist on one device are unioned; messages
   inside the same conversation are unioned and ordered chronologically; the same message
   written by two devices resolves deterministically by completion state and timestamp.
@@ -110,7 +111,8 @@ by conversation id, which is the last task in the plan.
 ### Sync transport
 
 Reuse the unmerged `feat/google-drive-backup` branch: `GoogleDriveApi` (Drive v3 REST),
-`GoogleDriveCloudSyncRepository` (encrypted objects in `appDataFolder`), the Google sign-in
+`GoogleDriveCloudSyncRepository` (encrypted objects in the app-created `LocalMind`
+folder in My Drive (`drive.file` scope)), the Google sign-in
 session, backup rotation and the `CloudSyncProviderKind.googleDrive` config. This work adds
 the merge and lifecycle layers on top; it does not rewrite the transport.
 

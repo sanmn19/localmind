@@ -61,7 +61,7 @@ brew install cocoapods
 pod --version
 ```
 
-## 3. Run the app
+## 4. Run the app
 
 ```bash
 fvm flutter pub get
@@ -78,7 +78,7 @@ fvm flutter build macos --release
 Without FVM, replace `fvm flutter` with your Flutter 3.44.2 binary, e.g.
 `~/fvm/versions/3.44.2/bin/flutter run -d macos`.
 
-## 4. Google sign-in (Drive sync)
+## 5. Google sign-in (Drive sync)
 
 Google sign-in on macOS needs an OAuth **Desktop app** client; the existing
 Android/iOS client cannot be reused. Create one once per Google Cloud project:
@@ -118,7 +118,7 @@ Until the macOS client id is configured, the cloud sync screen reports
 "Google sign-in is not configured on this device" and the rest of the app keeps
 working.
 
-## 5. Known toolchain blocker
+## 6. Known toolchain blocker
 
 `flutter build macos` needs a full Xcode 15+ install even with Swift Package
 Manager enabled. On a machine with only the Command Line Tools:
@@ -151,8 +151,9 @@ Installing Xcode and running `sudo xcodebuild -runFirstLaunch` resolves it.
 
 ## Multi-device sync policy
 
-LocalMind keeps one encrypted snapshot in Google Drive (`appDataFolder`, rotated to the
-three newest copies) and merges it with the local snapshot on every sync.
+LocalMind keeps one encrypted snapshot in an app-created `LocalMind` folder in My
+Drive (`drive.file` scope, rotated to the three newest copies) and merges it with
+the local snapshot on every sync.
 
 - **Messages merge per record.** Two devices that each append to the same chat keep both
   sets, ordered by request time (`createdAt`, then `threadOrder`, then id). No `(Conflict)`

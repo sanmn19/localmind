@@ -20,10 +20,9 @@ of the previous backup.
    `<appSupport>/cloud-backups/google-drive/<utc>.enc` (local copy) and
    `Localmind/backups/<utc>.enc` (cloud copy); keep the 3 newest of each.
 4. Existing S3 sync keeps working unchanged.
-5. The backup payload also carries the user's **skills** and **memories**
-   (added to `DataBackupService.exportAll`), so Google Drive sync backs them up
-   with everything else; the Settings Data section exposes targeted
-   export/import rows for them.
+5. Skills and memories stay device-local: `DataBackupService.exportAll` does not
+   include them, so a Google Drive backup carries conversations, messages,
+   personas, saved messages and folders only. Backing them up is out of scope here.
 
 ## Non-goals
 
