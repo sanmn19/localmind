@@ -241,17 +241,48 @@ class _MemoriesScreenState extends ConsumerState<MemoriesScreen> {
   }
 }
 
-class _ScreenMemoryStatusCard extends ConsumerWidget {
+class _ScreenMemoryStatusCard extends ConsumerStatefulWidget {
   const _ScreenMemoryStatusCard();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ScreenMemoryStatusCard> createState() =>
+      _ScreenMemoryStatusCardState();
+}
+
+class _ScreenMemoryStatusCardState
+    extends ConsumerState<_ScreenMemoryStatusCard> {
+  bool _working = false;
+
+  Future<void> _processNow() async {
+    if (_working) return;
+    setState(() => _working = true);
+    try {
+      await ref.read(screenMemorySchedulerProvider).batchNow();
+    } finally {
+      if (mounted) {
+        setState(() => _working = false);
+        ref.invalidate(screenMemoryStatusProvider);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final status = ref.watch(screenMemoryStatusProvider).value;
     if (status == null) return const SizedBox.shrink();
     final pending = status.pending;
-    final hasWork = pending > 0 || status.running || status.lastError != null;
+    final busy = _working || status.running;
+    final recentlyProcessed =
+        status.lastBatchAt != null &&
+        DateTime.now().difference(status.lastBatchAt!) <
+            const Duration(minutes: 2);
+    final hasWork =
+        pending > 0 ||
+        busy ||
+        status.lastError != null ||
+        recentlyProcessed;
     if (!hasWork) return const SizedBox.shrink();
 
     final reason = switch (status.blockedReason) {
@@ -303,7 +334,7 @@ class _ScreenMemoryStatusCard extends ConsumerWidget {
                     ),
                 ],
               ),
-              if (status.running) ...[
+              if (busy) ...[
                 const SizedBox(height: 8),
                 const LinearProgressIndicator(
                   key: ValueKey('screen_memory_progress'),
@@ -334,15 +365,13 @@ class _ScreenMemoryStatusCard extends ConsumerWidget {
                   style: theme.textTheme.bodySmall,
                 ),
               ],
-              if (!status.running && pending > 0) ...[
+              if (!busy && pending > 0) ...[
                 const SizedBox(height: 4),
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
                     key: const ValueKey('screen_memory_process_now'),
-                    onPressed: () => ref
-                        .read(screenMemorySchedulerProvider)
-                        .batchNow(),
+                    onPressed: _processNow,
                     child: Text(l10n.screen_memory_status_process_now),
                   ),
                 ),

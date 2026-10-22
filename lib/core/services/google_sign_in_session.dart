@@ -93,11 +93,19 @@ class GoogleSignInSession {
   final GoogleAuthAdapter _adapter;
 
   GoogleAccount? _account;
+  bool _restoreAttempted = false;
 
   GoogleAccount? get account => _account;
 
   /// Silent restore after a restart; null when there is no usable session.
+  ///
+  /// Only attempted once per app launch: opening the sync screen repeatedly must
+  /// not re-trigger the plugin's account picker. If the silent restore fails the
+  /// user can still tap Connect explicitly.
   Future<GoogleAccount?> restore() async {
+    if (_account != null) return _account;
+    if (_restoreAttempted) return null;
+    _restoreAttempted = true;
     try {
       final account = await _adapter.restore();
       _account = account;
@@ -110,6 +118,7 @@ class GoogleSignInSession {
   Future<GoogleAccount> connect() async {
     final account = await _adapter.signIn();
     _account = account;
+    _restoreAttempted = true;
     return account;
   }
 
@@ -123,6 +132,7 @@ class GoogleSignInSession {
   Future<void> disconnect() async {
     await _adapter.signOut();
     _account = null;
+    _restoreAttempted = false;
   }
 }
 
