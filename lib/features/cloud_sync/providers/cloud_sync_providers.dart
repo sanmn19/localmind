@@ -198,6 +198,8 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
         message: 'Cloud sync enabled.',
       );
       await syncNow(rethrowErrors: true);
+      if (!ref.mounted) return;
+      if (isMacDesktop) startPeriodicPull();
     } catch (error) {
       if (ref.mounted) {
         state = state.copyWith(
@@ -834,6 +836,8 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
 
   Future<void> disconnect() async {
     _operationGeneration++;
+    stopPeriodicPull();
+    _pending = false;
     _debounce?.cancel();
     _retryTimer?.cancel();
     final provider = config?.provider;
