@@ -201,8 +201,12 @@ class CloudSyncSnapshot {
     final payload = Map<String, dynamic>.from(json['payload'] as Map);
     _validatePayload(payload);
     final tombstones = <String, Map<String, String>>{};
-    if (json['tombstones'] is Map) {
-      for (final entry in (json['tombstones'] as Map).entries) {
+    final rawTombstones = json['tombstones'];
+    if (rawTombstones != null && rawTombstones is! Map) {
+      throw const FormatException('Invalid cloud sync tombstones');
+    }
+    if (rawTombstones is Map) {
+      for (final entry in rawTombstones.entries) {
         if (!_collections.contains(entry.key)) {
           throw const FormatException('Invalid cloud sync tombstones');
         }

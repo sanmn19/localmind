@@ -169,7 +169,7 @@ void main() {
       updatedAt: DateTime.utc(2026, 7, 10, 2),
       payload: snapshot('local-device', 2, {}).payload,
       tombstones: const {
-        'personas': ['deleted'],
+        'personas': {'deleted': '1970-01-01T00:00:00.000Z'},
       },
     );
 
@@ -212,8 +212,8 @@ void main() {
         updatedAt: DateTime.utc(2026, 7, 10, 2),
         payload: snapshot('local-device', 2, {}).payload,
         tombstones: const {
-          'personas': ['p1'],
-          'conversations': ['c1'],
+          'personas': {'p1': '1970-01-01T00:00:00.000Z'},
+          'conversations': {'c1': '1970-01-01T00:00:00.000Z'},
         },
       );
       final journal = {
@@ -250,7 +250,7 @@ void main() {
         'settings': {'fontSize': 16.0},
       }).payload,
       tombstones: const {
-        'personas': ['deleted-persona'],
+        'personas': {'deleted-persona': '1970-01-01T00:00:00.000Z'},
       },
     );
     final local = CloudSyncSnapshot(

@@ -84,6 +84,9 @@ void main() {
       {
         'unknownCollection': ['m1'],
       },
+      <Object>[],
+      'm1',
+      5,
     ]) {
       expect(
         () => CloudSyncSnapshot.fromJson(_snapshotJson(malformed)),
@@ -111,7 +114,7 @@ void main() {
   });
 
   test('preserves timestamps of existing tombstones', () {
-    const deletedAt = '2026-10-01T00:00:00.000Z';
+    final deletedAt = _isoDaysAgo(1);
     final tombstones = CloudSyncController.debugBuildTombstones(
       _payload(messageIds: ['m1']),
       {
@@ -134,6 +137,29 @@ void main() {
       'ids': {'messages': <String>[]},
       'tombstones': {
         'messages': {'old': old, 'recent': recent},
+      },
+    });
+
+    expect(tombstones['messages'], {'recent': recent});
+  });
+
+  test('converts legacy journal lists to epoch tombstones', () {
+    final tombstones = CloudSyncController.debugBuildTombstones(_payload(), {
+      'ids': {'messages': <String>[]},
+      'tombstones': {
+        'messages': ['m1'],
+      },
+    });
+
+    expect(tombstones['messages'], {'m1': '1970-01-01T00:00:00.000Z'});
+  });
+
+  test('drops unparseable journal timestamps', () {
+    final recent = _isoDaysAgo(1);
+    final tombstones = CloudSyncController.debugBuildTombstones(_payload(), {
+      'ids': {'messages': <String>[]},
+      'tombstones': {
+        'messages': {'corrupt': 'not-a-date', 'recent': recent},
       },
     });
 

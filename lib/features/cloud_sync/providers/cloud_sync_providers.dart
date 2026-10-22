@@ -453,6 +453,10 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
   /// Retains tombstones for this long so peers can still learn about deletes.
   static const _tombstoneRetention = Duration(days: 30);
 
+  /// Tombstones without a time (legacy lists) predate this change.
+  static final _legacyTombstoneTime = DateTime.utc(1970).toIso8601String();
+  static final _legacyTombstoneCutoff = DateTime.utc(1970);
+
   @visibleForTesting
   static Map<String, Map<String, String>> debugBuildTombstones(
     Map<String, dynamic> payload,
@@ -476,14 +480,22 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
       for (final entry in retained.entries) {
         if (!current.containsKey(entry.key)) continue;
         final ids = <String, String>{};
-        if (entry.value is Map) {
-          for (final tombstone in (entry.value as Map).entries) {
+        final value = entry.value;
+        if (value is Map) {
+          for (final tombstone in value.entries) {
             if (tombstone.key is! String || tombstone.value is! String) {
               continue;
             }
             final at = DateTime.tryParse(tombstone.value as String);
-            if (at != null && at.isBefore(cutoff)) continue;
+            if (at == null) continue;
+            if (at.isAfter(_legacyTombstoneCutoff) && at.isBefore(cutoff)) {
+              continue;
+            }
             ids[tombstone.key as String] = tombstone.value as String;
+          }
+        } else if (value is List) {
+          for (final id in value.whereType<String>()) {
+            ids[id] = _legacyTombstoneTime;
           }
         }
         if (ids.isNotEmpty) result[entry.key as String] = ids;
