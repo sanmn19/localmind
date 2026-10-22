@@ -33,6 +33,14 @@ class _ScreenMemoryLifecycleHostState
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      unawaited(
+        ref
+            .read(screenMemorySchedulerProvider)
+            .resumeSampling()
+            .catchError((Object error, StackTrace stack) {
+              Log.warning('Screen sampling resume failed: $error');
+            }),
+      );
       _batchNow();
     }
   }

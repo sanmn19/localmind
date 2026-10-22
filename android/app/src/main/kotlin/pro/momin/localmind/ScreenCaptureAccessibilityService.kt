@@ -69,6 +69,7 @@ class ScreenCaptureAccessibilityService : AccessibilityService() {
             addAction(Intent.ACTION_SCREEN_OFF)
         }
         registerReceiver(screenReceiver, filter)
+        requestedSamplingIntervalMs?.let { startSampling(it) }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -582,6 +583,24 @@ class ScreenCaptureAccessibilityService : AccessibilityService() {
         @Volatile
         var instance: ScreenCaptureAccessibilityService? = null
             private set
+
+        /** Sampling requested while the service was not yet connected. */
+        @Volatile
+        private var requestedSamplingIntervalMs: Long? = null
+
+        /** Requests sampling even if the service reconnects later. */
+        @JvmStatic
+        fun requestSampling(intervalMs: Long) {
+            val clamped = intervalMs.coerceIn(MIN_SAMPLE_INTERVAL_MS, MAX_SAMPLE_INTERVAL_MS)
+            requestedSamplingIntervalMs = clamped
+            instance?.startSampling(clamped)
+        }
+
+        @JvmStatic
+        fun requestStopSampling() {
+            requestedSamplingIntervalMs = null
+            instance?.stopSampling()
+        }
 
         /**
          * Samples a spread of [SCROLL_HASH_SAMPLES] pixels across the frame

@@ -208,11 +208,11 @@ class MainActivity : AudioServiceActivity() {
                 "readText" -> readScreenText(result)
                 "startSampling" -> {
                     val interval = ((call.arguments as? Map<*, *>)?.get("intervalMs") as? Number)?.toLong() ?: 500L
-                    ScreenCaptureAccessibilityService.instance?.startSampling(interval)
+                    ScreenCaptureAccessibilityService.requestSampling(interval)
                     result.success(null)
                 }
                 "stopSampling" -> {
-                    ScreenCaptureAccessibilityService.instance?.stopSampling()
+                    ScreenCaptureAccessibilityService.requestStopSampling()
                     result.success(null)
                 }
                 "drainSamples" ->
@@ -884,19 +884,28 @@ class MainActivity : AudioServiceActivity() {
             return
         }
         NativeAskLocalSink.pending = payload
+        Log.i(
+            "LocalMindAskLocal",
+            "pushAskLocalRequest: invoking Dart (selLen=${payload["selectedText"]?.toString()?.length}, capture=${payload["capturePath"]})"
+        )
         channel.invokeMethod(
             "askLocalRequestArrived",
             payload,
             object : MethodChannel.Result {
                 override fun success(result: Any?) {
+                    Log.i("LocalMindAskLocal", "pushAskLocalRequest: Dart acked result=$result")
                     if (result != null) {
                         NativeAskLocalSink.pending = null
                     }
                 }
 
-                override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) = Unit
+                override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {
+                    Log.w("LocalMindAskLocal", "pushAskLocalRequest: Dart errored $errorCode: $errorMessage")
+                }
 
-                override fun notImplemented() = Unit
+                override fun notImplemented() {
+                    Log.w("LocalMindAskLocal", "pushAskLocalRequest: Dart handler NOT INSTALLED")
+                }
             }
         )
     }

@@ -81,6 +81,15 @@ class ScreenMemoryScheduler {
     );
   }
 
+  /// Re-requests native sampling on resume. The accessibility service may have
+  /// reconnected after the app was backgrounded; without this the native request
+  /// is lost and the queue stays at zero.
+  Future<void> resumeSampling() async {
+    final interval = _sampleInterval;
+    if (!_sampling || interval == null) return;
+    await _sampler.startSampling(interval.inMilliseconds);
+  }
+
   /// Drains native samples, then processes the queue: app open/resume and the
   /// overlay being shown.
   Future<void> batchNow() async {
