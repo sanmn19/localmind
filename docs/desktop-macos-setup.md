@@ -174,3 +174,15 @@ three newest copies) and merges it with the local snapshot on every sync.
   suppressed from re-triggering a push.
 - `conflictCount` on the sync card counts overlapping edits that the merge had to resolve; it
   no longer means "chats were forked".
+
+## Sandboxed storage
+
+ObjectBox uses POSIX semaphores for its mutexes, and macOS only allows those inside an
+application group. The store therefore passes
+`macosApplicationGroup: 'pro.momin.localmind'` (see `lib/core/storage/objectbox_store.dart`)
+and both entitlements files declare the same group under
+`com.apple.security.application-groups`. Without the group the store fails to open with
+`failed to create store ... (1: Operation not permitted)`.
+
+The store itself lives in the sandbox container's Application Support directory; the app has no
+data outside `~/Library/Containers/pro.momin.localmind/`.
