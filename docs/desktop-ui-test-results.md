@@ -97,3 +97,42 @@ Still unverified in this pass (sidebar clicks did not always open the tab before
 the screenshot): Servers add/edit/default/delete in the rebuilt binary, History
 search/sort/select/delete, Saved message actions, Persona create/edit/delete,
 Local Models, TTS, Cloud Sync interactions, Skills, Background.
+
+## Pass 5 — History, Personas, Settings
+
+| Case | Result |
+|------|--------|
+| History search filters the list | **PASS** — typing "func" left only "Help me write a function" |
+| History overflow menu (Select / sort / filter) | **PASS** — menu opens and options apply |
+| Selection mode + bulk actions | **PASS** — checkbox, "1 selected", folder/export/AI-rename actions |
+| Export → Copy to Clipboard | **PASS** — valid v3 JSON on the clipboard, 1 conversation, 4 messages |
+| Archive / Archived filter / Unarchive | **PASS** — row leaves All, appears under Archived, returns after unarchive |
+| New folder | **PASS** — "Offset test" folder created and shown as a chip |
+| Persona create (name, description, system prompt) | **PASS** — validation blocks an empty prompt, then saves |
+| Persona long-press actions / delete | **PASS** — Edit / Delete / Clone & Edit sheet, delete confirmation |
+| Settings → Chat | **PASS** — streaming, Send on Enter, auto titles, resume, keep persona |
+| Settings → Voice | **PASS** — TTS engine, voice toggles, skip interval chips |
+| Settings → theme / code theme | **PASS** — Light theme applied; code-theme dropdown selects Dark |
+
+### New bug: modal routes are hit-tested 33 pt below where they paint
+
+On macOS every modal surface (AlertDialog, `showModalBottomSheet`, the custom
+`showAnchoredMenu`) paints in the right place but ignores a click at the painted
+position. Clicking **33 points lower** activates the item. Reproduced on:
+
+- History "New folder" → **Create** (painted 528 pt, works at 561 pt)
+- Persona actions sheet → **Delete** (painted 899 pt, works at 897 pt)
+- History overflow menu → **Select** (needs a slow press; fast taps are dropped)
+
+Clicking the barrier outside the modal still dismisses it, and non-modal widgets
+(sidebar, tabs, settings toggles, dropdowns) work at their painted positions.
+33 pt is exactly the macOS title-bar height, so the root-navigator overlay and the
+shell's hit-test space disagree by one title bar.
+
+Workarounds used for this pass: click 33 pt below modal content; press-and-hold
+(≥200 ms) for anchored-menu items.
+
+Still unverified: Saved Messages actions, Servers add/edit/default/delete, Local
+Models, TTS playback, Cloud Sync connect, Skills, Background, persona edit,
+History pin/rename/duplicate, and Settings → Models / Privacy & data / About (the
+Settings header scrolled out of view and would not scroll back in this build).
