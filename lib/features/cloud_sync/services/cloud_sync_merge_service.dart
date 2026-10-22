@@ -193,10 +193,11 @@ class CloudSyncMergeService {
         mergedConversations[id] = Map<String, dynamic>.from(localConversation);
         continue;
       }
-      Map<String, dynamic> winner;
-      if (_sameConversation(localConversation, remoteConversation)) {
-        winner = localConversation;
-      } else {
+      final metadataDiffers = !_sameConversation(
+        localConversation,
+        remoteConversation,
+      );
+      if (metadataDiffers) {
         if (await _conversationChanged(
               journal,
               id,
@@ -211,14 +212,14 @@ class CloudSyncMergeService {
             )) {
           conflicts++;
         }
-        winner = _resolveRecord(
-          localConversation,
-          remoteConversation,
-          'conversations',
-          local.deviceId,
-          remote.deviceId,
-        );
       }
+      final winner = _resolveRecord(
+        localConversation,
+        remoteConversation,
+        'conversations',
+        local.deviceId,
+        remote.deviceId,
+      );
       final merged = Map<String, dynamic>.from(winner);
       final createdAt = _earlierTime(
         localConversation['createdAt'],
@@ -370,6 +371,7 @@ class CloudSyncMergeService {
   ) {
     Map<String, dynamic> metadata(Map<String, dynamic> conversation) =>
         Map<String, dynamic>.from(conversation)
+          ..remove('updatedAt')
           ..remove('messageCount')
           ..remove('lastMessagePreview');
     return _same(metadata(local), metadata(remote));
@@ -557,12 +559,50 @@ class CloudSyncMergeService {
       if (raw is! Map) continue;
       final id = raw['id'];
       if (id is! String) continue;
-      final thread = threads[id] ?? const <Map<String, dynamic>>[];
-      raw['messageCount'] = thread.length;
-      raw['lastMessagePreview'] = thread.isEmpty
+      final active = _activeTimeline(
+        threads[id] ?? const <Map<String, dynamic>>[],
+      );
+      raw['messageCount'] = active.length;
+      raw['lastMessagePreview'] = active.isEmpty
           ? null
-          : _preview(thread.last['content']);
+          : _preview(active.last['content']);
     }
+  }
+
+  /// Mirrors `MessageVariants._legacyFlatResolve` for flat sync payloads: one
+  /// active message per variant group, ordered by the conversation timeline.
+  List<Map<String, dynamic>> _activeTimeline(
+    List<Map<String, dynamic>> messages,
+  ) {
+    final byGroup = <String, List<Map<String, dynamic>>>{};
+    for (final message in messages) {
+      final variantGroup = message['variantGroupId'];
+      final id = message['id'];
+      final groupId = variantGroup is String && variantGroup.isNotEmpty
+          ? variantGroup
+          : id is String
+          ? id
+          : null;
+      if (groupId != null) (byGroup[groupId] ??= []).add(message);
+    }
+    final active = <Map<String, dynamic>>[];
+    for (final group in byGroup.values) {
+      group.sort((a, b) {
+        final byIndex = _intValue(
+          a['variantIndex'],
+        ).compareTo(_intValue(b['variantIndex']));
+        if (byIndex != 0) return byIndex;
+        return _compareMessages(a, b);
+      });
+      active.add(
+        group.firstWhere(
+          (message) => message['isActiveVariant'] == true,
+          orElse: () => group.last,
+        ),
+      );
+    }
+    active.sort(_compareMessages);
+    return active;
   }
 
   bool _same(Map<String, dynamic> a, Map<String, dynamic> b) =>

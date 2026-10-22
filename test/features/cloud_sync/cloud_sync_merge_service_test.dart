@@ -51,6 +51,9 @@ void main() {
     String status = 'complete',
     String role = 'assistant',
     int? updatedAt,
+    String? variantGroupId,
+    int variantIndex = 0,
+    bool isActiveVariant = true,
   }) => {
     'id': id,
     'conversationId': conversationId,
@@ -65,6 +68,9 @@ void main() {
       updatedAt ?? minute,
     ).toIso8601String(),
     'status': status,
+    'variantGroupId': variantGroupId,
+    'variantIndex': variantIndex,
+    'isActiveVariant': isActiveVariant,
   };
 
   CloudSyncSnapshot withTombstones(
@@ -171,6 +177,259 @@ void main() {
 
     expect(forward.snapshot.payload['settings'], {'fontSize': 22.0});
     expect(backward.snapshot.payload['settings'], {'fontSize': 22.0});
+  });
+
+  test(
+    'does not count concurrent appends as a conversation conflict',
+    () async {
+      final remote = snapshot('remote-device', 1, {
+        'conversations': [conversation('c1', 'Chat', 1, updatedAt: 4)],
+        'messages': [message('m1', 'c1', 1), message('m2', 'c1', 2)],
+      });
+      final local = snapshot('local-device', 2, {
+        'conversations': [conversation('c1', 'Chat', 1, updatedAt: 5)],
+        'messages': [message('m1', 'c1', 1), message('m3', 'c1', 3)],
+      });
+
+      final forward = await service.merge(
+        local: local,
+        remote: remote,
+        journal: const {},
+      );
+      final backward = await service.merge(
+        local: remote,
+        remote: local,
+        journal: const {},
+      );
+
+      for (final result in [forward, backward]) {
+        expect(result.conflictCount, 0);
+        expect(
+          (result.snapshot.payload['messages'] as List).map((m) => m['id']),
+          ['m1', 'm2', 'm3'],
+        );
+      }
+    },
+  );
+
+  test('breaks equal-length content ties lexicographically', () async {
+    final remote = snapshot('remote-device', 1, {
+      'conversations': [conversation('c1', 'Chat', 1)],
+      'messages': [message('m1', 'c1', 1, content: 'aaa', updatedAt: 3)],
+    });
+    final local = snapshot('local-device', 2, {
+      'conversations': [conversation('c1', 'Chat', 1)],
+      'messages': [message('m1', 'c1', 1, content: 'bbb', updatedAt: 3)],
+    });
+
+    final forward = await service.merge(
+      local: local,
+      remote: remote,
+      journal: const {},
+    );
+    final backward = await service.merge(
+      local: remote,
+      remote: local,
+      journal: const {},
+    );
+
+    for (final result in [forward, backward]) {
+      expect(
+        (result.snapshot.payload['messages'] as List).single['content'],
+        'bbb',
+      );
+    }
+  });
+
+  test('orders equal timestamps by message id', () async {
+    final remote = snapshot('remote-device', 1, {
+      'conversations': [conversation('c1', 'Chat', 1)],
+      'messages': [message('b', 'c1', 1), message('a', 'c1', 1)],
+    });
+    final local = snapshot('local-device', 2, {
+      'conversations': [conversation('c1', 'Chat', 1)],
+    });
+
+    final forward = await service.merge(
+      local: local,
+      remote: remote,
+      journal: const {},
+    );
+    final backward = await service.merge(
+      local: remote,
+      remote: local,
+      journal: const {},
+    );
+
+    for (final result in [forward, backward]) {
+      expect(
+        (result.snapshot.payload['messages'] as List).map((m) => m['id']),
+        ['a', 'b'],
+      );
+    }
+  });
+
+  test('counts only both-sided message edits as conflicts', () async {
+    final base = snapshot('base-device', 1, {
+      'conversations': [conversation('c1', 'Chat', 1)],
+      'messages': [message('m1', 'c1', 1, content: 'base')],
+    });
+    final journal = {
+      'payloadHash': 'stale',
+      'remoteRevision': 0,
+      'remoteDeviceId': 'remote-device',
+      'recordHashes': await service.recordHashes(base.payload),
+    };
+    final remote = snapshot('remote-device', 2, {
+      'conversations': [conversation('c1', 'Chat', 1)],
+      'messages': [
+        message('m1', 'c1', 1, content: 'remote edit', updatedAt: 2),
+      ],
+    });
+    final localOneSided = snapshot('local-device', 2, {
+      'conversations': [conversation('c1', 'Chat', 1)],
+      'messages': [message('m1', 'c1', 1, content: 'base')],
+    });
+    final localBothSided = snapshot('local-device', 2, {
+      'conversations': [conversation('c1', 'Chat', 1)],
+      'messages': [message('m1', 'c1', 1, content: 'local edit', updatedAt: 3)],
+    });
+
+    final oneSided = await service.merge(
+      local: localOneSided,
+      remote: remote,
+      journal: journal,
+    );
+    final bothSided = await service.merge(
+      local: localBothSided,
+      remote: remote,
+      journal: journal,
+    );
+
+    expect(oneSided.conflictCount, 0);
+    expect(
+      (oneSided.snapshot.payload['messages'] as List).single['content'],
+      'remote edit',
+    );
+    expect(bothSided.conflictCount, 1);
+    expect(
+      (bothSided.snapshot.payload['messages'] as List).single['content'],
+      'local edit',
+    );
+  });
+
+  test('drops the messages of a tombstoned conversation', () async {
+    final remote = snapshot('remote-device', 1, {
+      'conversations': [conversation('c1', 'Chat', 1)],
+      'messages': [message('m1', 'c1', 1)],
+    });
+    final local = withTombstones(snapshot('local-device', 2, {}), const {
+      'conversations': {'c1': '2026-01-01T00:05:00.000Z'},
+    });
+
+    final forward = await service.merge(
+      local: local,
+      remote: remote,
+      journal: const {},
+    );
+    final backward = await service.merge(
+      local: remote,
+      remote: local,
+      journal: const {},
+    );
+
+    for (final result in [forward, backward]) {
+      expect(result.snapshot.payload['conversations'], isEmpty);
+      expect(result.snapshot.payload['messages'], isEmpty);
+    }
+  });
+
+  test('keeps the earlier conversation creation time', () async {
+    final remote = snapshot('remote-device', 1, {
+      'conversations': [conversation('c1', 'Chat', 5)],
+    });
+    final local = snapshot('local-device', 2, {
+      'conversations': [conversation('c1', 'Chat', 2)],
+    });
+
+    final forward = await service.merge(
+      local: local,
+      remote: remote,
+      journal: const {},
+    );
+    final backward = await service.merge(
+      local: remote,
+      remote: local,
+      journal: const {},
+    );
+
+    for (final result in [forward, backward]) {
+      expect(
+        (result.snapshot.payload['conversations'] as List).single['createdAt'],
+        DateTime.utc(2026, 1, 1, 0, 2).toIso8601String(),
+      );
+    }
+  });
+
+  test('counts and previews only active message variants', () async {
+    final remote = snapshot('remote-device', 1, {
+      'conversations': [conversation('c1', 'Chat', 1)],
+      'messages': [
+        message(
+          'discarded',
+          'c1',
+          3,
+          content: 'discarded later variant',
+          variantGroupId: 'g1',
+          variantIndex: 0,
+          isActiveVariant: false,
+        ),
+        message(
+          'kept',
+          'c1',
+          2,
+          content: 'kept reply',
+          variantGroupId: 'g1',
+          variantIndex: 1,
+        ),
+      ],
+    });
+    final local = snapshot('local-device', 2, {
+      'conversations': [conversation('c1', 'Chat', 1)],
+    });
+
+    final forward = await service.merge(
+      local: local,
+      remote: remote,
+      journal: const {},
+    );
+    final backward = await service.merge(
+      local: remote,
+      remote: local,
+      journal: const {},
+    );
+
+    for (final result in [forward, backward]) {
+      final merged = (result.snapshot.payload['conversations'] as List).single;
+      expect(merged['messageCount'], 1);
+      expect(merged['lastMessagePreview'], 'kept reply');
+    }
+  });
+
+  test('records per-message hashes', () async {
+    final payload = snapshot('local-device', 1, {
+      'conversations': [conversation('c1', 'Chat', 1)],
+      'messages': [
+        message('m1', 'c1', 1, content: 'one'),
+        message('m2', 'c1', 2, content: 'two'),
+      ],
+    }).payload;
+
+    final hashes = await service.recordHashes(payload);
+    final messages = hashes['messages'] as Map<String, String>;
+
+    expect(messages.keys, containsAll(['m1', 'm2']));
+    expect(messages['m1'], isNot(messages['m2']));
   });
 
   test(
