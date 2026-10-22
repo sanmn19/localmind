@@ -150,3 +150,27 @@ Manager enabled. On a machine with only the Command Line Tools:
 
 Installing Xcode and running `sudo xcodebuild -runFirstLaunch` resolves it.
 `flutter analyze` and `flutter test` do not need Xcode.
+
+## Multi-device sync policy
+
+LocalMind keeps one encrypted snapshot in Google Drive (`appDataFolder`, rotated to the
+three newest copies) and merges it with the local snapshot on every sync.
+
+- **Messages merge per record.** Two devices that each append to the same chat keep both
+  sets, ordered by request time (`createdAt`, then `threadOrder`, then id). No `(Conflict)`
+  copy is created for an appended chat.
+- **The same message written twice** resolves deterministically: a completed or errored reply
+  beats a streaming checkpoint; otherwise the later `updatedAt` wins, then longer content,
+  then lexicographic content, then id.
+- **Conversations** merge by id; title, pin, folder, persona, server and model use the later
+  `updatedAt` (ties go to the lexicographically larger device id). `messageCount` and
+  `lastMessagePreview` are recomputed from the merged active messages.
+- **Tombstones** carry the deletion time. A record survives only when it was edited strictly
+  after the deletion; legacy list-shaped tombstones read as deleted at the epoch and always win.
+- **Order does not matter.** `merge(local, remote)` and `merge(remote, local)` produce the
+  same payload, so both devices converge without a coordinator.
+- **Sync cadence.** A local change pushes after a 5 s debounce, the app pulls on resume, on the
+  cloud-sync screen and every 30 s while the macOS app is open. Remote application is
+  suppressed from re-triggering a push.
+- `conflictCount` on the sync card counts overlapping edits that the merge had to resolve; it
+  no longer means "chats were forked".
