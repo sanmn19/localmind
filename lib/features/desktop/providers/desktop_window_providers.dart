@@ -1,12 +1,10 @@
 import 'dart:async';
-import 'dart:ui';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/storage_providers.dart';
 import '../data/desktop_layout_store.dart';
 import '../data/models/desktop_window.dart';
-import '../utils/window_geometry.dart';
 
 final desktopLayoutStoreProvider = Provider<DesktopLayoutStore>((ref) {
   return DesktopLayoutStore(ref.watch(sharedPreferencesProvider));
@@ -17,27 +15,17 @@ final desktopWindowControllerProvider =
       DesktopWindowController.new,
     );
 
-/// Owns the open desktop windows, their stacking order and their persisted
-/// layout.
+/// Owns the open desktop tabs and the persisted layout.
 ///
-/// The controller is the single source of truth for window placement; views only
+/// The controller is the single source of truth for which tabs are open; views only
 /// call its methods and render [state]. Writes to the layout store are debounced
 /// and best-effort, so a slow or failing disk never blocks interaction.
 class DesktopWindowController extends Notifier<DesktopLayout> {
   /// How long a burst of layout changes waits before one write.
   static const Duration _saveDebounce = Duration(milliseconds: 300);
 
-  /// The size a window gets when the caller does not ask for one.
-  static const double _defaultWidth = 720;
-  static const double _defaultHeight = 520;
-
-  static const double _cascadeStep = 28;
-  static const double _cascadeLeft = 120;
-  static const double _cascadeTop = 96;
-  static const int _cascadeSlots = 6;
   static final RegExp _idPattern = RegExp(r'^w(\d+)$');
 
-  Rect? _workspace;
   Timer? _saveTimer;
   int _nextIdNumber = 1;
 
@@ -50,22 +38,20 @@ class DesktopWindowController extends Notifier<DesktopLayout> {
     return layout;
   }
 
-  /// Opens a window and returns its id.
+  /// Opens a tab and returns its id.
   ///
-  /// Chat windows are unique per [conversationId]; utility windows are unique
-  /// per [kind]. Reopening an existing window restores it and focuses it instead
-  /// of creating a duplicate.
+  /// Chat tabs are unique per [conversationId]; utility tabs are unique per
+  /// [kind]. Reopening an existing tab focuses it instead of creating a
+  /// duplicate.
   String open({
     required DesktopWindowKind kind,
     String? route,
     String? conversationId,
     String? title,
-    Rect? rect,
-    bool maximized = false,
   }) {
     final existing = _findOpen(kind, conversationId);
     if (existing != null) {
-      restore(existing.id);
+      focus(existing.id);
       return existing.id;
     }
     final id = 'w${_nextIdNumber++}';
@@ -73,11 +59,8 @@ class DesktopWindowController extends Notifier<DesktopLayout> {
       id: id,
       kind: kind,
       title: title ?? kind.defaultTitle,
-      rect: _clampToWorkspace(rect ?? _cascadeRect(state.windows.length)),
       route: route,
       conversationId: conversationId,
-      isMaximized: maximized,
-      zIndex: _topZIndex() + 1,
     );
     _set(
       DesktopLayout(windows: [...state.windows, window], focusedWindowId: id),
@@ -85,96 +68,30 @@ class DesktopWindowController extends Notifier<DesktopLayout> {
     return id;
   }
 
-  /// Closes [id] and focuses the topmost remaining window.
+  /// Closes [id] and activates the neighbouring tab.
+  ///
+  /// The tab that takes the closed tab's place becomes active; when the last tab
+  /// was closed, the one before it does. Closing an inactive tab leaves the
+  /// current focus alone.
   void close(String id) {
-    if (!state.windows.any((window) => window.id == id)) return;
-    final remaining = [
-      for (final window in state.windows)
-        if (window.id != id) window,
-    ];
+    final index = state.windows.indexWhere((window) => window.id == id);
+    if (index < 0) return;
+    final remaining = [...state.windows]..removeAt(index);
     final focused = state.focusedWindowId;
-    final keepFocus =
-        focused != id && remaining.any((window) => window.id == focused);
+    final keepFocus = focused != id && remaining.any((w) => w.id == focused);
     _set(
       DesktopLayout(
         windows: remaining,
-        focusedWindowId: keepFocus ? focused : _topmostVisible(remaining)?.id,
+        focusedWindowId: keepFocus ? focused : _neighbour(remaining, index),
       ),
     );
   }
 
-  /// Focuses [id], bringing it to the top of the stack.
+  /// Activates [id].
   void focus(String id) {
-    final window = _window(id);
-    if (window == null) return;
-    if (state.focusedWindowId == id && window.zIndex == _topZIndex()) return;
-    _bringToFront(window);
-  }
-
-  /// Hides [id] and moves focus to the next topmost visible window.
-  void minimize(String id) {
-    final window = _window(id);
-    if (window == null || window.isMinimized) return;
-    final windows = [
-      for (final candidate in state.windows)
-        candidate.id == id ? candidate.copyWith(isMinimized: true) : candidate,
-    ];
-    final focusedWindowId = state.focusedWindowId == id
-        ? _topmostVisible(windows)?.id
-        : state.focusedWindowId;
-    _set(DesktopLayout(windows: windows, focusedWindowId: focusedWindowId));
-  }
-
-  /// Shows a minimised window again and focuses it.
-  void restore(String id) {
-    final window = _window(id);
-    if (window == null) return;
-    _bringToFront(window.copyWith(isMinimized: false));
-  }
-
-  /// Flips the maximised flag. The stored rect is left untouched so the
-  /// window returns to its previous size when it is un-maximised.
-  void toggleMaximize(String id) {
-    final window = _window(id);
-    if (window == null) return;
-    _replace(window.copyWith(isMaximized: !window.isMaximized));
-  }
-
-  /// Moves [id], clamped to the workspace when one is known.
-  void move(String id, Rect rect) => _setRect(id, rect);
-
-  /// Resizes [id], clamped to the workspace when one is known.
-  void resize(String id, Rect rect) => _setRect(id, rect);
-
-  /// Fills [edge] of the workspace with [id] and un-maximises it.
-  ///
-  /// Does nothing until the shell has reported a workspace: there is no edge to
-  /// fill before that.
-  void snap(String id, DesktopSnapEdge edge) {
-    final window = _window(id);
-    final workspace = _workspace;
-    if (window == null || workspace == null) return;
-    final next = window.copyWith(
-      rect: _clampToWorkspace(WindowGeometry.snapped(edge, workspace)),
-      isMaximized: false,
-    );
-    if (next == window) return;
-    _replace(next);
-  }
-
-  /// Sets the workspace used to keep windows on screen and re-clamps every
-  /// window already open.
-  void setWorkspace(Rect workspace) {
-    _workspace = workspace;
-    _set(
-      DesktopLayout(
-        windows: [
-          for (final window in state.windows)
-            window.copyWith(rect: WindowGeometry.clamp(window.rect, workspace)),
-        ],
-        focusedWindowId: state.focusedWindowId,
-      ),
-    );
+    if (state.focusedWindowId == id) return;
+    if (!state.windows.any((window) => window.id == id)) return;
+    _set(DesktopLayout(windows: state.windows, focusedWindowId: id));
   }
 
   void updateTitle(String id, String title) {
@@ -205,35 +122,16 @@ class DesktopWindowController extends Notifier<DesktopLayout> {
     return null;
   }
 
-  int _topZIndex() {
-    var top = 0;
-    for (final window in state.windows) {
-      if (window.zIndex > top) top = window.zIndex;
-    }
-    return top;
-  }
-
-  /// The highest stacked window that is not minimised.
-  DesktopWindowState? _topmostVisible(List<DesktopWindowState> windows) {
-    DesktopWindowState? top;
-    for (final window in windows) {
-      if (window.isMinimized) continue;
-      if (top == null || window.zIndex > top.zIndex) top = window;
-    }
-    return top;
-  }
-
-  void _bringToFront(DesktopWindowState window) {
-    final raised = window.copyWith(zIndex: _topZIndex() + 1);
-    _set(
-      DesktopLayout(
-        windows: [
-          for (final candidate in state.windows)
-            candidate.id == window.id ? raised : candidate,
-        ],
-        focusedWindowId: raised.id,
-      ),
-    );
+  /// The id of the tab that takes [closedIndex]'s place, else the one before.
+  static String? _neighbour(
+    List<DesktopWindowState> remaining,
+    int closedIndex,
+  ) {
+    if (remaining.isEmpty) return null;
+    final index = closedIndex >= remaining.length
+        ? remaining.length - 1
+        : closedIndex;
+    return remaining[index].id;
   }
 
   void _replace(DesktopWindowState window) {
@@ -245,29 +143,6 @@ class DesktopWindowController extends Notifier<DesktopLayout> {
         ],
         focusedWindowId: state.focusedWindowId,
       ),
-    );
-  }
-
-  void _setRect(String id, Rect rect) {
-    final window = _window(id);
-    if (window == null) return;
-    final next = _clampToWorkspace(rect);
-    if (next == window.rect) return;
-    _replace(window.copyWith(rect: next));
-  }
-
-  Rect _clampToWorkspace(Rect rect) {
-    final workspace = _workspace;
-    return workspace == null ? rect : WindowGeometry.clamp(rect, workspace);
-  }
-
-  Rect _cascadeRect(int index) {
-    final offset = _cascadeStep * (index % _cascadeSlots);
-    return Rect.fromLTWH(
-      _cascadeLeft + offset,
-      _cascadeTop + offset,
-      _defaultWidth,
-      _defaultHeight,
     );
   }
 

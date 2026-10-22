@@ -1,50 +1,71 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hugeicons/hugeicons.dart';
 
+import '../../../core/components/app_sizes.dart';
 import '../../../core/routes/app_routes.dart';
 import '../data/models/desktop_window.dart';
 import '../providers/desktop_window_providers.dart';
 import '../utils/desktop_routes.dart';
 import 'components/desktop_command_palette.dart';
-import 'components/desktop_dock.dart';
-import 'components/desktop_window_frame.dart';
+import 'components/desktop_tab_bar.dart';
 
-/// The desktop canvas: a sidebar, a workspace of floating windows and a dock.
+/// Builds the screen hosted by the active desktop tab.
+typedef DesktopScreenBuilder = Widget Function(DesktopWindowState window);
+
+/// The desktop workspace: a sidebar, a tab strip and the active screen.
 ///
-/// The shell owns the workspace rectangle and hands it to
-/// [DesktopWindowController.setWorkspace] so restored layouts are clamped before
-/// their frames are painted. It renders no platform-specific window chrome, which
-/// keeps it usable in widget tests.
+/// The active screen fills the workspace with no frame of its own: tabs are the
+/// only window chrome. The shell renders no platform-specific window chrome,
+/// which keeps it usable in widget tests.
 ///
 /// It also owns the keyboard shortcuts and the command palette. The palette is an
 /// overlay inside the workspace, so it is part of the same focus scope as the
-/// windows it searches. Minimise is ⌥⌘M because macOS keeps ⌘M for the native
-/// window.
+/// screen it searches.
 class DesktopShell extends ConsumerStatefulWidget {
   const DesktopShell({
     super.key,
     required this.sidebar,
     required this.screenBuilder,
     this.conversationCommands,
+    this.startNewChat,
   });
 
   /// The navigation sidebar shown left of the workspace.
   final Widget sidebar;
 
-  /// Builds the screen hosted by one window.
+  /// Builds the screen hosted by the active tab.
   final DesktopScreenBuilder screenBuilder;
 
   /// Builds the recent-conversation commands listed by the palette.
   final List<DesktopCommand> Function()? conversationCommands;
+
+  /// Resets the app-wide chat before the shell opens a new chat tab.
+  ///
+  /// Chat state belongs to the chat feature, so the app supplies this callback
+  /// and the desktop feature never imports a sibling feature.
+  final Future<void> Function()? startNewChat;
 
   @override
   ConsumerState<DesktopShell> createState() => _DesktopShellState();
 }
 
 class _DesktopShellState extends ConsumerState<DesktopShell> {
+  /// The number keys that activate the first nine tabs.
+  static const List<LogicalKeyboardKey> _tabKeys = [
+    LogicalKeyboardKey.digit1,
+    LogicalKeyboardKey.digit2,
+    LogicalKeyboardKey.digit3,
+    LogicalKeyboardKey.digit4,
+    LogicalKeyboardKey.digit5,
+    LogicalKeyboardKey.digit6,
+    LogicalKeyboardKey.digit7,
+    LogicalKeyboardKey.digit8,
+    LogicalKeyboardKey.digit9,
+  ];
+
   final _focusNode = FocusNode(debugLabel: 'desktop-shell');
-  Rect? _workspace;
   bool _isPaletteOpen = false;
 
   DesktopWindowController get _controller =>
@@ -58,7 +79,8 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(desktopWindowControllerProvider);
+    final layout = ref.watch(desktopWindowControllerProvider);
+    final activeWindow = layout.focusedWindow;
     final theme = Theme.of(context);
 
     final canvas = Material(
@@ -69,42 +91,15 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
           Expanded(
             child: Column(
               children: [
+                DesktopTabBar(onNewChat: _newChat),
                 Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      if (!constraints.hasBoundedWidth ||
-                          !constraints.hasBoundedHeight) {
-                        return const SizedBox.shrink();
-                      }
-                      final workspace = Rect.fromLTWH(
-                        0,
-                        0,
-                        constraints.maxWidth,
-                        constraints.maxHeight,
-                      );
-                      _syncWorkspace(workspace);
-                      final layout = ref.read(desktopWindowControllerProvider);
-                      final windows = [...layout.windows]
-                        ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
-                      return Stack(
-                        key: const ValueKey('desktop-workspace'),
-                        clipBehavior: Clip.hardEdge,
-                        children: [
-                          for (final window in windows)
-                            if (!window.isMinimized)
-                              DesktopWindowFrame(
-                                key: ValueKey('desktop-window-${window.id}'),
-                                window: window,
-                                workspace: workspace,
-                                isFocused: layout.focusedWindowId == window.id,
-                                screenBuilder: widget.screenBuilder,
-                              ),
-                        ],
-                      );
-                    },
-                  ),
+                  child: activeWindow == null
+                      ? const _DesktopEmptyState()
+                      : KeyedSubtree(
+                          key: ValueKey('desktop-screen-${activeWindow.id}'),
+                          child: widget.screenBuilder(activeWindow),
+                        ),
                 ),
-                const DesktopDock(),
               ],
             ),
           ),
@@ -119,10 +114,11 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
             _togglePalette,
         const SingleActivator(LogicalKeyboardKey.keyW, meta: true):
             _closeFocused,
-        const SingleActivator(LogicalKeyboardKey.keyM, meta: true, alt: true):
-            _minimizeFocused,
         const SingleActivator(LogicalKeyboardKey.comma, meta: true):
             _openSettings,
+        for (var index = 0; index < _tabKeys.length; index++)
+          SingleActivator(_tabKeys[index], meta: true): () =>
+              _activateTab(index),
         if (_isPaletteOpen)
           const SingleActivator(LogicalKeyboardKey.escape): _closePalette,
       },
@@ -154,16 +150,25 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
     );
   }
 
-  /// Opens a fresh draft chat window.
+  /// Resets the app-wide chat and opens the home chat tab.
   ///
-  /// A new draft id per press keeps the controller from deduping the window into
-  /// the chat window that is already open.
-  void _newChat() {
+  /// The home tab has no conversation id, so it renders the app-scope chat rather
+  /// than a window bound to a conversation that does not exist yet.
+  Future<void> _newChat() async {
+    await widget.startNewChat?.call();
+    if (!mounted) return;
     _controller.open(
       kind: DesktopWindowKind.chat,
-      conversationId: 'draft-${DateTime.now().microsecondsSinceEpoch}',
+      conversationId: null,
       title: DesktopWindowKind.chat.defaultTitle,
     );
+  }
+
+  /// Activates the tab at [index], if there is one.
+  void _activateTab(int index) {
+    final windows = ref.read(desktopWindowControllerProvider).windows;
+    if (index < 0 || index >= windows.length) return;
+    _controller.focus(windows[index].id);
   }
 
   void _togglePalette() {
@@ -185,11 +190,6 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
     if (id != null) _controller.close(id);
   }
 
-  void _minimizeFocused() {
-    final id = ref.read(desktopWindowControllerProvider).focusedWindowId;
-    if (id != null) _controller.minimize(id);
-  }
-
   void _openSettings() {
     _controller.open(
       kind: DesktopWindowKind.settings,
@@ -198,7 +198,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
     );
   }
 
-  /// Runs one palette command: focus an open window or open its route.
+  /// Runs one palette command: focus an open tab or open its route.
   void _selectCommand(DesktopCommand command) {
     _closePalette();
     if (command.id.startsWith(DesktopCommand.windowPrefix)) {
@@ -223,21 +223,34 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
       title: command.label,
     );
   }
+}
 
-  /// Hands the workspace to the controller after the frame.
-  ///
-  /// Riverpod forbids changing a provider while the widget tree is building, and
-  /// a [LayoutBuilder] runs during layout. Frames already render with the
-  /// workspace passed to them, so this only persists the clamped layout; the first
-  /// painted frame is never unclamped.
-  void _syncWorkspace(Rect workspace) {
-    if (_workspace == workspace) return;
-    _workspace = workspace;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      ref
-          .read(desktopWindowControllerProvider.notifier)
-          .setWorkspace(workspace);
-    });
+/// The workspace shown when every tab is closed.
+class _DesktopEmptyState extends StatelessWidget {
+  const _DesktopEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = theme.colorScheme.onSurfaceVariant;
+
+    return Center(
+      key: const ValueKey('desktop-empty-workspace'),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          HugeIcon(
+            icon: HugeIcons.strokeRoundedDashboardSquare01,
+            size: AppSizes.iconXl,
+            color: color.withValues(alpha: 0.5),
+          ),
+          const SizedBox(height: AppSizes.sm),
+          Text(
+            'No open tabs',
+            style: theme.textTheme.bodyMedium?.copyWith(color: color),
+          ),
+        ],
+      ),
+    );
   }
 }

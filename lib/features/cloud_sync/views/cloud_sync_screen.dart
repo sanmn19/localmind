@@ -2,9 +2,10 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
+import 'package:hugeicons/hugeicons.dart';
 
 import '../../../core/routes/app_routes.dart';
+import '../../../core/routes/desktop_window_scope.dart';
 import '../../../l10n/app_localizations.dart';
 import '../data/models/cloud_sync_models.dart';
 import '../providers/cloud_sync_providers.dart';
@@ -154,10 +155,13 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
             child: Row(
               children: [
                 IconButton(
-                  onPressed: () => context.canPop()
-                      ? context.pop()
-                      : context.go(AppRoutes.settings),
-                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () => DesktopWindowScope.popOrClose(
+                    context,
+                    AppRoutes.settings,
+                  ),
+                  icon: const HugeIcon(
+                    icon: HugeIcons.strokeRoundedArrowLeft01,
+                  ),
                 ),
                 Expanded(
                   child: Text(

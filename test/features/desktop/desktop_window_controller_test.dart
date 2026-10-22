@@ -1,12 +1,9 @@
-import 'dart:ui';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:localmind/core/providers/storage_providers.dart';
 import 'package:localmind/features/desktop/data/desktop_layout_store.dart';
 import 'package:localmind/features/desktop/data/models/desktop_window.dart';
 import 'package:localmind/features/desktop/providers/desktop_window_providers.dart';
-import 'package:localmind/features/desktop/utils/window_geometry.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Counts saves so the debounce can be observed without inspecting internals.
@@ -51,7 +48,7 @@ void main() {
     return container;
   }
 
-  test('opens one window per conversation and focuses the newest', () {
+  test('opens one tab per conversation and focuses the newest', () {
     final container = createContainer();
     final controller = container.read(desktopWindowControllerProvider.notifier);
 
@@ -82,7 +79,7 @@ void main() {
     );
   });
 
-  test('reopening the same conversation focuses the existing window', () {
+  test('reopening the same conversation focuses the existing tab', () {
     final container = createContainer();
     final controller = container.read(desktopWindowControllerProvider.notifier);
     final id = controller.open(
@@ -90,25 +87,25 @@ void main() {
       conversationId: 'c1',
       title: 'One',
     );
-    controller.minimize(id);
+    controller.open(
+      kind: DesktopWindowKind.chat,
+      conversationId: 'c2',
+      title: 'Two',
+    );
+
     final again = controller.open(
       kind: DesktopWindowKind.chat,
       conversationId: 'c1',
       title: 'One',
     );
+
+    final layout = container.read(desktopWindowControllerProvider);
     expect(again, id);
-    expect(
-      container
-          .read(desktopWindowControllerProvider)
-          .windows
-          .single
-          .isMinimized,
-      isFalse,
-    );
-    expect(container.read(desktopWindowControllerProvider).focusedWindowId, id);
+    expect(layout.windows, hasLength(2));
+    expect(layout.focusedWindowId, id);
   });
 
-  test('opens one utility window per kind and brings it to the front', () {
+  test('opens one utility tab per kind and focuses it', () {
     final container = createContainer();
     final controller = container.read(desktopWindowControllerProvider.notifier);
 
@@ -130,189 +127,88 @@ void main() {
     expect(again, settings);
     expect(layout.windows, hasLength(2));
     expect(layout.focusedWindowId, settings);
+    expect(layout.windows.map((w) => w.id), contains(chat));
+  });
+
+  test('closing a tab activates the next one, then the previous', () {
+    final container = createContainer();
+    final controller = container.read(desktopWindowControllerProvider.notifier);
+    final first = controller.open(
+      kind: DesktopWindowKind.settings,
+      title: 'Settings',
+    );
+    final second = controller.open(
+      kind: DesktopWindowKind.skills,
+      title: 'Skills',
+    );
+    final third = controller.open(
+      kind: DesktopWindowKind.servers,
+      title: 'Servers',
+    );
+    controller.focus(second);
+
+    controller.close(second);
     expect(
-      layout.windows.firstWhere((w) => w.id == settings).zIndex,
-      greaterThan(layout.windows.firstWhere((w) => w.id == chat).zIndex),
-    );
-  });
-
-  test('move and resize keep the raw rect until a workspace is known', () {
-    final container = createContainer();
-    final controller = container.read(desktopWindowControllerProvider.notifier);
-    final id = controller.open(
-      kind: DesktopWindowKind.settings,
-      title: 'Settings',
+      container.read(desktopWindowControllerProvider).focusedWindowId,
+      third,
     );
 
-    controller.move(id, const Rect.fromLTWH(5000, -400, 900, 700));
-    controller.resize(id, const Rect.fromLTWH(5000, -400, 100, 100));
-
-    final window = container
-        .read(desktopWindowControllerProvider)
-        .windows
-        .single;
-    expect(window.rect, const Rect.fromLTWH(5000, -400, 100, 100));
-  });
-
-  test('move and resize clamp inside the workspace once it is known', () {
-    final container = createContainer();
-    final controller = container.read(desktopWindowControllerProvider.notifier);
-    controller.setWorkspace(const Rect.fromLTWH(0, 0, 1200, 800));
-    final id = controller.open(
-      kind: DesktopWindowKind.settings,
-      title: 'Settings',
-    );
-
-    controller.move(id, const Rect.fromLTWH(5000, -400, 900, 700));
-    var window = container.read(desktopWindowControllerProvider).windows.single;
-    expect(window.rect, const Rect.fromLTWH(840, 0, 900, 700));
-
-    controller.resize(id, const Rect.fromLTWH(10, 10, 100, 100));
-    window = container.read(desktopWindowControllerProvider).windows.single;
-    expect(window.rect, const Rect.fromLTWH(10, 10, 360, 320));
-  });
-
-  test('snap fills a workspace edge and clears the maximised flag', () {
-    final container = createContainer();
-    final controller = container.read(desktopWindowControllerProvider.notifier);
-    controller.setWorkspace(const Rect.fromLTWH(0, 0, 1200, 800));
-    final id = controller.open(
-      kind: DesktopWindowKind.settings,
-      title: 'Settings',
-    );
-    controller.toggleMaximize(id);
-
-    controller.snap(id, DesktopSnapEdge.rightHalf);
-
-    final window = container
-        .read(desktopWindowControllerProvider)
-        .windows
-        .single;
-    expect(window.rect, const Rect.fromLTWH(600, 0, 600, 800));
-    expect(window.isMaximized, isFalse);
-  });
-
-  test('snap without a workspace is a no-op', () {
-    final container = createContainer();
-    final controller = container.read(desktopWindowControllerProvider.notifier);
-    final id = controller.open(
-      kind: DesktopWindowKind.settings,
-      title: 'Settings',
-    );
-    final before = container
-        .read(desktopWindowControllerProvider)
-        .windows
-        .single;
-
-    controller.snap(id, DesktopSnapEdge.full);
-
+    controller.close(third);
     expect(
-      container.read(desktopWindowControllerProvider).windows.single,
-      before,
-    );
-  });
-
-  test('setWorkspace pulls every saved window back on screen', () {
-    final container = createContainer();
-    final controller = container.read(desktopWindowControllerProvider.notifier);
-    controller.open(
-      kind: DesktopWindowKind.settings,
-      title: 'Settings',
-      rect: const Rect.fromLTWH(4000, 3000, 700, 500),
-    );
-    controller.open(
-      kind: DesktopWindowKind.chat,
-      conversationId: 'c1',
-      title: 'One',
-      rect: const Rect.fromLTWH(-800, -800, 700, 500),
+      container.read(desktopWindowControllerProvider).focusedWindowId,
+      first,
     );
 
-    controller.setWorkspace(const Rect.fromLTWH(0, 0, 1200, 800));
-
-    final rects = container
-        .read(desktopWindowControllerProvider)
-        .windows
-        .map((w) => w.rect);
-    expect(rects, contains(const Rect.fromLTWH(840, 480, 700, 500)));
-    expect(rects, contains(const Rect.fromLTWH(0, 0, 700, 500)));
-  });
-
-  test(
-    'minimize focuses the next topmost window and clears focus when empty',
-    () {
-      final container = createContainer();
-      final controller = container.read(
-        desktopWindowControllerProvider.notifier,
-      );
-      final settings = controller.open(
-        kind: DesktopWindowKind.settings,
-        title: 'Settings',
-      );
-      final chat = controller.open(
-        kind: DesktopWindowKind.chat,
-        conversationId: 'c1',
-        title: 'One',
-      );
-
-      controller.minimize(chat);
-      var layout = container.read(desktopWindowControllerProvider);
-      expect(layout.focusedWindowId, settings);
-      expect(
-        layout.windows.firstWhere((w) => w.id == chat).isMinimized,
-        isTrue,
-      );
-
-      controller.minimize(settings);
-      layout = container.read(desktopWindowControllerProvider);
-      expect(layout.focusedWindowId, isNull);
-    },
-  );
-
-  test('restore un-minimises and focuses the window', () {
-    final container = createContainer();
-    final controller = container.read(desktopWindowControllerProvider.notifier);
-    final settings = controller.open(
-      kind: DesktopWindowKind.settings,
-      title: 'Settings',
-    );
-    final chat = controller.open(
-      kind: DesktopWindowKind.chat,
-      conversationId: 'c1',
-      title: 'One',
-    );
-    controller.minimize(chat);
-
-    controller.restore(chat);
-
+    controller.close(first);
     final layout = container.read(desktopWindowControllerProvider);
-    expect(layout.focusedWindowId, chat);
-    expect(layout.windows.firstWhere((w) => w.id == chat).isMinimized, isFalse);
-    expect(
-      layout.windows.firstWhere((w) => w.id == chat).zIndex,
-      greaterThan(layout.windows.firstWhere((w) => w.id == settings).zIndex),
-    );
+    expect(layout.windows, isEmpty);
+    expect(layout.focusedWindowId, isNull);
   });
 
-  test('toggleMaximize flips the flag and leaves the rect untouched', () {
+  test('closing an inactive tab keeps the current focus', () {
     final container = createContainer();
     final controller = container.read(desktopWindowControllerProvider.notifier);
-    final id = controller.open(
+    final first = controller.open(
       kind: DesktopWindowKind.settings,
       title: 'Settings',
-      rect: const Rect.fromLTWH(40, 50, 600, 400),
     );
+    final second = controller.open(
+      kind: DesktopWindowKind.skills,
+      title: 'Skills',
+    );
+    controller.focus(second);
 
-    controller.toggleMaximize(id);
-    var window = container.read(desktopWindowControllerProvider).windows.single;
-    expect(window.isMaximized, isTrue);
-    expect(window.rect, const Rect.fromLTWH(40, 50, 600, 400));
+    controller.close(first);
 
-    controller.toggleMaximize(id);
-    window = container.read(desktopWindowControllerProvider).windows.single;
-    expect(window.isMaximized, isFalse);
+    expect(
+      container.read(desktopWindowControllerProvider).focusedWindowId,
+      second,
+    );
   });
 
-  test('updateTitle renames an existing window and ignores unknown ids', () {
+  test('focus activates an open tab and ignores unknown ids', () {
+    final container = createContainer();
+    final controller = container.read(desktopWindowControllerProvider.notifier);
+    final first = controller.open(
+      kind: DesktopWindowKind.settings,
+      title: 'Settings',
+    );
+    controller.open(kind: DesktopWindowKind.skills, title: 'Skills');
+
+    controller.focus(first);
+    expect(
+      container.read(desktopWindowControllerProvider).focusedWindowId,
+      first,
+    );
+
+    controller.focus('missing');
+    expect(
+      container.read(desktopWindowControllerProvider).focusedWindowId,
+      first,
+    );
+  });
+
+  test('updateTitle renames an existing tab and ignores unknown ids', () {
     final container = createContainer();
     final controller = container.read(desktopWindowControllerProvider.notifier);
     final id = controller.open(
@@ -337,11 +233,7 @@ void main() {
 
     controller.close('missing');
     controller.focus('missing');
-    controller.minimize('missing');
-    controller.restore('missing');
-    controller.toggleMaximize('missing');
-    controller.move('missing', const Rect.fromLTWH(0, 0, 500, 500));
-    controller.resize('missing', const Rect.fromLTWH(0, 0, 500, 500));
+    controller.updateTitle('missing', 'Ignored');
 
     expect(container.read(desktopWindowControllerProvider), before);
   });
@@ -349,14 +241,12 @@ void main() {
   test('restores the saved layout on the next build', () async {
     final store = DesktopLayoutStore(prefs);
     await store.save(
-      DesktopLayout(
+      const DesktopLayout(
         windows: [
-          const DesktopWindowState(
+          DesktopWindowState(
             id: 'w1',
             kind: DesktopWindowKind.settings,
             title: 'Settings',
-            rect: Rect.fromLTWH(10, 20, 600, 400),
-            zIndex: 3,
           ),
         ],
         focusedWindowId: 'w1',
@@ -372,16 +262,15 @@ void main() {
   });
 
   test(
-    'a new window gets an id that does not collide with restored ones',
+    'a new tab gets an id that does not collide with restored ones',
     () async {
       await DesktopLayoutStore(prefs).save(
-        DesktopLayout(
+        const DesktopLayout(
           windows: [
-            const DesktopWindowState(
+            DesktopWindowState(
               id: 'w1',
               kind: DesktopWindowKind.settings,
               title: 'Settings',
-              rect: Rect.fromLTWH(10, 20, 600, 400),
             ),
           ],
           focusedWindowId: 'w1',

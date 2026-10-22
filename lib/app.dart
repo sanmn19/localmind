@@ -394,8 +394,10 @@ class _AppShellState extends ConsumerState<AppShell> {
       return DesktopHost(
         initialRoute: location,
         sidebar: const SidebarWidget(),
-        screenBuilder: _buildDesktopScreen,
+        screenBuilder: buildDesktopScreen,
         conversationCommands: () => _desktopConversationCommands(ref),
+        startNewChat: () =>
+            ref.read(chatProvider.notifier).startNewConversation(),
       );
     }
 
@@ -447,14 +449,14 @@ class _AppShellState extends ConsumerState<AppShell> {
   }
 }
 
-/// Builds the screen hosted by one desktop window.
+/// Builds the screen hosted by one desktop tab.
 ///
-/// This is the only place that maps windows onto feature screens, so the desktop
-/// feature itself never imports a sibling feature. Chat windows that belong to a
-/// conversation are composed by [DesktopChatWindow] here as well. Windows that
-/// need router `extra` (add-server, persona, skill editor, model browser) open
-/// without one after a relaunch and fall back to their create state.
-Widget _buildDesktopScreen(DesktopWindowState window) {
+/// This is the only place that maps tabs onto feature screens, so the desktop
+/// feature itself never imports a sibling feature. Chat tabs that belong to a
+/// conversation are composed by [DesktopChatWindow] here as well. Tabs that need
+/// router `extra` (add-server, persona, skill editor, model browser) open without
+/// one after a relaunch and fall back to their create state.
+Widget buildDesktopScreen(DesktopWindowState window) {
   return switch (window.kind) {
     DesktopWindowKind.chat =>
       window.conversationId == null
@@ -479,11 +481,11 @@ Widget _buildDesktopScreen(DesktopWindowState window) {
   };
 }
 
-/// One floating chat window, bound to a single conversation.
+/// One chat tab, bound to a single conversation.
 ///
-/// It composes the desktop window, the chat screen and the conversation that
-/// screen is fixed to, which is why it lives beside [_buildDesktopScreen] in the
-/// app layer instead of in the desktop feature.
+/// It composes the chat screen and the conversation that screen is fixed to,
+/// which is why it lives beside [buildDesktopScreen] in the app layer instead of
+/// in the desktop feature.
 class DesktopChatWindow extends ConsumerWidget {
   const DesktopChatWindow({super.key, required this.conversationId});
 

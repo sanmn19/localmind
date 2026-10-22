@@ -1,8 +1,6 @@
-import 'dart:ui';
-
-/// The screen a desktop window hosts.
+/// The screen a desktop tab hosts.
 ///
-/// Utility windows are one-per-kind; [chat] windows are one-per-conversation.
+/// Utility tabs are one-per-kind; [chat] tabs are one-per-conversation.
 enum DesktopWindowKind {
   chat,
   history,
@@ -22,9 +20,9 @@ enum DesktopWindowKind {
   lmStudioModels,
   onboarding;
 
-  /// The title used when a caller opens a window without one.
+  /// The title used when a caller opens a tab without one.
   ///
-  /// Views pass localised titles instead; this is only a fallback so a window is
+  /// Views pass localised titles instead; this is only a fallback so a tab is
   /// never untitled.
   String get defaultTitle => switch (this) {
     DesktopWindowKind.chat => 'Chat',
@@ -57,54 +55,38 @@ enum DesktopWindowKind {
   }
 }
 
-/// One floating window in the desktop layout.
+/// One open tab in the desktop workspace.
 class DesktopWindowState {
   const DesktopWindowState({
     required this.id,
     required this.kind,
     required this.title,
-    required this.rect,
     this.route,
     this.conversationId,
-    this.isMinimized = false,
-    this.isMaximized = false,
-    this.zIndex = 0,
   });
 
   final String id;
   final DesktopWindowKind kind;
   final String title;
-  final Rect rect;
   final String? route;
   final String? conversationId;
-  final bool isMinimized;
-  final bool isMaximized;
-  final int zIndex;
 
   DesktopWindowState copyWith({
     DesktopWindowKind? kind,
     String? title,
-    Rect? rect,
     String? route,
     bool clearRoute = false,
     String? conversationId,
     bool clearConversationId = false,
-    bool? isMinimized,
-    bool? isMaximized,
-    int? zIndex,
   }) {
     return DesktopWindowState(
       id: id,
       kind: kind ?? this.kind,
       title: title ?? this.title,
-      rect: rect ?? this.rect,
       route: clearRoute ? null : (route ?? this.route),
       conversationId: clearConversationId
           ? null
           : (conversationId ?? this.conversationId),
-      isMinimized: isMinimized ?? this.isMinimized,
-      isMaximized: isMaximized ?? this.isMaximized,
-      zIndex: zIndex ?? this.zIndex,
     );
   }
 
@@ -113,54 +95,32 @@ class DesktopWindowState {
       'id': id,
       'kind': kind.name,
       'title': title,
-      'left': rect.left,
-      'top': rect.top,
-      'width': rect.width,
-      'height': rect.height,
       'route': route,
       'conversationId': conversationId,
-      'isMinimized': isMinimized,
-      'isMaximized': isMaximized,
-      'zIndex': zIndex,
     };
   }
 
-  /// Returns `null` when the persisted window cannot be trusted: an unknown
-  /// [kind] or a rect that is not finite (or missing).
+  /// Returns `null` when the persisted tab cannot be trusted: a missing [id] or an
+  /// unknown [kind].
+  ///
+  /// Fields written by an older layout (rect, z-index, minimise and maximise
+  /// flags) are ignored, and a missing title falls back to the kind's default, so a
+  /// layout can always be read after an upgrade.
   static DesktopWindowState? fromJson(Object? json) {
     if (json is! Map) return null;
     final id = json['id'];
     final kind = DesktopWindowKind.tryParse(json['kind']);
+    if (id is! String || id.isEmpty || kind == null) return null;
     final title = json['title'];
-    final left = _toDouble(json['left']);
-    final top = _toDouble(json['top']);
-    final width = _toDouble(json['width']);
-    final height = _toDouble(json['height']);
-    if (id is! String || id.isEmpty) return null;
-    if (kind == null || title is! String) return null;
-    if (left == null || top == null || width == null || height == null) {
-      return null;
-    }
     final route = json['route'];
     final conversationId = json['conversationId'];
-    final zIndex = json['zIndex'];
     return DesktopWindowState(
       id: id,
       kind: kind,
-      title: title,
-      rect: Rect.fromLTWH(left, top, width, height),
+      title: title is String && title.isNotEmpty ? title : kind.defaultTitle,
       route: route is String ? route : null,
       conversationId: conversationId is String ? conversationId : null,
-      isMinimized: json['isMinimized'] == true,
-      isMaximized: json['isMaximized'] == true,
-      zIndex: zIndex is int ? zIndex : 0,
     );
-  }
-
-  static double? _toDouble(Object? value) {
-    if (value is! num) return null;
-    final result = value.toDouble();
-    return result.isFinite ? result : null;
   }
 
   @override
@@ -170,38 +130,24 @@ class DesktopWindowState {
           other.id == id &&
           other.kind == kind &&
           other.title == title &&
-          other.rect == rect &&
           other.route == route &&
-          other.conversationId == conversationId &&
-          other.isMinimized == isMinimized &&
-          other.isMaximized == isMaximized &&
-          other.zIndex == zIndex;
+          other.conversationId == conversationId;
 
   @override
-  int get hashCode => Object.hash(
-    id,
-    kind,
-    title,
-    rect,
-    route,
-    conversationId,
-    isMinimized,
-    isMaximized,
-    zIndex,
-  );
+  int get hashCode => Object.hash(id, kind, title, route, conversationId);
 
   @override
-  String toString() => 'DesktopWindowState($id, ${kind.name}, $rect)';
+  String toString() => 'DesktopWindowState($id, ${kind.name}, $title)';
 }
 
-/// Every open window plus which one has focus.
+/// Every open tab plus which one is active.
 class DesktopLayout {
   const DesktopLayout({this.windows = const [], this.focusedWindowId});
 
   final List<DesktopWindowState> windows;
   final String? focusedWindowId;
 
-  /// The focused window, or `null` when nothing (or a closed window) is focused.
+  /// The active tab, or `null` when nothing (or a closed tab) is focused.
   DesktopWindowState? get focusedWindow {
     final id = focusedWindowId;
     if (id == null) return null;
@@ -231,15 +177,19 @@ class DesktopLayout {
     };
   }
 
-  /// Returns `null` when [json] is not a layout at all. Individual windows that
-  /// cannot be trusted are skipped, and a focus that points at a skipped window is
+  /// Returns `null` when [json] is not a layout at all. Individual tabs that
+  /// cannot be trusted are skipped, and a focus that points at a skipped tab is
   /// dropped.
+  ///
+  /// A layout written before tabs stored no window list at all, so a missing list
+  /// reads as an empty layout.
   static DesktopLayout? fromJson(Object? json) {
     if (json is! Map) return null;
     final rawWindows = json['windows'];
-    if (rawWindows is! List) return null;
+    if (rawWindows != null && rawWindows is! List) return null;
     final windows = <DesktopWindowState>[
-      for (final raw in rawWindows) ?DesktopWindowState.fromJson(raw),
+      if (rawWindows is List)
+        for (final raw in rawWindows) ?DesktopWindowState.fromJson(raw),
     ];
     final rawFocused = json['focusedWindowId'];
     final focusedWindowId =

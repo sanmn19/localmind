@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:localmind/features/desktop/data/models/desktop_window.dart';
 
@@ -8,12 +6,8 @@ void main() {
     id: 'w1',
     kind: DesktopWindowKind.chat,
     title: 'Trip planning',
-    rect: Rect.fromLTWH(10, 20, 600, 400),
     route: '/chat/c1',
     conversationId: 'c1',
-    isMinimized: true,
-    isMaximized: true,
-    zIndex: 4,
   );
 
   group('DesktopWindowState', () {
@@ -23,15 +17,38 @@ void main() {
       expect(restored, window);
     });
 
-    test('writes the rect as four numbers', () {
+    test('writes the tab fields', () {
       final json = window.toJson();
 
-      expect(json['left'], 10);
-      expect(json['top'], 20);
-      expect(json['width'], 600);
-      expect(json['height'], 400);
+      expect(json['id'], 'w1');
       expect(json['kind'], 'chat');
+      expect(json['title'], 'Trip planning');
+      expect(json['route'], '/chat/c1');
       expect(json['conversationId'], 'c1');
+    });
+
+    test('ignores the fields of the old floating layout', () {
+      final json = window.toJson()
+        ..['left'] = 10.0
+        ..['top'] = 20.0
+        ..['width'] = 600.0
+        ..['height'] = 400.0
+        ..['zIndex'] = 3
+        ..['isMinimized'] = true
+        ..['isMaximized'] = true;
+
+      expect(DesktopWindowState.fromJson(json), window);
+    });
+
+    test('defaults a missing title and optional fields', () {
+      final restored = DesktopWindowState.fromJson({
+        'id': 'w2',
+        'kind': 'settings',
+      });
+
+      expect(restored!.title, 'Settings');
+      expect(restored.route, isNull);
+      expect(restored.conversationId, isNull);
     });
 
     test('returns null for an unknown kind', () {
@@ -40,39 +57,37 @@ void main() {
       expect(DesktopWindowState.fromJson(json), isNull);
     });
 
-    test('returns null for a non-finite rect', () {
-      for (final broken in ['left', 'top', 'width', 'height']) {
-        final json = window.toJson()..[broken] = double.infinity;
-
-        expect(
-          DesktopWindowState.fromJson(json),
-          isNull,
-          reason: 'expected a non-finite $broken to be rejected',
-        );
-      }
+    test('returns null when the id is missing', () {
+      expect(DesktopWindowState.fromJson({'kind': 'chat'}), isNull);
+      expect(DesktopWindowState.fromJson('nope'), isNull);
     });
 
-    test('returns null when required fields are missing', () {
-      expect(DesktopWindowState.fromJson(<String, Object?>{}), isNull);
-      expect(DesktopWindowState.fromJson('nope'), isNull);
+    test('copyWith clears the optional fields', () {
+      final cleared = window.copyWith(
+        clearRoute: true,
+        clearConversationId: true,
+        title: 'Renamed',
+      );
+
+      expect(cleared.route, isNull);
+      expect(cleared.conversationId, isNull);
+      expect(cleared.title, 'Renamed');
     });
   });
 
   group('DesktopLayout', () {
-    test('focusedWindow returns the focused window or null', () {
+    test('focusedWindow returns the focused tab or null', () {
       const layout = DesktopLayout(
         windows: [
           DesktopWindowState(
             id: 'w1',
             kind: DesktopWindowKind.settings,
             title: 'Settings',
-            rect: Rect.fromLTWH(0, 0, 600, 400),
           ),
           DesktopWindowState(
             id: 'w2',
             kind: DesktopWindowKind.chat,
             title: 'One',
-            rect: Rect.fromLTWH(40, 40, 600, 400),
             conversationId: 'c1',
           ),
         ],
@@ -90,8 +105,6 @@ void main() {
             id: 'w1',
             kind: DesktopWindowKind.settings,
             title: 'Settings',
-            rect: Rect.fromLTWH(0, 0, 600, 400),
-            zIndex: 1,
           ),
         ],
         focusedWindowId: 'w1',
@@ -100,13 +113,9 @@ void main() {
       expect(DesktopLayout.fromJson(layout.toJson()), layout);
     });
 
-    test('skips windows with a corrupt kind or rect', () {
+    test('skips tabs with an unknown kind', () {
       final json = {
-        'windows': [
-          window.toJson(),
-          (window.toJson()..['kind'] = 'spaceship'),
-          (window.toJson()..['left'] = double.nan),
-        ],
+        'windows': [window.toJson(), (window.toJson()..['kind'] = 'spaceship')],
         'focusedWindowId': 'w1',
       };
 
@@ -116,7 +125,7 @@ void main() {
       expect(layout.focusedWindowId, 'w1');
     });
 
-    test('drops a focused id that no longer has a window', () {
+    test('drops a focused id that no longer has a tab', () {
       final layout = DesktopLayout.fromJson({
         'windows': [(window.toJson()..['kind'] = 'spaceship')],
         'focusedWindowId': 'w1',
@@ -126,10 +135,16 @@ void main() {
       expect(layout.focusedWindowId, isNull);
     });
 
+    test('reads a layout without a window list as empty', () {
+      expect(
+        DesktopLayout.fromJson(const <String, Object?>{})!.windows,
+        isEmpty,
+      );
+    });
+
     test('returns null for corrupt JSON', () {
       expect(DesktopLayout.fromJson('{not json'), isNull);
       expect(DesktopLayout.fromJson({'windows': 'nope'}), isNull);
-      expect(DesktopLayout.fromJson(const <String, Object?>{}), isNull);
     });
   });
 }

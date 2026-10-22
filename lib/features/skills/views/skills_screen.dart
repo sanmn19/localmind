@@ -6,6 +6,7 @@ import 'package:localmind/l10n/app_localizations.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../../core/routes/app_routes.dart';
+import '../../../core/routes/desktop_window_scope.dart';
 import '../../../core/utils/system_insets.dart';
 import '../data/skills_provider.dart';
 import '../data/skills_store.dart';
@@ -85,9 +86,10 @@ class SkillsScreen extends ConsumerWidget {
                     icon: const HugeIcon(
                       icon: HugeIcons.strokeRoundedArrowLeft01,
                     ),
-                    onPressed: () => context.canPop()
-                        ? context.pop()
-                        : context.go(AppRoutes.settings),
+                    onPressed: () => DesktopWindowScope.popOrClose(
+                      context,
+                      AppRoutes.settings,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Text(

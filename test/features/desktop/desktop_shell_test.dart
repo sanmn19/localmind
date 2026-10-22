@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:localmind/core/providers/storage_providers.dart';
 import 'package:localmind/features/desktop/data/models/desktop_window.dart';
 import 'package:localmind/features/desktop/providers/desktop_window_providers.dart';
-import 'package:localmind/features/desktop/views/components/desktop_window_frame.dart';
 import 'package:localmind/features/desktop/views/desktop_shell.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -24,9 +24,10 @@ void main() {
     return container;
   }
 
-  Future<void> pumpShellFrame(
+  Future<void> pumpShell(
     WidgetTester tester,
     ProviderContainer container, {
+    Future<void> Function()? startNewChat,
     Size size = const Size(1440, 900),
   }) async {
     tester.view.physicalSize = size;
@@ -40,19 +41,15 @@ void main() {
         child: MaterialApp(
           home: DesktopShell(
             sidebar: const SizedBox(width: 240),
-            screenBuilder: (window) => Text('screen:${window.title}'),
+            screenBuilder: (window) => SizedBox.expand(
+              key: ValueKey('screen-${window.id}'),
+              child: Text('screen:${window.title}'),
+            ),
+            startNewChat: startNewChat,
           ),
         ),
       ),
     );
-  }
-
-  Future<void> pumpShell(
-    WidgetTester tester,
-    ProviderContainer container, {
-    Size size = const Size(1440, 900),
-  }) async {
-    await pumpShellFrame(tester, container, size: size);
     await tester.pumpAndSettle();
   }
 
@@ -61,104 +58,17 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets(
-    'renders one frame per window and a dock entry per minimised window',
-    (tester) async {
-      final container = createContainer();
-      final controller = container.read(
-        desktopWindowControllerProvider.notifier,
-      );
-      controller.open(kind: DesktopWindowKind.settings, title: 'Settings');
-      controller.open(
-        kind: DesktopWindowKind.chat,
-        conversationId: 'c1',
-        title: 'Chat',
-      );
-
-      await pumpShell(tester, container);
-
-      expect(find.text('screen:Settings'), findsOneWidget);
-      expect(find.text('screen:Chat'), findsOneWidget);
-
-      controller.minimize(controller.state.windows.first.id);
-      await tester.pumpAndSettle();
-      expect(find.text('screen:Settings'), findsNothing);
-      expect(
-        find.byKey(const ValueKey('desktop-dock-entry-Settings')),
-        findsOneWidget,
-      );
-
-      await flushSaves(tester);
-    },
-  );
-
-  testWidgets('the title bar closes, minimises and maximises a window', (
-    tester,
-  ) async {
-    final container = createContainer();
-    final controller = container.read(desktopWindowControllerProvider.notifier);
-
-    final id = controller.open(
-      kind: DesktopWindowKind.settings,
-      title: 'Settings',
-    );
-    await pumpShell(tester, container);
-
-    await tester.tap(find.byKey(ValueKey('desktop-maximize-$id')));
+  Future<void> pressMeta(WidgetTester tester, LogicalKeyboardKey key) async {
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendKeyEvent(key);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
     await tester.pumpAndSettle();
-    expect(
-      container
-          .read(desktopWindowControllerProvider)
-          .windows
-          .single
-          .isMaximized,
-      isTrue,
-    );
+  }
 
-    await tester.tap(find.byKey(ValueKey('desktop-minimize-$id')));
-    await tester.pumpAndSettle();
-    expect(find.text('screen:Settings'), findsNothing);
-    expect(
-      find.byKey(const ValueKey('desktop-dock-entry-Settings')),
-      findsOneWidget,
-    );
+  DesktopLayout layoutOf(ProviderContainer container) =>
+      container.read(desktopWindowControllerProvider);
 
-    await tester.tap(find.byKey(const ValueKey('desktop-dock-entry-Settings')));
-    await tester.pumpAndSettle();
-    expect(find.text('screen:Settings'), findsOneWidget);
-
-    await tester.tap(find.byKey(ValueKey('desktop-close-$id')));
-    await tester.pumpAndSettle();
-    expect(container.read(desktopWindowControllerProvider).windows, isEmpty);
-    expect(
-      find.byKey(const ValueKey('desktop-dock-entry-Settings')),
-      findsNothing,
-    );
-
-    await flushSaves(tester);
-  });
-
-  testWidgets('a maximised window fills the workspace', (tester) async {
-    final container = createContainer();
-    final controller = container.read(desktopWindowControllerProvider.notifier);
-    final id = controller.open(
-      kind: DesktopWindowKind.settings,
-      title: 'Settings',
-    );
-    await pumpShell(tester, container);
-
-    final workspace = tester.getRect(
-      find.byKey(const ValueKey('desktop-workspace')),
-    );
-    controller.toggleMaximize(id);
-    await tester.pumpAndSettle();
-
-    expect(tester.getRect(find.byType(DesktopWindowFrame)), workspace);
-
-    await flushSaves(tester);
-  });
-
-  testWidgets('the dock restores a minimised window and focuses it', (
+  testWidgets('renders one tab per window and only the active screen', (
     tester,
   ) async {
     final container = createContainer();
@@ -166,120 +76,228 @@ void main() {
     final settings = controller.open(
       kind: DesktopWindowKind.settings,
       title: 'Settings',
-    );
-    controller.open(
-      kind: DesktopWindowKind.chat,
-      conversationId: 'c1',
-      title: 'Chat',
-    );
-    await pumpShell(tester, container);
-
-    controller.minimize(settings);
-    await tester.pumpAndSettle();
-    expect(find.text('screen:Settings'), findsNothing);
-
-    await tester.tap(find.byKey(const ValueKey('desktop-dock-entry-Settings')));
-    await tester.pumpAndSettle();
-
-    final layout = container.read(desktopWindowControllerProvider);
-    expect(find.text('screen:Settings'), findsOneWidget);
-    expect(layout.focusedWindowId, settings);
-    expect(
-      layout.windows.firstWhere((window) => window.id == settings).isMinimized,
-      isFalse,
-    );
-
-    await flushSaves(tester);
-  });
-
-  testWidgets('tapping a window focuses it', (tester) async {
-    final container = createContainer();
-    final controller = container.read(desktopWindowControllerProvider.notifier);
-    final settings = controller.open(
-      kind: DesktopWindowKind.settings,
-      title: 'Settings',
-      rect: const Rect.fromLTWH(0, 0, 500, 500),
     );
     final chat = controller.open(
       kind: DesktopWindowKind.chat,
       conversationId: 'c1',
       title: 'Chat',
-      rect: const Rect.fromLTWH(700, 400, 500, 500),
     );
+
     await pumpShell(tester, container);
-    expect(
-      container.read(desktopWindowControllerProvider).focusedWindowId,
-      chat,
-    );
 
-    await tester.tap(find.text('screen:Settings'));
-    await tester.pumpAndSettle();
-
-    expect(
-      container.read(desktopWindowControllerProvider).focusedWindowId,
-      settings,
-    );
+    expect(find.byKey(ValueKey('desktop-tab-$settings')), findsOneWidget);
+    expect(find.byKey(ValueKey('desktop-tab-$chat')), findsOneWidget);
+    expect(find.text('Chat'), findsOneWidget);
+    expect(find.text('screen:Chat'), findsOneWidget);
+    expect(find.text('screen:Settings'), findsNothing);
 
     await flushSaves(tester);
   });
 
-  testWidgets('the dock opens a new chat window', (tester) async {
+  testWidgets('the active screen fills the workspace beside the sidebar', (
+    tester,
+  ) async {
     final container = createContainer();
+    final controller = container.read(desktopWindowControllerProvider.notifier);
+    controller.open(kind: DesktopWindowKind.settings, title: 'Settings');
+
     await pumpShell(tester, container);
 
-    await tester.tap(find.byKey(const ValueKey('desktop-dock-new-chat')));
+    final tabBar = tester.getRect(
+      find.byKey(const ValueKey('desktop-tab-bar')),
+    );
+    final screen = tester.getRect(
+      find.byKey(ValueKey('screen-${layoutOf(container).focusedWindowId}')),
+    );
+    expect(screen.left, 240);
+    expect(screen.top, tabBar.bottom);
+    expect(screen.width, 1440 - 240);
+
+    await flushSaves(tester);
+  });
+
+  testWidgets('the tab strip scrolls horizontally when tabs overflow', (
+    tester,
+  ) async {
+    final container = createContainer();
+    final controller = container.read(desktopWindowControllerProvider.notifier);
+    for (var index = 0; index < 12; index++) {
+      controller.open(
+        kind: DesktopWindowKind.chat,
+        conversationId: 'c$index',
+        title: 'Conversation $index',
+      );
+    }
+
+    await pumpShell(tester, container, size: const Size(800, 600));
+
+    final scroller = tester.widget<SingleChildScrollView>(
+      find.descendant(
+        of: find.byKey(const ValueKey('desktop-tab-bar')),
+        matching: find.byType(SingleChildScrollView),
+      ),
+    );
+    expect(scroller.scrollDirection, Axis.horizontal);
+
+    await flushSaves(tester);
+  });
+
+  testWidgets('the focused tab is highlighted', (tester) async {
+    final container = createContainer();
+    final controller = container.read(desktopWindowControllerProvider.notifier);
+    final settings = controller.open(
+      kind: DesktopWindowKind.settings,
+      title: 'Settings',
+    );
+    final chat = controller.open(
+      kind: DesktopWindowKind.chat,
+      conversationId: 'c1',
+      title: 'Chat',
+    );
+
+    await pumpShell(tester, container);
+
+    Color? tabColor(String id) {
+      final material = tester.widget<Material>(
+        find
+            .descendant(
+              of: find.byKey(ValueKey('desktop-tab-$id')),
+              matching: find.byType(Material),
+            )
+            .first,
+      );
+      return material.color;
+    }
+
+    final colorScheme = Theme.of(
+      tester.element(find.byKey(const ValueKey('desktop-tab-bar'))),
+    ).colorScheme;
+    expect(tabColor(chat), colorScheme.surfaceContainerHighest);
+    expect(tabColor(settings), isNot(colorScheme.surfaceContainerHighest));
+
+    await flushSaves(tester);
+  });
+
+  testWidgets('a tab activates its screen when tapped', (tester) async {
+    final container = createContainer();
+    final controller = container.read(desktopWindowControllerProvider.notifier);
+    final settings = controller.open(
+      kind: DesktopWindowKind.settings,
+      title: 'Settings',
+    );
+    controller.open(
+      kind: DesktopWindowKind.chat,
+      conversationId: 'c1',
+      title: 'Chat',
+    );
+
+    await pumpShell(tester, container);
+    expect(find.text('screen:Chat'), findsOneWidget);
+
+    await tester.tap(find.byKey(ValueKey('desktop-tab-$settings')));
     await tester.pumpAndSettle();
 
-    final layout = container.read(desktopWindowControllerProvider);
+    expect(layoutOf(container).focusedWindowId, settings);
+    expect(find.text('screen:Settings'), findsOneWidget);
+    expect(find.text('screen:Chat'), findsNothing);
+
+    await flushSaves(tester);
+  });
+
+  testWidgets('the tab close button closes it and activates the neighbour', (
+    tester,
+  ) async {
+    final container = createContainer();
+    final controller = container.read(desktopWindowControllerProvider.notifier);
+    final settings = controller.open(
+      kind: DesktopWindowKind.settings,
+      title: 'Settings',
+    );
+    final chat = controller.open(
+      kind: DesktopWindowKind.chat,
+      conversationId: 'c1',
+      title: 'Chat',
+    );
+
+    await pumpShell(tester, container);
+
+    await tester.tap(find.byKey(ValueKey('desktop-tab-close-$chat')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(ValueKey('desktop-tab-$chat')), findsNothing);
+    expect(layoutOf(container).windows.single.id, settings);
+    expect(layoutOf(container).focusedWindowId, settings);
+    expect(find.text('screen:Settings'), findsOneWidget);
+
+    await flushSaves(tester);
+  });
+
+  testWidgets('the tab bar button opens a new chat tab', (tester) async {
+    final container = createContainer();
+    var newChats = 0;
+
+    await pumpShell(tester, container, startNewChat: () async => newChats++);
+
+    await tester.tap(find.byKey(const ValueKey('desktop-new-chat')));
+    await tester.pumpAndSettle();
+
+    final layout = layoutOf(container);
+    expect(newChats, 1);
     expect(layout.windows, hasLength(1));
     expect(layout.windows.single.kind, DesktopWindowKind.chat);
+    expect(layout.windows.single.conversationId, isNull);
     expect(find.text('screen:Chat'), findsOneWidget);
 
     await flushSaves(tester);
   });
 
-  testWidgets('a restored off-screen layout is clamped into the workspace', (
-    tester,
-  ) async {
+  testWidgets('command 1 to 9 activates the nth tab', (tester) async {
     final container = createContainer();
     final controller = container.read(desktopWindowControllerProvider.notifier);
-    final id = controller.open(
+    final settings = controller.open(
       kind: DesktopWindowKind.settings,
       title: 'Settings',
-      rect: const Rect.fromLTWH(4000, 4000, 720, 520),
     );
-    await pumpShell(tester, container);
+    final chat = controller.open(
+      kind: DesktopWindowKind.chat,
+      conversationId: 'c1',
+      title: 'Chat',
+    );
 
-    final layout = container.read(desktopWindowControllerProvider);
-    expect(layout.windows.single.rect, const Rect.fromLTWH(840, 516, 720, 520));
-    expect(
-      tester.getRect(find.byKey(ValueKey('desktop-title-$id'))).left,
-      240 + 840,
-    );
+    await pumpShell(tester, container);
+    expect(layoutOf(container).focusedWindowId, chat);
+
+    await pressMeta(tester, LogicalKeyboardKey.digit1);
+    expect(layoutOf(container).focusedWindowId, settings);
+
+    await pressMeta(tester, LogicalKeyboardKey.digit2);
+    expect(layoutOf(container).focusedWindowId, chat);
+
+    // A digit past the last tab is a no-op.
+    await pressMeta(tester, LogicalKeyboardKey.digit9);
+    expect(layoutOf(container).focusedWindowId, chat);
 
     await flushSaves(tester);
   });
 
-  testWidgets('clamps an off-screen restored window on the first frame', (
-    tester,
-  ) async {
+  testWidgets('closing every tab shows the empty workspace', (tester) async {
     final container = createContainer();
     final controller = container.read(desktopWindowControllerProvider.notifier);
-    controller.open(
+    final settings = controller.open(
       kind: DesktopWindowKind.settings,
       title: 'Settings',
-      rect: const Rect.fromLTWH(4000, 4000, 720, 520),
     );
 
-    await pumpShellFrame(tester, container);
+    await pumpShell(tester, container);
+    expect(find.byKey(const ValueKey('desktop-empty-workspace')), findsNothing);
 
+    await tester.tap(find.byKey(ValueKey('desktop-tab-close-$settings')));
+    await tester.pumpAndSettle();
+
+    expect(layoutOf(container).windows, isEmpty);
     expect(
-      tester.getRect(find.byType(DesktopWindowFrame)),
-      const Rect.fromLTWH(240 + 840, 516, 720, 520),
-    );
-    expect(
-      container.read(desktopWindowControllerProvider).windows.single.rect,
-      const Rect.fromLTWH(840, 516, 720, 520),
+      find.byKey(const ValueKey('desktop-empty-workspace')),
+      findsOneWidget,
     );
 
     await flushSaves(tester);

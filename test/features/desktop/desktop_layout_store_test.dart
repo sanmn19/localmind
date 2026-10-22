@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:localmind/features/desktop/data/desktop_layout_store.dart';
 import 'package:localmind/features/desktop/data/models/desktop_window.dart';
@@ -17,7 +15,6 @@ void main() {
           id: 'w1',
           kind: DesktopWindowKind.settings,
           title: 'Settings',
-          rect: Rect.fromLTWH(10, 20, 600, 400),
         ),
       ],
       focusedWindowId: 'w1',
@@ -35,6 +32,24 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
 
     expect(DesktopLayoutStore(prefs).load(), isNull);
+  });
+
+  test('reads a layout written by the floating-window build', () async {
+    SharedPreferences.setMockInitialValues({
+      DesktopLayoutStore.key:
+          '{"windows":[{"id":"w1","kind":"settings","title":"Settings",'
+          '"left":120.0,"top":96.0,"width":720.0,"height":520.0,'
+          '"zIndex":2,"isMinimized":false,"isMaximized":true}],'
+          '"focusedWindowId":"w1"}',
+    });
+    final prefs = await SharedPreferences.getInstance();
+
+    final layout = DesktopLayoutStore(prefs).load();
+
+    expect(layout!.windows.single.id, 'w1');
+    expect(layout.windows.single.kind, DesktopWindowKind.settings);
+    expect(layout.windows.single.title, 'Settings');
+    expect(layout.focusedWindowId, 'w1');
   });
 
   test('persists under the versioned key', () async {
