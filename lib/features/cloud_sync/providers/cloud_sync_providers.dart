@@ -711,8 +711,8 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
           '=',
         );
         final decodedName = utf8.decode(base64Url.decode(padded));
-        final safeName = p.basename(decodedName);
-        final destination = File(p.join(dir.path, '$identifier-$safeName'));
+        final localName = cloudAttachmentLocalName(identifier, decodedName);
+        final destination = File(p.join(dir.path, localName));
         if (!await destination.exists()) {
           final remote = await repository.readObject(
             repository.attachmentKey(identifier),
