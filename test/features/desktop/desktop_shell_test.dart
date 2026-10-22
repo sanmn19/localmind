@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -172,8 +173,8 @@ void main() {
     final colorScheme = Theme.of(
       tester.element(find.byKey(const ValueKey('desktop-tab-bar'))),
     ).colorScheme;
-    expect(tabColor(chat), colorScheme.surfaceContainerHighest);
-    expect(tabColor(settings), isNot(colorScheme.surfaceContainerHighest));
+    expect(tabColor(chat), colorScheme.primary.withValues(alpha: 0.12));
+    expect(tabColor(settings), isNot(colorScheme.primary.withValues(alpha: 0.12)));
 
     await flushSaves(tester);
   });
@@ -200,6 +201,48 @@ void main() {
     expect(layoutOf(container).focusedWindowId, settings);
     expect(find.text('screen:Settings'), findsOneWidget);
     expect(find.text('screen:Chat'), findsNothing);
+
+    await flushSaves(tester);
+  });
+
+  testWidgets('an inactive tab reveals its close button on hover', (
+    tester,
+  ) async {
+    final container = createContainer();
+    final controller = container.read(desktopWindowControllerProvider.notifier);
+    final settings = controller.open(
+      kind: DesktopWindowKind.settings,
+      title: 'Settings',
+    );
+    final chat = controller.open(
+      kind: DesktopWindowKind.chat,
+      conversationId: 'c1',
+      title: 'Chat',
+    );
+
+    await pumpShell(tester, container);
+
+    // The inactive tab hides its close button, so a tap misses it.
+    await tester.tap(
+      find.byKey(ValueKey('desktop-tab-close-$settings')),
+      warnIfMissed: false,
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(ValueKey('desktop-tab-$settings')), findsOneWidget);
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await tester.pump();
+    await gesture.moveTo(
+      tester.getCenter(find.byKey(ValueKey('desktop-tab-$settings'))),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ValueKey('desktop-tab-close-$settings')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(ValueKey('desktop-tab-$settings')), findsNothing);
+    expect(layoutOf(container).focusedWindowId, chat);
 
     await flushSaves(tester);
   });
