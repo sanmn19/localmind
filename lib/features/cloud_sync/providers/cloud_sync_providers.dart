@@ -12,6 +12,7 @@ import '../../../core/providers/app_providers.dart';
 import '../../../core/providers/storage_providers.dart';
 import '../../../core/services/data_backup_service.dart';
 import '../../../core/services/google_sign_in_session.dart';
+import '../../../core/utils/platform_support.dart';
 import '../../conversations/providers/conversation_providers.dart';
 import '../../personas/providers/personas_providers.dart';
 import '../../saved_messages/providers/saved_message_providers.dart';
@@ -81,6 +82,7 @@ final cloudSyncStorageFactoryProvider = Provider<CloudSyncStorageFactory>(
 class CloudSyncController extends Notifier<CloudSyncStatus> {
   Timer? _debounce;
   Timer? _retryTimer;
+  Timer? _periodicPull;
   bool _running = false;
   bool _pending = false;
   bool _applyingRemote = false;
@@ -89,6 +91,8 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
   bool _forceBackup = false;
 
   bool get isApplyingRemote => _applyingRemote;
+
+  bool get isPeriodicPullActive => _periodicPull != null;
 
   CloudSyncLocalRepository get _local =>
       ref.read(cloudSyncLocalRepositoryProvider);
@@ -101,10 +105,14 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
   @override
   CloudSyncStatus build() {
     ref.onDispose(() {
+      stopPeriodicPull();
       _debounce?.cancel();
       _retryTimer?.cancel();
     });
     final config = _local.loadConfig();
+    if (config?.enabled == true && isMacDesktop) {
+      startPeriodicPull();
+    }
     return CloudSyncStatus(
       phase: config?.enabled == true
           ? CloudSyncPhase.ready
@@ -205,6 +213,18 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
     if (_applyingRemote || config?.enabled != true) return;
     _debounce?.cancel();
     _debounce = Timer(delay, () => unawaited(syncNow()));
+  }
+
+  /// Pulls on a timer while the desktop app stays open, so remote edits from
+  /// other devices arrive without waiting for a resume or a local edit.
+  void startPeriodicPull({Duration interval = const Duration(seconds: 30)}) {
+    _periodicPull?.cancel();
+    _periodicPull = Timer.periodic(interval, (_) => unawaited(syncNow()));
+  }
+
+  void stopPeriodicPull() {
+    _periodicPull?.cancel();
+    _periodicPull = null;
   }
 
   Future<void> syncNow({bool rethrowErrors = false}) async {
