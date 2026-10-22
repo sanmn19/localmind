@@ -34,8 +34,8 @@ class ScreenSampler {
 
   /// Starts native event-driven sampling. The native service owns the debounce
   /// and the screen-off pause; no Dart timer is needed.
-  Future<void> startSampling(int intervalMs) =>
-      _gateway.startSampling(intervalMs);
+  Future<void> startSampling(int intervalMs, {bool eventDriven = true}) =>
+      _gateway.startSampling(intervalMs, eventDriven: eventDriven);
 
   Future<void> stopSampling() => _gateway.stopSampling();
 

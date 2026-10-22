@@ -145,6 +145,10 @@ class AppSettings {
   /// Sampling cadence in milliseconds (500 ms by default).
   final int screenMemorySampleIntervalMs;
 
+  /// `event` samples on accessibility changes; `interval` polls every
+  /// [screenMemorySampleIntervalMs] (the old 500 ms behavior).
+  final String screenMemorySamplingMode;
+
   /// Batch cadence in seconds (60 s by default).
   final int screenMemoryBatchIntervalSeconds;
 
@@ -242,6 +246,7 @@ class AppSettings {
     this.autoMemoryEnabled = false,
     this.screenMemoryEnabled = false,
     this.screenMemorySampleIntervalMs = 500,
+    this.screenMemorySamplingMode = 'event',
     this.screenMemoryBatchIntervalSeconds = 60,
     this.screenMemoryServerId,
     this.screenMemoryModelId,
@@ -316,6 +321,7 @@ class AppSettings {
     bool? autoMemoryEnabled,
     bool? screenMemoryEnabled,
     int? screenMemorySampleIntervalMs,
+    String? screenMemorySamplingMode,
     int? screenMemoryBatchIntervalSeconds,
     Object? screenMemoryServerId = _unset,
     Object? screenMemoryModelId = _unset,
@@ -417,6 +423,8 @@ class AppSettings {
       screenMemoryEnabled: screenMemoryEnabled ?? this.screenMemoryEnabled,
       screenMemorySampleIntervalMs:
           screenMemorySampleIntervalMs ?? this.screenMemorySampleIntervalMs,
+      screenMemorySamplingMode:
+          screenMemorySamplingMode ?? this.screenMemorySamplingMode,
       screenMemoryBatchIntervalSeconds:
           screenMemoryBatchIntervalSeconds ??
           this.screenMemoryBatchIntervalSeconds,
@@ -503,6 +511,7 @@ class AppSettings {
       'autoMemoryEnabled': autoMemoryEnabled,
       'screenMemoryEnabled': screenMemoryEnabled,
       'screenMemorySampleIntervalMs': screenMemorySampleIntervalMs,
+      'screenMemorySamplingMode': screenMemorySamplingMode,
       'screenMemoryBatchIntervalSeconds': screenMemoryBatchIntervalSeconds,
       'screenMemoryServerId': screenMemoryServerId,
       'screenMemoryModelId': screenMemoryModelId,
@@ -585,6 +594,8 @@ class AppSettings {
       screenMemoryEnabled: map['screenMemoryEnabled'] ?? false,
       screenMemorySampleIntervalMs:
           map['screenMemorySampleIntervalMs']?.toInt() ?? 500,
+      screenMemorySamplingMode:
+          map['screenMemorySamplingMode'] as String? ?? 'event',
       screenMemoryBatchIntervalSeconds:
           map['screenMemoryBatchIntervalSeconds']?.toInt() ?? 60,
       screenMemoryServerId: map['screenMemoryServerId'] as String?,

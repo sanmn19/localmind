@@ -7119,6 +7119,36 @@ abstract class AppLocalizations {
   /// **'Use chat model'**
   String get screen_memories_processing_model_reset;
 
+  /// No description provided for @screen_memories_sampling_mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Sampling mode'**
+  String get screen_memories_sampling_mode;
+
+  /// No description provided for @screen_memories_sampling_mode_desc.
+  ///
+  /// In en, this message translates to:
+  /// **'Screen changes uses less battery; 500 ms captures more but drains faster.'**
+  String get screen_memories_sampling_mode_desc;
+
+  /// No description provided for @screen_memories_sampling_event.
+  ///
+  /// In en, this message translates to:
+  /// **'On screen changes'**
+  String get screen_memories_sampling_event;
+
+  /// No description provided for @screen_memories_sampling_interval.
+  ///
+  /// In en, this message translates to:
+  /// **'Every 500 ms'**
+  String get screen_memories_sampling_interval;
+
+  /// No description provided for @screen_memories_sample_interval.
+  ///
+  /// In en, this message translates to:
+  /// **'Sample every'**
+  String get screen_memories_sample_interval;
+
   /// Screen memories card footer
   ///
   /// In en, this message translates to:

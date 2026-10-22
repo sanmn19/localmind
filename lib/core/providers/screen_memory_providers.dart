@@ -80,6 +80,9 @@ final screenMemoryTickProvider = Provider<void>((ref) {
     ),
   );
   ref.watch(
+    settingsProvider.select((settings) => settings.screenMemorySamplingMode),
+  );
+  ref.watch(
     settingsProvider.select(
       (settings) => settings.screenMemoryBatchIntervalSeconds,
     ),

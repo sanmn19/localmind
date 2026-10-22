@@ -20,7 +20,7 @@ class _FakeGateway implements ScreenTextGateway {
   Future<ScreenText?> readText() async => null;
 
   @override
-  Future<void> startSampling(int intervalMs) async {}
+  Future<void> startSampling(int intervalMs, {bool eventDriven = true}) async {}
 
   @override
   Future<void> stopSampling() async {}
@@ -202,7 +202,7 @@ class _ChangeableGateway implements ScreenTextGateway {
   Future<ScreenText?> readText() async => null;
 
   @override
-  Future<void> startSampling(int intervalMs) async {}
+  Future<void> startSampling(int intervalMs, {bool eventDriven = true}) async {}
 
   @override
   Future<void> stopSampling() async {}
