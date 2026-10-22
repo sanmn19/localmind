@@ -15,7 +15,8 @@ class CloudSyncLocalRepository {
     FlutterSecureStorage secureStorage = const FlutterSecureStorage(),
   }) : _secureStorage = secureStorage; // ignore: prefer_initializing_formals
 
-  static const _configKey = 'cloudSync.config.v1';
+  static const _configKey = 'cloudSync.config.v2';
+  static const _legacyConfigKey = 'cloudSync.config.v1';
   static const _deviceKey = 'cloudSync.deviceId.v1';
   static const _journalKey = 'cloudSync.journal.v1';
   static const _lastSyncKey = 'cloudSync.lastSyncedAt.v1';
@@ -29,7 +30,9 @@ class CloudSyncLocalRepository {
   final FlutterSecureStorage _secureStorage;
 
   S3SyncConfig? loadConfig() {
-    final raw = _preferences.getString(_configKey);
+    final raw =
+        _preferences.getString(_configKey) ??
+        _preferences.getString(_legacyConfigKey);
     if (raw == null) return null;
     try {
       return S3SyncConfig.fromJson(jsonDecode(raw) as Map<String, dynamic>);
@@ -40,6 +43,12 @@ class CloudSyncLocalRepository {
 
   Future<void> saveConfig(S3SyncConfig config) =>
       _preferences.setString(_configKey, jsonEncode(config.toJson()));
+
+  String _masterKeyKey(CloudSyncProviderKind provider) =>
+      'cloudSync.${provider.name}.masterKey.v1';
+
+  String _saltKeyFor(CloudSyncProviderKind provider) =>
+      'cloudSync.${provider.name}.salt.v1';
 
   Future<CloudSyncCredentials?> loadCredentials() async {
     final accessKey = await _secureStorage.read(key: _accessKey);
@@ -53,29 +62,52 @@ class CloudSyncLocalRepository {
   }
 
   Future<void> saveSecrets({
-    required CloudSyncCredentials credentials,
+    required CloudSyncProviderKind provider,
+    CloudSyncCredentials? credentials,
     required List<int> masterKey,
     required List<int> salt,
   }) async {
     await Future.wait([
-      _secureStorage.write(key: _accessKey, value: credentials.accessKeyId),
-      _secureStorage.write(key: _secretKey, value: credentials.secretAccessKey),
-      if (credentials.sessionToken?.isNotEmpty == true)
-        _secureStorage.write(key: _sessionKey, value: credentials.sessionToken)
-      else
-        _secureStorage.delete(key: _sessionKey),
-      _secureStorage.write(key: _masterKey, value: base64Encode(masterKey)),
-      _secureStorage.write(key: _saltKey, value: base64Encode(salt)),
+      _secureStorage.write(
+        key: _masterKeyKey(provider),
+        value: base64Encode(masterKey),
+      ),
+      _secureStorage.write(
+        key: _saltKeyFor(provider),
+        value: base64Encode(salt),
+      ),
+      if (provider == CloudSyncProviderKind.s3 && credentials != null) ...[
+        _secureStorage.write(key: _accessKey, value: credentials.accessKeyId),
+        _secureStorage.write(
+          key: _secretKey,
+          value: credentials.secretAccessKey,
+        ),
+        if (credentials.sessionToken?.isNotEmpty == true)
+          _secureStorage.write(
+            key: _sessionKey,
+            value: credentials.sessionToken,
+          )
+        else
+          _secureStorage.delete(key: _sessionKey),
+      ],
     ]);
   }
 
-  Future<List<int>?> loadMasterKey() async {
-    final value = await _secureStorage.read(key: _masterKey);
+  Future<List<int>?> loadMasterKey(CloudSyncProviderKind provider) async {
+    final value =
+        await _secureStorage.read(key: _masterKeyKey(provider)) ??
+        (provider == CloudSyncProviderKind.s3
+            ? await _secureStorage.read(key: _masterKey)
+            : null);
     return value == null ? null : base64Decode(value);
   }
 
-  Future<List<int>?> loadSalt() async {
-    final value = await _secureStorage.read(key: _saltKey);
+  Future<List<int>?> loadSalt(CloudSyncProviderKind provider) async {
+    final value =
+        await _secureStorage.read(key: _saltKeyFor(provider)) ??
+        (provider == CloudSyncProviderKind.s3
+            ? await _secureStorage.read(key: _saltKey)
+            : null);
     return value == null ? null : base64Decode(value);
   }
 
@@ -127,18 +159,30 @@ class CloudSyncLocalRepository {
     if (lastSync != null) await _preferences.setString(_lastSyncKey, lastSync);
   }
 
-  Future<void> disconnect() async {
+  Future<void> disconnect({CloudSyncProviderKind? provider}) async {
+    final active = loadConfig()?.provider;
     await _preferences.remove(_configKey);
     await _preferences.remove(_journalKey);
     await _preferences.remove(_lastSyncKey);
     final journal = await _journalFile();
     if (await journal.exists()) await journal.delete();
-    await Future.wait([
-      _secureStorage.delete(key: _accessKey),
-      _secureStorage.delete(key: _secretKey),
-      _secureStorage.delete(key: _sessionKey),
-      _secureStorage.delete(key: _masterKey),
-      _secureStorage.delete(key: _saltKey),
-    ]);
+    if (provider == null || provider == CloudSyncProviderKind.s3) {
+      await Future.wait([
+        _secureStorage.delete(key: _accessKey),
+        _secureStorage.delete(key: _secretKey),
+        _secureStorage.delete(key: _sessionKey),
+      ]);
+    }
+    final targets = provider == null
+        ? CloudSyncProviderKind.values
+        : [provider];
+    for (final kind in targets) {
+      await _secureStorage.delete(key: _masterKeyKey(kind));
+      await _secureStorage.delete(key: _saltKeyFor(kind));
+    }
+    if (active == null || active == CloudSyncProviderKind.s3) {
+      await _secureStorage.delete(key: _masterKey);
+      await _secureStorage.delete(key: _saltKey);
+    }
   }
 }

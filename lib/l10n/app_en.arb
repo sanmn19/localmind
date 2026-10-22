@@ -3732,5 +3732,17 @@
   "background_resume_task": "Resume task",
   "@background_resume_task": {"description": "Tooltip of a background task's resume button"},
   "background_pill_title": "Background task",
-  "@background_pill_title": {"description": "Inline chat pill prefix next to a background task's state chip"}
+  "@background_pill_title": {"description": "Inline chat pill prefix next to a background task's state chip"},
+  "cloud_sync_provider": "Backup destination",
+  "@cloud_sync_provider": {"description": "Cloud Sync screen: provider selector label"},
+  "cloud_sync_provider_s3": "S3-compatible",
+  "@cloud_sync_provider_s3": {"description": "Cloud Sync screen: S3 provider option"},
+  "cloud_sync_provider_google_drive": "Google Drive",
+  "@cloud_sync_provider_google_drive": {"description": "Cloud Sync screen: Google Drive provider option"},
+  "cloud_sync_connect_google": "Connect Google Drive",
+  "@cloud_sync_connect_google": {"description": "Cloud Sync screen: Google OAuth connect button"},
+  "cloud_sync_connected_as": "Connected as {email}",
+  "@cloud_sync_connected_as": {"description": "Cloud Sync screen: connected Google account", "placeholders": {"email": {"type": "String"}}},
+  "cloud_sync_backup_now": "Back up now",
+  "@cloud_sync_backup_now": {"description": "Cloud Sync screen: force a backup rotation and upload"}
 }

@@ -3655,4 +3655,24 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get background_pill_title => 'Background task';
+
+  @override
+  String get cloud_sync_provider => 'Backup destination';
+
+  @override
+  String get cloud_sync_provider_s3 => 'S3-compatible';
+
+  @override
+  String get cloud_sync_provider_google_drive => 'Google Drive';
+
+  @override
+  String get cloud_sync_connect_google => 'Connect Google Drive';
+
+  @override
+  String cloud_sync_connected_as(String email) {
+    return 'Connected as $email';
+  }
+
+  @override
+  String get cloud_sync_backup_now => 'Back up now';
 }
