@@ -24,7 +24,7 @@ void main() {
     return container;
   }
 
-  Future<void> pumpShell(
+  Future<void> pumpShellFrame(
     WidgetTester tester,
     ProviderContainer container, {
     Size size = const Size(1440, 900),
@@ -45,6 +45,14 @@ void main() {
         ),
       ),
     );
+  }
+
+  Future<void> pumpShell(
+    WidgetTester tester,
+    ProviderContainer container, {
+    Size size = const Size(1440, 900),
+  }) async {
+    await pumpShellFrame(tester, container, size: size);
     await tester.pumpAndSettle();
   }
 
@@ -247,6 +255,31 @@ void main() {
     expect(
       tester.getRect(find.byKey(ValueKey('desktop-title-$id'))).left,
       240 + 840,
+    );
+
+    await flushSaves(tester);
+  });
+
+  testWidgets('clamps an off-screen restored window on the first frame', (
+    tester,
+  ) async {
+    final container = createContainer();
+    final controller = container.read(desktopWindowControllerProvider.notifier);
+    controller.open(
+      kind: DesktopWindowKind.settings,
+      title: 'Settings',
+      rect: const Rect.fromLTWH(4000, 4000, 720, 520),
+    );
+
+    await pumpShellFrame(tester, container);
+
+    expect(
+      tester.getRect(find.byType(DesktopWindowFrame)),
+      const Rect.fromLTWH(240 + 840, 516, 720, 520),
+    );
+    expect(
+      container.read(desktopWindowControllerProvider).windows.single.rect,
+      const Rect.fromLTWH(840, 516, 720, 520),
     );
 
     await flushSaves(tester);

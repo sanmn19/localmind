@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/components/app_sizes.dart';
 import '../../data/models/desktop_window.dart';
 import '../../providers/desktop_window_providers.dart';
+import '../../utils/window_geometry.dart';
 import 'desktop_window_title_bar.dart';
 
 /// Builds the screen hosted by one desktop window.
@@ -11,18 +12,20 @@ typedef DesktopScreenBuilder = Widget Function(DesktopWindowState window);
 
 /// One floating window on the desktop workspace.
 ///
-/// The frame is responsible for its position, chrome and window controls. It does
-/// not own its geometry: every interaction is delegated to
-/// [DesktopWindowController].
+/// The frame renders its window at a rect clamped to the current [workspace] so a
+/// restored off-screen layout is never painted outside the canvas. It does not own
+/// its geometry: every mutation is delegated to [DesktopWindowController].
 class DesktopWindowFrame extends ConsumerWidget {
   const DesktopWindowFrame({
     super.key,
     required this.window,
+    required this.workspace,
     required this.isFocused,
     required this.screenBuilder,
   });
 
   final DesktopWindowState window;
+  final Rect workspace;
   final bool isFocused;
   final DesktopScreenBuilder screenBuilder;
 
@@ -65,6 +68,9 @@ class DesktopWindowFrame extends ConsumerWidget {
     if (window.isMaximized) {
       return Positioned.fill(child: frame);
     }
-    return Positioned.fromRect(rect: window.rect, child: frame);
+    return Positioned.fromRect(
+      rect: WindowGeometry.clamp(window.rect, workspace),
+      child: frame,
+    );
   }
 }

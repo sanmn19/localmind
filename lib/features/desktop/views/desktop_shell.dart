@@ -31,14 +31,6 @@ class DesktopShell extends ConsumerStatefulWidget {
 class _DesktopShellState extends ConsumerState<DesktopShell> {
   Rect? _workspace;
 
-  /// Whether the controller has received the first workspace rectangle.
-  ///
-  /// Riverpod forbids changing a provider while the widget tree is building, and a
-  /// [LayoutBuilder] runs during layout, so the first workspace sync is deferred to
-  /// the end of the frame. Windows are not painted until then, which guarantees
-  /// that a restored off-screen layout is never rendered before it is clamped.
-  bool _workspaceApplied = false;
-
   @override
   Widget build(BuildContext context) {
     ref.watch(desktopWindowControllerProvider);
@@ -59,17 +51,13 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
                           !constraints.hasBoundedHeight) {
                         return const SizedBox.shrink();
                       }
-                      _syncWorkspace(
-                        Rect.fromLTWH(
-                          0,
-                          0,
-                          constraints.maxWidth,
-                          constraints.maxHeight,
-                        ),
+                      final workspace = Rect.fromLTWH(
+                        0,
+                        0,
+                        constraints.maxWidth,
+                        constraints.maxHeight,
                       );
-                      if (!_workspaceApplied) {
-                        return const SizedBox.expand();
-                      }
+                      _syncWorkspace(workspace);
                       final layout = ref.read(desktopWindowControllerProvider);
                       final windows = [...layout.windows]
                         ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
@@ -82,6 +70,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
                               DesktopWindowFrame(
                                 key: ValueKey('desktop-window-${window.id}'),
                                 window: window,
+                                workspace: workspace,
                                 isFocused: layout.focusedWindowId == window.id,
                                 screenBuilder: widget.screenBuilder,
                               ),
@@ -99,6 +88,12 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
     );
   }
 
+  /// Hands the workspace to the controller after the frame.
+  ///
+  /// Riverpod forbids changing a provider while the widget tree is building, and
+  /// a [LayoutBuilder] runs during layout. Frames already render with the
+  /// workspace passed to them, so this only persists the clamped layout; the first
+  /// painted frame is never unclamped.
   void _syncWorkspace(Rect workspace) {
     if (_workspace == workspace) return;
     _workspace = workspace;
@@ -107,7 +102,6 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
       ref
           .read(desktopWindowControllerProvider.notifier)
           .setWorkspace(workspace);
-      setState(() => _workspaceApplied = true);
     });
   }
 }
