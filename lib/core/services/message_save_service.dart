@@ -30,11 +30,12 @@ class MessageSaveService {
   /// (streaming updates supersede the previous checkpoint).
   void enqueue(Message message) {
     if (_disposed) return;
-    final idx = _queue.indexWhere((m) => m.id == message.id);
+    final checkpoint = message.copyWith(updatedAt: DateTime.now());
+    final idx = _queue.indexWhere((m) => m.id == checkpoint.id);
     if (idx != -1) {
-      _queue[idx] = message;
+      _queue[idx] = checkpoint;
     } else {
-      _queue.add(message);
+      _queue.add(checkpoint);
     }
     // Start a periodic flush timer on the first enqueue.
     _flushTimer ??= Timer.periodic(

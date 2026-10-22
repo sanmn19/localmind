@@ -9,6 +9,7 @@ class Message {
   final MessageRole role;
   final String content;
   final DateTime createdAt;
+  final DateTime? updatedAt;
   final MessageStatus status;
   final String? modelId;
   final int? tokenCount;
@@ -38,6 +39,7 @@ class Message {
     required this.role,
     required this.content,
     required this.createdAt,
+    this.updatedAt,
     this.status = MessageStatus.complete,
     this.modelId,
     this.tokenCount,
@@ -68,6 +70,7 @@ class Message {
     MessageRole? role,
     String? content,
     DateTime? createdAt,
+    DateTime? updatedAt,
     MessageStatus? status,
     String? modelId,
     int? tokenCount,
@@ -97,6 +100,7 @@ class Message {
       role: role ?? this.role,
       content: content ?? this.content,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
       status: status ?? this.status,
       modelId: modelId ?? this.modelId,
       tokenCount: tokenCount ?? this.tokenCount,
@@ -121,6 +125,10 @@ class Message {
       contentTokenCount: contentTokenCount ?? this.contentTokenCount,
     );
   }
+
+  /// The last time this message changed, falling back to [createdAt] for rows
+  /// written before completion timestamps were recorded.
+  DateTime get effectiveUpdatedAt => updatedAt ?? createdAt;
 }
 
 class ToolCallData {

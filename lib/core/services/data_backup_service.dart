@@ -65,6 +65,7 @@ class DataBackupService {
     'role': message.role.name,
     'content': message.content,
     'createdAt': message.createdAt.toIso8601String(),
+    'updatedAt': message.effectiveUpdatedAt.toIso8601String(),
     'status': message.status.name,
     'modelId': message.modelId,
     'tokenCount': message.tokenCount,
@@ -773,6 +774,7 @@ class DataBackupService {
             role: MessageRole.values.byName(item['role'] as String? ?? 'user'),
             content: item['content'] as String? ?? '',
             createdAt: createdAt,
+            updatedAt: backupImportDateTime(item['updatedAt']) ?? createdAt,
             status: MessageStatus.values.byName(
               item['status'] as String? ?? 'complete',
             ),
