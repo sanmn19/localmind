@@ -24,6 +24,9 @@ class _RecordingStore implements ScreenSampleStore {
   List<ScreenSample> pending({int limit = 240}) => added.take(limit).toList();
 
   @override
+  int pendingCount() => added.length;
+
+  @override
   void markProcessed(Iterable<int> ids, DateTime now) => processed.addAll(ids);
 
   @override
@@ -119,14 +122,21 @@ void main() {
     expect(store.processed, [1, 2]);
   });
 
-  test('the batch hourly cap stops extraction', () async {
+  test('the batch hourly cap follows the configured interval', () async {
     final store = _RecordingStore()..add(_sample(1, 'x', 'com.whatsapp'));
     final extractor = _FakeExtractor();
-    final batch = _processor(store: store, extractor: extractor);
-    for (var i = 0; i < 7; i++) {
+    final batch = _processor(
+      store: store,
+      extractor: extractor,
+      settings: AppSettings(
+        screenMemoryEnabled: true,
+        screenMemoryBatchIntervalSeconds: 300,
+      ),
+    );
+    for (var i = 0; i < 13; i++) {
       await batch.batchNow();
     }
-    expect(extractor.calls, 6);
+    expect(extractor.calls, 12);
   });
 
   test('the batch merges the latest text per package', () async {

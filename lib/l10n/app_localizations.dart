@@ -7119,6 +7119,66 @@ abstract class AppLocalizations {
   /// **'Open accessibility settings'**
   String get screen_memories_service_open_settings;
 
+  /// No description provided for @screen_memory_status_title.
+  ///
+  /// In en, this message translates to:
+  /// **'Screen memories'**
+  String get screen_memory_status_title;
+
+  /// Unprocessed screen samples
+  ///
+  /// In en, this message translates to:
+  /// **'{count} waiting'**
+  String screen_memory_status_pending(int count);
+
+  /// No description provided for @screen_memory_status_processing.
+  ///
+  /// In en, this message translates to:
+  /// **'Processing screen samples…'**
+  String get screen_memory_status_processing;
+
+  /// Last screen batch result
+  ///
+  /// In en, this message translates to:
+  /// **'Last batch: {count} memories · {when}'**
+  String screen_memory_status_last(int count, String when);
+
+  /// Last screen batch error
+  ///
+  /// In en, this message translates to:
+  /// **'Last batch failed: {error}'**
+  String screen_memory_status_error(String error);
+
+  /// No description provided for @screen_memory_status_process_now.
+  ///
+  /// In en, this message translates to:
+  /// **'Process now'**
+  String get screen_memory_status_process_now;
+
+  /// No description provided for @screen_memory_status_no_model.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a model to process samples'**
+  String get screen_memory_status_no_model;
+
+  /// No description provided for @screen_memory_status_off.
+  ///
+  /// In en, this message translates to:
+  /// **'Screen memories are off'**
+  String get screen_memory_status_off;
+
+  /// No description provided for @screen_memory_status_backoff.
+  ///
+  /// In en, this message translates to:
+  /// **'Retrying after an error'**
+  String get screen_memory_status_backoff;
+
+  /// No description provided for @screen_memory_status_cap.
+  ///
+  /// In en, this message translates to:
+  /// **'Hourly limit reached'**
+  String get screen_memory_status_cap;
+
   /// Screen memories: accessibility settings open failure
   ///
   /// In en, this message translates to:

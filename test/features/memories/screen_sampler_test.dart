@@ -17,14 +17,28 @@ class _FakeGateway implements ScreenTextGateway {
   int reads = 0;
 
   @override
-  Future<ScreenText?> readText() async {
+  Future<ScreenText?> readText() async => null;
+
+  @override
+  Future<void> startSampling(int intervalMs) async {}
+
+  @override
+  Future<void> stopSampling() async {}
+
+  @override
+  Future<List<ScreenText>> drainSamples() async {
     reads++;
-    return ScreenText(
-      packageName: packageName,
-      text: text,
-      isInteractive: interactive,
-    );
+    return [
+      ScreenText(
+        packageName: packageName,
+        text: text,
+        isInteractive: interactive,
+      ),
+    ];
   }
+
+  @override
+  Future<int> pendingSampleCount() async => 0;
 }
 
 class _RecordingStore implements ScreenSampleStore {
@@ -38,6 +52,9 @@ class _RecordingStore implements ScreenSampleStore {
 
   @override
   List<ScreenSample> pending({int limit = 240}) => added.take(limit).toList();
+
+  @override
+  int pendingCount() => added.length;
 
   @override
   void prune({required DateTime before, int keepMax = 4000}) {}
@@ -182,9 +199,23 @@ class _ChangeableGateway implements ScreenTextGateway {
   final String Function() text;
 
   @override
-  Future<ScreenText?> readText() async => ScreenText(
-    packageName: 'com.whatsapp',
-    text: text(),
-    isInteractive: true,
-  );
+  Future<ScreenText?> readText() async => null;
+
+  @override
+  Future<void> startSampling(int intervalMs) async {}
+
+  @override
+  Future<void> stopSampling() async {}
+
+  @override
+  Future<List<ScreenText>> drainSamples() async => [
+        ScreenText(
+          packageName: 'com.whatsapp',
+          text: text(),
+          isInteractive: true,
+        ),
+      ];
+
+  @override
+  Future<int> pendingSampleCount() async => 0;
 }

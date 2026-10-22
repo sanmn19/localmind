@@ -63,3 +63,57 @@ final screenMemoryTickProvider = Provider<void>((ref) {
   scheduler.applySettings(ref.read(settingsProvider));
   ref.onDispose(scheduler.stop);
 });
+
+/// Live queue/processing status for the Memories screen.
+class ScreenMemoryStatus {
+  const ScreenMemoryStatus({
+    required this.pending,
+    required this.running,
+    required this.lastBatchAt,
+    required this.lastExtracted,
+    required this.lastError,
+    required this.blockedReason,
+  });
+
+  final int pending;
+  final bool running;
+  final DateTime? lastBatchAt;
+  final int lastExtracted;
+  final String? lastError;
+  final String? blockedReason;
+}
+
+/// Polls the native ring and the ObjectBox queue only while the Memories screen
+/// is mounted. Auto-dispose keeps it from waking the app in the background.
+final screenMemoryStatusProvider =
+    StreamProvider.autoDispose<ScreenMemoryStatus>((ref) async* {
+  final batch = ref.watch(screenBatchProcessorProvider);
+  final sampler = ref.watch(screenSamplerProvider);
+  final settings = ref.watch(settingsProvider);
+  final server = ref.watch(activeServerProvider);
+  final modelId = ref.watch(activeChatTargetProvider).effectiveModelId ?? '';
+  var disposed = false;
+  ref.onDispose(() => disposed = true);
+  while (!disposed) {
+    final nativePending = await sampler.pendingSampleCount();
+    String? reason;
+    if (!settings.screenMemoryEnabled) {
+      reason = 'off';
+    } else if (server == null || modelId.isEmpty) {
+      reason = 'no_model';
+    } else if (batch.isBackingOff) {
+      reason = 'backoff';
+    } else if (batch.isAtHourlyCap) {
+      reason = 'cap';
+    }
+    yield ScreenMemoryStatus(
+      pending: batch.pendingCount + nativePending,
+      running: batch.isRunning,
+      lastBatchAt: batch.lastBatchAt,
+      lastExtracted: batch.lastExtracted,
+      lastError: batch.lastError,
+      blockedReason: reason,
+    );
+    await Future<void>.delayed(const Duration(seconds: 2));
+  }
+});

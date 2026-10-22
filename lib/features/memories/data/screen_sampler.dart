@@ -28,53 +28,69 @@ class ScreenSampler {
   final AppSettings Function() _settings;
   final DateTime Function() _now;
 
-  String? _lastHash;
+  final Map<String, String> _lastHashes = {};
   bool _tickInFlight = false;
   bool _disposed = false;
 
-  Future<void> tick() async {
+  /// Starts native event-driven sampling. The native service owns the debounce
+  /// and the screen-off pause; no Dart timer is needed.
+  Future<void> startSampling(int intervalMs) =>
+      _gateway.startSampling(intervalMs);
+
+  Future<void> stopSampling() => _gateway.stopSampling();
+
+  /// Samples waiting in the native ring, before the next drain.
+  Future<int> pendingSampleCount() => _gateway.pendingSampleCount();
+
+  /// Drains native changed-screen samples into the on-disk queue.
+  Future<void> drain() async {
     if (_disposed || _tickInFlight) return;
     final settings = _settings();
     if (!settings.screenMemoryEnabled) return;
 
     _tickInFlight = true;
     try {
-      final screen = await _gateway.readText();
-      if (_disposed || screen == null || !screen.isInteractive) return;
-      if (isBlockedPackage(
-        screen.packageName,
-        settings.screenMemoryBlockedApps,
-      )) {
-        return;
+      final samples = await _gateway.drainSamples();
+      for (final screen in samples) {
+        if (_disposed || !screen.isInteractive) continue;
+        if (isBlockedPackage(
+          screen.packageName,
+          settings.screenMemoryBlockedApps,
+        )) {
+          continue;
+        }
+        final text = _normalize(screen.text);
+        if (text.isEmpty) continue;
+        final hash = _hash(screen.packageName, text);
+        if (_lastHashes[screen.packageName] == hash) continue;
+        if (ScreenPrivacyFilter.containsSensitiveData(text)) {
+          // Remember the hash so the same sensitive screen is not re-read every
+          // batch; a changed screen is evaluated again.
+          _lastHashes[screen.packageName] = hash;
+          Log.info('Screen sample skipped: sensitive content');
+          continue;
+        }
+        _store.add(
+          ScreenSample(
+            capturedAt: screen.capturedAt ?? _now(),
+            packageName: screen.packageName,
+            text: text,
+            hash: hash,
+          ),
+        );
+        _lastHashes[screen.packageName] = hash;
       }
-      final text = _normalize(screen.text);
-      if (text.isEmpty) return;
-      final hash = _hash(screen.packageName, text);
-      if (hash == _lastHash) return;
-      if (ScreenPrivacyFilter.containsSensitiveData(text)) {
-        // Remember the hash so the same sensitive screen is not re-read every
-        // tick; a changed screen is evaluated again.
-        _lastHash = hash;
-        Log.info('Screen sample skipped: sensitive content');
-        return;
-      }
-      _store.add(
-        ScreenSample(
-          capturedAt: _now(),
-          packageName: screen.packageName,
-          text: text,
-          hash: hash,
-        ),
-      );
-      _lastHash = hash;
     } catch (error) {
-      // A channel or store hiccup must not kill the 500 ms timer; the next
-      // tick retries, and an unchanged screen is still deduped by hash.
+      // A channel or store hiccup must not kill the sampler; the next batch
+      // retries, and an unchanged screen is still deduped by hash.
       Log.warning('Screen sampling failed: $error');
     } finally {
       _tickInFlight = false;
     }
   }
+
+  /// Backwards-compatible single drain (tests and callers that pump once).
+  Future<void> tick() => drain();
 
   void dispose() {
     _disposed = true;

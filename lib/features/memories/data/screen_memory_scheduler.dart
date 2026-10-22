@@ -23,18 +23,23 @@ class ScreenMemoryScheduler {
   final ScreenSampler _sampler;
   final ScreenMemoryBatchProcessor _batch;
 
-  Timer? _sampleTimer;
   Timer? _batchTimer;
   Duration? _sampleInterval;
   Duration? _batchInterval;
+  bool _sampling = false;
 
-  bool get isRunning => _sampleTimer != null && _batchTimer != null;
+  bool get isRunning => _batchTimer != null;
 
   void applySettings(AppSettings settings) {
     final sampleMs = settings.screenMemorySampleIntervalMs;
     final batchSeconds = settings.screenMemoryBatchIntervalSeconds;
     if (!settings.screenMemoryEnabled || sampleMs <= 0 || batchSeconds <= 0) {
       stop();
+      unawaited(
+        _sampler.stopSampling().catchError((Object error, StackTrace stack) {
+          Log.warning('Screen sampling stop failed: $error');
+        }),
+      );
       // No more batches run while the feature is off, so drain expired samples
       // here instead of leaving captured text on disk indefinitely.
       unawaited(
@@ -47,19 +52,25 @@ class ScreenMemoryScheduler {
 
     final sampleInterval = Duration(milliseconds: sampleMs);
     final batchInterval = Duration(seconds: batchSeconds);
-    if (isRunning &&
-        _sampleInterval == sampleInterval &&
-        _batchInterval == batchInterval) {
-      return;
+
+    // Native event-driven sampling: start or change the debounce. It survives
+    // the app being backgrounded, unlike a Dart timer.
+    if (!_sampling || _sampleInterval != sampleInterval) {
+      _sampleInterval = sampleInterval;
+      _sampling = true;
+      unawaited(
+        _sampler.startSampling(sampleMs).catchError((
+          Object error,
+          StackTrace stack,
+        ) {
+          Log.warning('Screen sampling start failed: $error');
+        }),
+      );
     }
 
-    stop();
-    _sampleInterval = sampleInterval;
+    if (_batchTimer != null && _batchInterval == batchInterval) return;
+    _batchTimer?.cancel();
     _batchInterval = batchInterval;
-    _sampleTimer = Timer.periodic(
-      sampleInterval,
-      (_) => unawaited(_sampler.tick()),
-    );
     _batchTimer = Timer.periodic(
       batchInterval,
       (_) => unawaited(
@@ -70,17 +81,27 @@ class ScreenMemoryScheduler {
     );
   }
 
-  /// Drains the queue now: app open/resume and the overlay being shown.
-  Future<void> batchNow() => _batch.batchNow();
+  /// Drains native samples, then processes the queue: app open/resume and the
+  /// overlay being shown.
+  Future<void> batchNow() async {
+    await _sampler.drain();
+    await _batch.batchNow();
+  }
 
   void stop() {
-    _sampleTimer?.cancel();
     _batchTimer?.cancel();
-    _sampleTimer = null;
     _batchTimer = null;
     _sampleInterval = null;
     _batchInterval = null;
+    _sampling = false;
   }
 
-  void dispose() => stop();
+  void dispose() {
+    stop();
+    unawaited(
+      _sampler.stopSampling().catchError((Object error, StackTrace stack) {
+        Log.warning('Screen sampling stop failed: $error');
+      }),
+    );
+  }
 }

@@ -28,6 +28,20 @@ class _FakeGateway implements ScreenTextGateway {
   @override
   Future<ScreenText?> readText() async =>
       ScreenText(packageName: packageName, text: text, isInteractive: true);
+
+  @override
+  Future<void> startSampling(int intervalMs) async {}
+
+  @override
+  Future<void> stopSampling() async {}
+
+  @override
+  Future<List<ScreenText>> drainSamples() async => [
+        ScreenText(packageName: packageName, text: text, isInteractive: true),
+      ];
+
+  @override
+  Future<int> pendingSampleCount() async => 0;
 }
 
 class _RecordingStore implements ScreenSampleStore {
@@ -41,6 +55,9 @@ class _RecordingStore implements ScreenSampleStore {
 
   @override
   List<ScreenSample> pending({int limit = 240}) => added.take(limit).toList();
+
+  @override
+  int pendingCount() => added.length;
 
   @override
   void prune({required DateTime before, int keepMax = 4000}) {}
@@ -92,6 +109,25 @@ class _FakeBatch extends ScreenMemoryBatchProcessor {
   }
 }
 
+class _FakeScheduler extends ScreenMemoryScheduler {
+  _FakeScheduler(this.batch)
+    : super(
+        sampler: ScreenSampler(
+          gateway: const NoopScreenTextGateway(),
+          store: _RecordingStore(),
+          settings: () => AppSettings(screenMemoryEnabled: true),
+        ),
+        batch: batch,
+      );
+
+  final _FakeBatch batch;
+
+  @override
+  Future<void> batchNow() async {
+    batch.calls++;
+  }
+}
+
 class _EnabledSettings extends SettingsNotifier {
   @override
   AppSettings build() => AppSettings(screenMemoryEnabled: true);
@@ -131,7 +167,9 @@ void main() {
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
         settingsProvider.overrideWith(_EnabledSettings.new),
-        screenBatchProcessorProvider.overrideWithValue(batch),
+        screenMemorySchedulerProvider.overrideWithValue(
+          _FakeScheduler(batch),
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -157,7 +195,9 @@ void main() {
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
         settingsProvider.overrideWith(_EnabledSettings.new),
-        screenBatchProcessorProvider.overrideWithValue(batch),
+        screenMemorySchedulerProvider.overrideWithValue(
+          _FakeScheduler(batch),
+        ),
       ],
     );
     addTearDown(container.dispose);

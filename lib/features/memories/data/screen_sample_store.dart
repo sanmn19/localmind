@@ -26,6 +26,9 @@ abstract class ScreenSampleStore {
 
   List<ScreenSample> pending({int limit = 240});
 
+  /// Number of samples waiting for the next batch (no text materialized).
+  int pendingCount();
+
   void markProcessed(Iterable<int> ids, DateTime now);
 
   /// Deletes samples captured before [before], then keeps at most [keepMax]
@@ -59,6 +62,16 @@ class ObjectBoxScreenSampleStore implements ScreenSampleStore {
     try {
       query.limit = limit;
       return query.find().map(_toDomain).toList();
+    } finally {
+      query.close();
+    }
+  }
+
+  @override
+  int pendingCount() {
+    final query = _box.query(ScreenSampleEntity_.processedAt.isNull()).build();
+    try {
+      return query.count();
     } finally {
       query.close();
     }

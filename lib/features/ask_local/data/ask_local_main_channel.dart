@@ -339,7 +339,7 @@ class AskLocalMainChannel {
       if (!container.read(settingsProvider).screenMemoryEnabled) return;
       unawaited(
         container
-            .read(screenBatchProcessorProvider)
+            .read(screenMemorySchedulerProvider)
             .batchNow()
             .catchError((Object error, StackTrace stack) {
               Log.warning('Screen memory batch on overlay open failed: $error');

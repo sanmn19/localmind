@@ -3885,6 +3885,43 @@ class AppLocalizationsFr extends AppLocalizations {
       'Open accessibility settings';
 
   @override
+  String get screen_memory_status_title => 'Screen memories';
+
+  @override
+  String screen_memory_status_pending(int count) {
+    return '$count waiting';
+  }
+
+  @override
+  String get screen_memory_status_processing => 'Processing screen samples…';
+
+  @override
+  String screen_memory_status_last(int count, String when) {
+    return 'Last batch: $count memories · $when';
+  }
+
+  @override
+  String screen_memory_status_error(String error) {
+    return 'Last batch failed: $error';
+  }
+
+  @override
+  String get screen_memory_status_process_now => 'Process now';
+
+  @override
+  String get screen_memory_status_no_model =>
+      'Select a model to process samples';
+
+  @override
+  String get screen_memory_status_off => 'Screen memories are off';
+
+  @override
+  String get screen_memory_status_backoff => 'Retrying after an error';
+
+  @override
+  String get screen_memory_status_cap => 'Hourly limit reached';
+
+  @override
   String get screen_memories_service_error =>
       'Could not open accessibility settings.';
 

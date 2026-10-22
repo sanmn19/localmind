@@ -5,6 +5,7 @@ import 'package:hugeicons/hugeicons.dart';
 import 'package:localmind/core/routes/app_routes.dart';
 import 'package:localmind/core/theme/colors.dart';
 import 'package:localmind/features/memories/data/models/memory.dart';
+import 'package:localmind/core/providers/screen_memory_providers.dart';
 import 'package:localmind/features/memories/providers/memory_providers.dart';
 import 'package:localmind/l10n/app_localizations.dart';
 
@@ -157,6 +158,7 @@ class _MemoriesScreenState extends ConsumerState<MemoriesScreen> {
       ),
       body: Column(
         children: [
+          const _ScreenMemoryStatusCard(),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: TextField(
@@ -236,6 +238,127 @@ class _MemoriesScreenState extends ConsumerState<MemoriesScreen> {
                   );
       },
     );
+  }
+}
+
+class _ScreenMemoryStatusCard extends ConsumerWidget {
+  const _ScreenMemoryStatusCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final status = ref.watch(screenMemoryStatusProvider).value;
+    if (status == null) return const SizedBox.shrink();
+    final pending = status.pending;
+    final hasWork = pending > 0 || status.running || status.lastError != null;
+    if (!hasWork) return const SizedBox.shrink();
+
+    final reason = switch (status.blockedReason) {
+      'no_model' => l10n.screen_memory_status_no_model,
+      'backoff' => l10n.screen_memory_status_backoff,
+      'cap' => l10n.screen_memory_status_cap,
+      'off' => l10n.screen_memory_status_off,
+      _ => null,
+    };
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Card(
+        key: const ValueKey('screen_memory_status'),
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      l10n.screen_memory_status_title,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  if (pending > 0)
+                    Container(
+                      key: const ValueKey('screen_memory_pending'),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        l10n.screen_memory_status_pending(pending),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              if (status.running) ...[
+                const SizedBox(height: 8),
+                const LinearProgressIndicator(
+                  key: ValueKey('screen_memory_progress'),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  l10n.screen_memory_status_processing,
+                  style: theme.textTheme.bodySmall,
+                ),
+              ] else if (status.lastError != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  l10n.screen_memory_status_error(status.lastError!),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+              ] else if (reason != null) ...[
+                const SizedBox(height: 6),
+                Text(reason, style: theme.textTheme.bodySmall),
+              ] else if (status.lastBatchAt != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  l10n.screen_memory_status_last(
+                    status.lastExtracted,
+                    _relative(status.lastBatchAt!),
+                  ),
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+              if (!status.running && pending > 0) ...[
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    key: const ValueKey('screen_memory_process_now'),
+                    onPressed: () => ref
+                        .read(screenMemorySchedulerProvider)
+                        .batchNow(),
+                    child: Text(l10n.screen_memory_status_process_now),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static String _relative(DateTime at) {
+    final delta = DateTime.now().difference(at);
+    if (delta.inSeconds < 60) return 'just now';
+    if (delta.inMinutes < 60) return '${delta.inMinutes} min ago';
+    return '${delta.inHours} h ago';
   }
 }
 

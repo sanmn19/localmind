@@ -39,7 +39,12 @@ class ScreenMemoryBatchProcessor {
        _now = now ?? DateTime.now,
        _onFailure = onFailure;
 
-  static const _maxBatchesPerHour = 6;
+  /// One batch per configured interval; manual triggers may add a few more.
+  static int maxBatchesPerHourFor(int batchIntervalSeconds) {
+    if (batchIntervalSeconds <= 0) return 60;
+    return (3600 / batchIntervalSeconds).ceil().clamp(6, 360);
+  }
+
   static const _maxMergedChars = 4000;
   static const _sampleRetention = Duration(hours: 24);
   static const _failureBackoff = Duration(minutes: 5);
@@ -59,8 +64,28 @@ class ScreenMemoryBatchProcessor {
   final List<DateTime> _batchTimes = [];
   DateTime? _backoffUntil;
   bool _running = false;
+  DateTime? _lastBatchAt;
+  int _lastExtracted = 0;
+  String? _lastError;
 
   bool get isRunning => _running;
+  int get pendingCount => _store.pendingCount();
+  DateTime? get lastBatchAt => _lastBatchAt;
+  int get lastExtracted => _lastExtracted;
+  String? get lastError => _lastError;
+  bool get isBackingOff {
+    final until = _backoffUntil;
+    return until != null && _now().isBefore(until);
+  }
+
+  bool get isAtHourlyCap {
+    final settings = _settings();
+    final now = _now();
+    final recent = _batchTimes
+        .where((time) => now.difference(time) < const Duration(hours: 1))
+        .length;
+    return recent >= maxBatchesPerHourFor(settings.screenMemoryBatchIntervalSeconds);
+  }
 
   /// Drops samples past the 24-hour retention window without extracting.
   ///
@@ -91,7 +116,10 @@ class ScreenMemoryBatchProcessor {
     _batchTimes.removeWhere(
       (time) => now.difference(time) >= const Duration(hours: 1),
     );
-    if (_batchTimes.length >= _maxBatchesPerHour) return;
+    final maxBatches = maxBatchesPerHourFor(
+      settings.screenMemoryBatchIntervalSeconds,
+    );
+    if (_batchTimes.length >= maxBatches) return;
 
     final samples = _store.pending();
     if (samples.isEmpty) return;
@@ -163,6 +191,9 @@ class ScreenMemoryBatchProcessor {
       // Only a completed extraction consumes the queue; a throw leaves the
       // samples pending so the backoff can retry them.
       _store.markProcessed(allowed.map((sample) => sample.id), now);
+      _lastBatchAt = now;
+      _lastExtracted = extracted.length;
+      _lastError = null;
     } catch (error) {
       _fail(now, error);
     } finally {
@@ -172,6 +203,8 @@ class ScreenMemoryBatchProcessor {
 
   void _fail(DateTime now, Object error) {
     _backoffUntil = now.add(_failureBackoff);
+    _lastBatchAt = now;
+    _lastError = error.toString();
     Log.warning('Screen memory batch failed: $error');
     _onFailure?.call(error.toString());
   }

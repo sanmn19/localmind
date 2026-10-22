@@ -3,7 +3,10 @@ package pro.momin.localmind
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.app.KeyguardManager
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -16,6 +19,7 @@ import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
 import android.view.Display
+import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import java.io.File
 import java.io.FileOutputStream
@@ -30,20 +34,122 @@ class ScreenCaptureAccessibilityService : AccessibilityService() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    // Event-driven screen-memory sampling. The accessibility event is the
+    // trigger; a short debounce coalesces content-change bursts into one read.
+    private val sampleRing = ArrayDeque<ScreenTextSample>()
+    private var samplingEnabled = false
+    private var sampleIntervalMs = 500L
+    private var screenOn = true
+    private var lastSampleSignature: String? = null
+    private val debounceSample = Runnable { captureSample() }
+
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                Intent.ACTION_SCREEN_OFF -> {
+                    screenOn = false
+                    mainHandler.removeCallbacks(debounceSample)
+                }
+                Intent.ACTION_SCREEN_ON -> {
+                    screenOn = true
+                    scheduleSample()
+                }
+            }
+        }
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         Log.i(TAG, "Screen capture accessibility service connected")
         instance = this
+        val power = getSystemService(Context.POWER_SERVICE) as? PowerManager
+        screenOn = power?.isInteractive == true
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_SCREEN_OFF)
+        }
+        registerReceiver(screenReceiver, filter)
     }
 
-    override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) = Unit
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (!samplingEnabled) return
+        when (event?.eventType) {
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> scheduleSample()
+        }
+    }
 
     override fun onInterrupt() = Unit
 
-    override fun onUnbind(intent: android.content.Intent?): Boolean {
+    override fun onUnbind(intent: Intent?): Boolean {
         Log.i(TAG, "Screen capture accessibility service unbound")
+        stopSampling()
+        try {
+            unregisterReceiver(screenReceiver)
+        } catch (_: IllegalArgumentException) {
+            // Already unregistered (service re-created).
+        }
         instance = null
         return super.onUnbind(intent)
+    }
+
+    /** Starts event-driven sampling with [intervalMs] debounce. */
+    fun startSampling(intervalMs: Long) {
+        samplingEnabled = true
+        sampleIntervalMs = intervalMs.coerceIn(MIN_SAMPLE_INTERVAL_MS, MAX_SAMPLE_INTERVAL_MS)
+        scheduleSample()
+    }
+
+    /** Stops sampling and drops any queued text. */
+    fun stopSampling() {
+        samplingEnabled = false
+        mainHandler.removeCallbacks(debounceSample)
+        sampleRing.clear()
+        lastSampleSignature = null
+    }
+
+    /** Drains and clears the queued samples for the Dart batch. */
+    fun drainSamples(): List<Map<String, Any>> {
+        val out = sampleRing.map {
+            mapOf(
+                "packageName" to it.packageName,
+                "text" to it.text,
+                "capturedAtMillis" to it.capturedAtMillis
+            )
+        }
+        sampleRing.clear()
+        return out
+    }
+
+    /** Number of changed-screen samples waiting for the next batch. */
+    fun pendingSampleCount(): Int = sampleRing.size
+
+    private fun scheduleSample() {
+        if (!samplingEnabled || !screenOn) return
+        mainHandler.removeCallbacks(debounceSample)
+        mainHandler.postDelayed(debounceSample, sampleIntervalMs)
+    }
+
+    private fun captureSample() {
+        if (!samplingEnabled || !screenOn) return
+        val screen = readScreenTextNow() ?: return
+        // Cheap dirty check: package + window + text fingerprint. The event
+        // already told us something changed, but a burst of layout events can
+        // still resolve to the same text.
+        val signature = "${screen.packageName}|${screen.windowId}|${screen.text.hashCode()}"
+        if (signature == lastSampleSignature) return
+        lastSampleSignature = signature
+        sampleRing.addLast(
+            ScreenTextSample(
+                packageName = screen.packageName,
+                text = screen.text,
+                capturedAtMillis = System.currentTimeMillis()
+            )
+        )
+        while (sampleRing.size > MAX_SAMPLE_RING) {
+            sampleRing.removeFirst()
+        }
     }
 
     /**
@@ -158,13 +264,17 @@ class ScreenCaptureAccessibilityService : AccessibilityService() {
      * skipped; the collected text is capped at [MAX_SCREEN_TEXT_CHARS].
      */
     fun readScreenText(onResult: (ScreenText?) -> Unit) {
+        onResult(readScreenTextNow())
+    }
+
+    /** One synchronous read of the active/focused window, or null. */
+    private fun readScreenTextNow(): ScreenText? {
         val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
         val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
         val interactive = powerManager?.isInteractive == true
         if (!interactive || keyguardManager?.isKeyguardLocked == true) {
             Log.i(TAG, "Screen text read skipped: interactive=$interactive")
-            onResult(null)
-            return
+            return null
         }
 
         // The active/focused window only: a window behind it (for example a
@@ -174,8 +284,7 @@ class ScreenCaptureAccessibilityService : AccessibilityService() {
         val packageName = root?.packageName?.toString()
         if (root == null || packageName == null || isSkippedPackage(packageName)) {
             Log.i(TAG, "Screen text read found nothing (package=$packageName)")
-            onResult(null)
-            return
+            return null
         }
 
         val collected = StringBuilder()
@@ -183,15 +292,13 @@ class ScreenCaptureAccessibilityService : AccessibilityService() {
         val text = collected.take(MAX_SCREEN_TEXT_CHARS).toString()
         if (text.isBlank()) {
             Log.i(TAG, "Screen text read found nothing (package=$packageName)")
-            onResult(null)
-            return
+            return null
         }
-        onResult(
-            ScreenText(
-                packageName = packageName,
-                text = text,
-                isInteractive = interactive
-            )
+        return ScreenText(
+            packageName = packageName,
+            text = text,
+            isInteractive = interactive,
+            windowId = root.windowId
         )
     }
 
@@ -452,6 +559,13 @@ class ScreenCaptureAccessibilityService : AccessibilityService() {
         /** Character cap on one foreground-app text read. */
         private const val MAX_SCREEN_TEXT_CHARS = 8000
 
+        /** Bounded in-memory queue drained by the Dart batch. */
+        private const val MAX_SAMPLE_RING = 200
+
+        /** Debounce bounds for event-driven sampling. */
+        private const val MIN_SAMPLE_INTERVAL_MS = 250L
+        private const val MAX_SAMPLE_INTERVAL_MS = 5000L
+
         /** System UI windows never count as the foreground app. */
         private const val SYSTEM_UI_PACKAGE = "com.android.systemui"
 
@@ -532,5 +646,13 @@ class ScreenCaptureAccessibilityService : AccessibilityService() {
 data class ScreenText(
     val packageName: String,
     val text: String,
-    val isInteractive: Boolean
+    val isInteractive: Boolean,
+    val windowId: Int
+)
+
+/** One changed-screen sample waiting for the Dart batch. */
+data class ScreenTextSample(
+    val packageName: String,
+    val text: String,
+    val capturedAtMillis: Long
 )

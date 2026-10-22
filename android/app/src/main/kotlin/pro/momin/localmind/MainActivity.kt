@@ -206,6 +206,19 @@ class MainActivity : AudioServiceActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SCREEN_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "readText" -> readScreenText(result)
+                "startSampling" -> {
+                    val interval = ((call.arguments as? Map<*, *>)?.get("intervalMs") as? Number)?.toLong() ?: 500L
+                    ScreenCaptureAccessibilityService.instance?.startSampling(interval)
+                    result.success(null)
+                }
+                "stopSampling" -> {
+                    ScreenCaptureAccessibilityService.instance?.stopSampling()
+                    result.success(null)
+                }
+                "drainSamples" ->
+                    result.success(ScreenCaptureAccessibilityService.instance?.drainSamples() ?: emptyList<Map<String, Any>>())
+                "pendingSampleCount" ->
+                    result.success(ScreenCaptureAccessibilityService.instance?.pendingSampleCount() ?: 0)
                 else -> result.notImplemented()
             }
         }
@@ -921,7 +934,8 @@ class MainActivity : AudioServiceActivity() {
                 if (screen != null) mapOf(
                     "packageName" to screen.packageName,
                     "text" to screen.text,
-                    "isInteractive" to screen.isInteractive
+                    "isInteractive" to screen.isInteractive,
+                    "windowId" to screen.windowId
                 ) else null
             )
         }
