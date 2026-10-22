@@ -44,7 +44,7 @@ class DesktopHost extends ConsumerStatefulWidget {
   /// Resets the app-wide chat before the shell opens a new chat tab.
   ///
   /// The app supplies it because chat state belongs to a sibling feature.
-  final Future<void> Function()? startNewChat;
+  final Future<String?> Function()? startNewChat;
 
   @override
   ConsumerState<DesktopHost> createState() => _DesktopHostState();
@@ -118,7 +118,7 @@ class _DesktopHostBody extends ConsumerStatefulWidget {
   final DesktopScreenBuilder screenBuilder;
   final String? fallbackRoute;
   final List<DesktopCommand> Function()? conversationCommands;
-  final Future<void> Function()? startNewChat;
+  final Future<String?> Function()? startNewChat;
 
   @override
   ConsumerState<_DesktopHostBody> createState() => _DesktopHostBodyState();

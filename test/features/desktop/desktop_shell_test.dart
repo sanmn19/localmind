@@ -27,7 +27,7 @@ void main() {
   Future<void> pumpShell(
     WidgetTester tester,
     ProviderContainer container, {
-    Future<void> Function()? startNewChat,
+    Future<String?> Function()? startNewChat,
     Size size = const Size(1440, 900),
   }) async {
     tester.view.physicalSize = size;
@@ -236,7 +236,7 @@ void main() {
     final container = createContainer();
     var newChats = 0;
 
-    await pumpShell(tester, container, startNewChat: () async => newChats++);
+    await pumpShell(tester, container, startNewChat: () async => 'c${newChats++}');
 
     await tester.tap(find.byKey(const ValueKey('desktop-new-chat')));
     await tester.pumpAndSettle();
@@ -245,7 +245,7 @@ void main() {
     expect(newChats, 1);
     expect(layout.windows, hasLength(1));
     expect(layout.windows.single.kind, DesktopWindowKind.chat);
-    expect(layout.windows.single.conversationId, isNull);
+    expect(layout.windows.single.conversationId, 'c0');
     expect(find.text('screen:Chat'), findsOneWidget);
 
     await flushSaves(tester);

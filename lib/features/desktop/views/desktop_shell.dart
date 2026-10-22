@@ -45,7 +45,7 @@ class DesktopShell extends ConsumerStatefulWidget {
   ///
   /// Chat state belongs to the chat feature, so the app supplies this callback
   /// and the desktop feature never imports a sibling feature.
-  final Future<void> Function()? startNewChat;
+  final Future<String?> Function()? startNewChat;
 
   @override
   ConsumerState<DesktopShell> createState() => _DesktopShellState();
@@ -155,11 +155,11 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
   /// The home tab has no conversation id, so it renders the app-scope chat rather
   /// than a window bound to a conversation that does not exist yet.
   Future<void> _newChat() async {
-    await widget.startNewChat?.call();
+    final conversationId = await widget.startNewChat?.call();
     if (!mounted) return;
     _controller.open(
       kind: DesktopWindowKind.chat,
-      conversationId: null,
+      conversationId: conversationId,
       title: DesktopWindowKind.chat.defaultTitle,
     );
   }
@@ -188,6 +188,11 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
   void _closeFocused() {
     final id = ref.read(desktopWindowControllerProvider).focusedWindowId;
     if (id != null) _controller.close(id);
+    // Closing the last tab removes the widget that owned focus, so the shell
+    // takes it back for the next shortcut.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
   }
 
   void _openSettings() {

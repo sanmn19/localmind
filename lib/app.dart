@@ -396,8 +396,10 @@ class _AppShellState extends ConsumerState<AppShell> {
         sidebar: const SidebarWidget(),
         screenBuilder: buildDesktopScreen,
         conversationCommands: () => _desktopConversationCommands(ref),
-        startNewChat: () =>
-            ref.read(chatProvider.notifier).startNewConversation(),
+        startNewChat: () async {
+          await ref.read(chatProvider.notifier).startNewConversation();
+          return ref.read(conv.activeConversationIdProvider);
+        },
       );
     }
 

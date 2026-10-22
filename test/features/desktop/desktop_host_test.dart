@@ -97,7 +97,7 @@ void main() {
     String initialLocation = AppRoutes.home,
     Widget? sidebar,
     List<DesktopCommand> Function()? conversationCommands,
-    Future<void> Function()? startNewChat,
+    Future<String?> Function()? startNewChat,
   }) async {
     useDesktopViewport(tester);
     final router = GoRouter(
@@ -162,7 +162,7 @@ void main() {
     WidgetTester tester,
     ProviderContainer container, {
     String initialLocation = AppRoutes.home,
-    Future<void> Function()? startNewChat,
+    Future<String?> Function()? startNewChat,
     Size size = const Size(1440, 900),
   }) async {
     tester.view.physicalSize = size;
@@ -313,8 +313,10 @@ void main() {
       tester,
       container,
       initialLocation: AppRoutes.addServer,
-      startNewChat: () =>
-          container.read(chatProvider.notifier).startNewConversation(),
+      startNewChat: () async {
+        await container.read(chatProvider.notifier).startNewConversation();
+        return container.read(conv.activeConversationIdProvider);
+      },
     );
     expect(find.byType(ChatScreen), findsNothing);
 
