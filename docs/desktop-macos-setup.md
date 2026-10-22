@@ -168,7 +168,9 @@ three newest copies) and merges it with the local snapshot on every sync.
 - **Tombstones** carry the deletion time. A record survives only when it was edited strictly
   after the deletion; legacy list-shaped tombstones read as deleted at the epoch and always win.
 - **Order does not matter.** `merge(local, remote)` and `merge(remote, local)` produce the
-  same payload, so both devices converge without a coordinator.
+  same payload, so both devices converge without a coordinator. The one exception is the
+  first link: when a device has never synced, it adopts the remote settings instead of
+  merging them, so settings resolve to whichever side was the existing snapshot.
 - **Sync cadence.** A local change pushes after a 5 s debounce, the app pulls on resume, on the
   cloud-sync screen and every 30 s while the macOS app is open. Remote application is
   suppressed from re-triggering a push.
