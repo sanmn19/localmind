@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:marionette_flutter/marionette_flutter.dart';
 import 'package:marionette_logger/marionette_logger.dart';
@@ -28,6 +29,11 @@ Future<void> main() async {
         );
       } else {
         WidgetsFlutterBinding.ensureInitialized();
+      }
+      // Exposes the widget tree to macOS accessibility clients so UI tests and
+      // assistive tools can find and drive real elements. Off unless asked for.
+      if (const bool.fromEnvironment('LOCALMIND_SEMANTICS')) {
+        SemanticsBinding.instance.ensureSemantics();
       }
       await pdfrxFlutterInitialize();
       final crashReports = CrashReportService.instance;
