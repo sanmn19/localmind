@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hugeicons/hugeicons.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'l10n/app_localizations.dart';
 
@@ -15,12 +16,13 @@ import 'core/utils/locale_utils.dart';
 import 'core/utils/platform_support.dart';
 import 'core/widgets/android_assistant_invocation_host.dart';
 import 'core/widgets/web_server_registration_host.dart';
+import 'features/chat/providers/chat_mcp_providers.dart';
 import 'features/chat/providers/chat_providers.dart';
+import 'features/conversations/data/models/conversation.dart';
 import 'features/conversations/providers/conversation_providers.dart' as conv;
 import 'features/chat/views/chat_screen.dart';
 import 'features/conversations/views/chat_history_screen.dart';
 import 'features/desktop/data/models/desktop_window.dart';
-import 'features/desktop/views/components/desktop_chat_window.dart';
 import 'features/desktop/views/components/desktop_command_palette.dart';
 import 'features/desktop/views/desktop_host.dart';
 import 'features/mcp/views/mcp_tools_screen.dart';
@@ -448,9 +450,10 @@ class _AppShellState extends ConsumerState<AppShell> {
 /// Builds the screen hosted by one desktop window.
 ///
 /// This is the only place that maps windows onto feature screens, so the desktop
-/// feature never imports a sibling feature. Windows that need router `extra`
-/// (add-server, persona, skill editor, model browser) open without one after a
-/// relaunch and fall back to their create state.
+/// feature itself never imports a sibling feature. Chat windows that belong to a
+/// conversation are composed by [DesktopChatWindow] here as well. Windows that
+/// need router `extra` (add-server, persona, skill editor, model browser) open
+/// without one after a relaunch and fall back to their create state.
 Widget _buildDesktopScreen(DesktopWindowState window) {
   return switch (window.kind) {
     DesktopWindowKind.chat =>
@@ -474,6 +477,211 @@ Widget _buildDesktopScreen(DesktopWindowState window) {
     DesktopWindowKind.lmStudioModels => const _DesktopLmStudioBrowser(),
     DesktopWindowKind.onboarding => const OnboardingLanguageScreen(),
   };
+}
+
+/// One floating chat window, bound to a single conversation.
+///
+/// It composes the desktop window, the chat screen and the conversation that
+/// screen is fixed to, which is why it lives beside [_buildDesktopScreen] in the
+/// app layer instead of in the desktop feature.
+class DesktopChatWindow extends ConsumerWidget {
+  const DesktopChatWindow({super.key, required this.conversationId});
+
+  final String conversationId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ref
+        .watch(conv.conversationsProvider)
+        .when(
+          data: (conversations) {
+            final conversation = conversations
+                .where((candidate) => candidate.id == conversationId)
+                .firstOrNull;
+            if (conversation == null) {
+              return const _MissingConversationState();
+            }
+            return ProviderScope(
+              // A window keeps one session per conversation; a different
+              // conversation in the same slot gets a fresh notifier.
+              key: ValueKey(conversation.id),
+              overrides: [
+                chatProvider.overrideWith(
+                  () => ChatNotifier(resumeLastChat: false),
+                ),
+                // Every piece of app-wide chat state this window's screen can
+                // touch is scoped, so a window never changes the main chat.
+                conv.activeConversationIdProvider.overrideWith(
+                  () => _FixedActiveConversationIdNotifier(conversation.id),
+                ),
+                conv.activeConversationProvider.overrideWith(
+                  () => _FixedActiveConversationNotifier(conversation),
+                ),
+                activeGenerationsProvider.overrideWith(
+                  ActiveGenerationsNotifier.new,
+                ),
+                isStreamingProvider.overrideWith(IsStreamingNotifier.new),
+                chatMcpConfigProvider.overrideWith(ChatMcpConfigNotifier.new),
+              ],
+              child: _ConversationLoader(conversation: conversation),
+            );
+          },
+          loading: () =>
+              const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          error: (error, stackTrace) => const _MissingConversationState(),
+        );
+  }
+}
+
+/// Loads the window's conversation into its own [ChatNotifier] once.
+class _ConversationLoader extends ConsumerStatefulWidget {
+  const _ConversationLoader({required this.conversation});
+
+  final Conversation conversation;
+
+  @override
+  ConsumerState<_ConversationLoader> createState() =>
+      _ConversationLoaderState();
+}
+
+class _ConversationLoaderState extends ConsumerState<_ConversationLoader> {
+  String? _loadedConversationId;
+  bool _isReady = false;
+  bool _hasFailed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleLoad();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ConversationLoader oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_loadedConversationId != widget.conversation.id) {
+      _isReady = false;
+      _hasFailed = false;
+      _scheduleLoad();
+    }
+  }
+
+  void _scheduleLoad() {
+    final id = widget.conversation.id;
+    if (_loadedConversationId == id) return;
+    _loadedConversationId = id;
+    // Provider state can't be written while the tree is building, so the load
+    // starts after the first frame. `activate: false` keeps the app-wide active
+    // conversation untouched: opening a second window must not steal the first
+    // one's active chat.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      var failed = false;
+      try {
+        await ref
+            .read(chatProvider.notifier)
+            .loadConversation(widget.conversation, activate: false);
+      } catch (_) {
+        failed = true;
+      } finally {
+        if (mounted) {
+          setState(() {
+            _hasFailed = failed;
+            _isReady = true;
+          });
+        }
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isReady) {
+      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+    }
+    if (_hasFailed) {
+      return const _MissingConversationState();
+    }
+    return const ChatScreen();
+  }
+}
+
+/// The window's active conversation id, fixed to the one it was opened for.
+class _FixedActiveConversationIdNotifier
+    extends conv.ActiveConversationIdNotifier {
+  _FixedActiveConversationIdNotifier(this.conversationId);
+
+  final String conversationId;
+
+  @override
+  String? build() => conversationId;
+
+  @override
+  void setActiveConversation(Conversation? conversation) {
+    // Window-side loads and new chats stay inside this scope.
+    state = conversation?.id;
+  }
+
+  @override
+  void setActiveConversationId(String? id) {
+    state = id;
+  }
+}
+
+/// The window's active conversation, following its scoped active id.
+class _FixedActiveConversationNotifier extends conv.ActiveConversationNotifier {
+  _FixedActiveConversationNotifier(this.conversation);
+
+  final Conversation conversation;
+
+  @override
+  Conversation? build() {
+    final id = ref.watch(conv.activeConversationIdProvider);
+    if (id == null) return null;
+    final conversations =
+        ref.watch(conv.conversationsProvider).value ?? const [];
+    return conversations.where((candidate) => candidate.id == id).firstOrNull;
+  }
+
+  @override
+  void setActiveConversation(Conversation? conversation) {
+    // The scoped id notifier absorbs the change; the global active
+    // conversation belongs to whichever window the user last worked in.
+    ref
+        .read(conv.activeConversationIdProvider.notifier)
+        .setActiveConversation(conversation);
+    state = conversation;
+  }
+}
+
+class _MissingConversationState extends StatelessWidget {
+  const _MissingConversationState();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
+
+    return Center(
+      key: const ValueKey('desktop-chat-missing'),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          HugeIcon(
+            icon: HugeIcons.strokeRoundedAiChat01,
+            size: 32,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            l10n.history_missing_title,
+            style: TextStyle(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// The LM Studio model browser for the active server.

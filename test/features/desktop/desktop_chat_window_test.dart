@@ -3,20 +3,24 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:localmind/app.dart';
 import 'package:localmind/core/models/enums.dart';
 import 'package:localmind/core/providers/app_providers.dart';
 import 'package:localmind/core/providers/storage_providers.dart';
 import 'package:localmind/core/storage/objectbox_store.dart';
 import 'package:localmind/core/theme/app_theme.dart';
 import 'package:localmind/features/chat/data/models/message.dart';
+import 'package:localmind/features/chat/data/smart_reply_service.dart';
+import 'package:localmind/features/chat/providers/chat_mcp_providers.dart';
 import 'package:localmind/features/chat/providers/chat_notifier.dart';
+import 'package:localmind/features/chat/providers/chat_service_providers.dart';
+import 'package:localmind/features/chat/providers/generation_session.dart';
 import 'package:localmind/features/chat/providers/model_selection_providers.dart';
 import 'package:localmind/features/chat/providers/smart_reply_providers.dart';
 import 'package:localmind/features/chat/views/chat_screen.dart';
 import 'package:localmind/features/conversations/data/models/conversation.dart';
 import 'package:localmind/features/conversations/providers/conversation_providers.dart'
     as conv;
-import 'package:localmind/features/desktop/views/components/desktop_chat_window.dart';
 import 'package:localmind/features/servers/data/models/server.dart';
 import 'package:localmind/features/servers/providers/server_providers.dart';
 import 'package:localmind/features/settings/data/models/app_settings.dart';
@@ -59,6 +63,7 @@ void main() {
     required List<Conversation> conversations,
     Map<String, List<Message>> messages = const {},
     Future<List<Conversation>> Function()? conversationsFuture,
+    SmartReplyService? smartReplyService,
   }) {
     final container = ProviderContainer(
       overrides: [
@@ -78,6 +83,8 @@ void main() {
           ),
         ),
         smartRepliesProvider.overrideWith((ref) async => const <String>[]),
+        if (smartReplyService != null)
+          smartReplyServiceProvider.overrideWithValue(smartReplyService),
         sttProvider.overrideWith(_StubSttNotifier.new),
         ttsProvider.overrideWith(_StubTtsNotifier.new),
       ],
@@ -158,6 +165,103 @@ void main() {
     expect(container.read(conv.activeConversationProvider), isNull);
   });
 
+  testWidgets('a window never changes the app-wide active conversation', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({'lastActiveConversationId': 'c2'});
+    prefs = await SharedPreferences.getInstance();
+
+    final c1 = conversation('c1');
+    final c2 = conversation('c2');
+    final container = createContainer(
+      conversations: [c1, c2],
+      messages: {
+        'c1': [message('m1', 'c1', 'one')],
+        'c2': [message('m2', 'c2', 'two')],
+      },
+    );
+    // The main app is on c2 before the window opens.
+    container
+        .read(conv.activeConversationIdProvider.notifier)
+        .setActiveConversation(c2);
+
+    await pumpWindows(tester, container, ['c1']);
+    await tester.pumpAndSettle();
+
+    final window = ProviderScope.containerOf(
+      tester.element(find.byType(ChatScreen)),
+      listen: false,
+    );
+
+    await window.read(chatProvider.notifier).startNewConversation();
+    await tester.pumpAndSettle();
+
+    expect(container.read(conv.activeConversationIdProvider), 'c2');
+    expect(prefs.getString('lastActiveConversationId'), 'c2');
+    expect(window.read(conv.activeConversationIdProvider), isNull);
+    expect(window.read(conv.activeConversationProvider), isNull);
+
+    // A window-side load with the default `activate: true` stays scoped too.
+    await window.read(chatProvider.notifier).loadConversation(c1);
+    await tester.pumpAndSettle();
+
+    expect(container.read(conv.activeConversationIdProvider), 'c2');
+    expect(prefs.getString('lastActiveConversationId'), 'c2');
+    expect(window.read(conv.activeConversationIdProvider), 'c1');
+    expect(window.read(conv.activeConversationProvider)?.id, 'c1');
+  });
+
+  testWidgets('a window keeps its own generation and MCP state', (
+    tester,
+  ) async {
+    final container = createContainer(
+      conversations: [conversation('c1'), conversation('c2')],
+      messages: {
+        'c1': [message('m1', 'c1', 'one')],
+      },
+    );
+    // The main app is streaming c2 when the window opens.
+    container.read(activeGenerationsProvider.notifier).set({
+      'c2': const ActiveGeneration(conversationId: 'c2', isOnDevice: false),
+    });
+    container.read(isStreamingProvider.notifier).setStreaming(true);
+    final outerMcpConfig = container.read(chatMcpConfigProvider);
+
+    await pumpWindows(tester, container, ['c1']);
+    await tester.pumpAndSettle();
+
+    final window = ProviderScope.containerOf(
+      tester.element(find.byType(ChatScreen)),
+      listen: false,
+    );
+
+    expect(container.read(activeGenerationsProvider).keys, ['c2']);
+    expect(container.read(isStreamingProvider), isTrue);
+    expect(window.read(activeGenerationsProvider), isEmpty);
+    expect(window.read(isStreamingProvider), isFalse);
+    expect(
+      identical(outerMcpConfig, window.read(chatMcpConfigProvider)),
+      isFalse,
+    );
+  });
+
+  testWidgets('a failed window load stops the spinner', (tester) async {
+    final container = createContainer(
+      conversations: [conversation('c1')],
+      messages: {
+        'c1': [message('m1', 'c1', 'one')],
+      },
+      smartReplyService: _ThrowingSmartReplyService(),
+    );
+
+    await pumpWindows(tester, container, ['c1']);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('desktop-chat-missing')), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(ChatScreen), findsNothing);
+  });
+
   testWidgets('a window whose conversation is gone shows an empty state', (
     tester,
   ) async {
@@ -214,6 +318,11 @@ class _TestSettingsNotifier extends SettingsNotifier {
 class _NoServerNotifier extends ActiveServerNotifier {
   @override
   Server? build() => null;
+}
+
+class _ThrowingSmartReplyService extends SmartReplyService {
+  @override
+  void reset() => throw StateError('load failed');
 }
 
 class _StubSttNotifier extends SttNotifier {

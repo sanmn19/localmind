@@ -138,7 +138,8 @@ class ChatNotifier extends Notifier<ChatState> {
 
   /// Whether [build] may restore the last active conversation from the previous
   /// session. Floating desktop windows pass `false`: each window loads the
-  /// conversation it was opened for instead of racing the global resume.
+  /// conversation it was opened for instead of racing the global resume, and it
+  /// never takes over the app-wide "last active chat" persistence.
   final bool resumeLastChat;
 
   MessageSaveService? _saveService;
@@ -524,7 +525,7 @@ class ChatNotifier extends Notifier<ChatState> {
       }
       _publishGenerations();
 
-      if (activate && !conversation.isTemporary) {
+      if (activate && resumeLastChat && !conversation.isTemporary) {
         _persistLastActiveConversation(conversation.id);
       }
 
@@ -802,7 +803,9 @@ class ChatNotifier extends Notifier<ChatState> {
     ref
         .read(conv.activeConversationIdProvider.notifier)
         .setActiveConversation(conversation);
-    _persistLastActiveConversation(conversation.id);
+    if (resumeLastChat) {
+      _persistLastActiveConversation(conversation.id);
+    }
     // A conversationsProvider refresh triggered later in this same send
     // (e.g. syncConversationStats) rebuilds activeConversationProvider
     // from the reloaded list; use this captured value for this send so
