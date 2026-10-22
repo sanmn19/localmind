@@ -10,7 +10,10 @@ class CalendarService {
   CalendarService._();
   static final instance = CalendarService._();
 
-  final _plugin = DeviceCalendar.instance;
+  /// Created on first use: constructing the plugin singleton throws on a
+  /// platform without an implementation, and every method checks
+  /// [isAvailable] before touching it.
+  DeviceCalendar get _plugin => DeviceCalendar.instance;
 
   /// Whether the device calendar plugin exists on this platform. Every public
   /// method short-circuits to a safe value when this is false, so no caller

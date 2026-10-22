@@ -29,8 +29,16 @@ class ObjectBoxStore {
     savedMessageFolderBox = Box<SavedMessageFolderEntity>(store);
   }
 
+  static ObjectBoxStore? _instance;
+
   /// Create an instance of ObjectBox storage.
+  ///
+  /// A second call in the same isolate (for example after "Try again" on the
+  /// crash screen) reuses the open store: ObjectBox refuses to open the same
+  /// directory twice in one isolate.
   static Future<ObjectBoxStore> create() async {
+    final existing = _instance;
+    if (existing != null) return existing;
     final baseDir = await _baseDirectory();
     final store = await openStore(
       directory: _storeDirectory(baseDir).path,
@@ -38,7 +46,7 @@ class ObjectBoxStore {
       // application group; without it the store open fails with EPERM.
       macosApplicationGroup: isMacDesktop ? macosApplicationGroupId : null,
     );
-    return ObjectBoxStore.fromStore(store);
+    return _instance = ObjectBoxStore.fromStore(store);
   }
 
   /// macOS keeps the store in Application Support: it is inside the sandbox

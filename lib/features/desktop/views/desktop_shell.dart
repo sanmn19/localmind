@@ -83,9 +83,11 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
     final activeWindow = layout.focusedWindow;
     final theme = Theme.of(context);
 
-    final canvas = Material(
-      color: theme.scaffoldBackgroundColor,
-      child: Row(
+    // Screens hosted by tabs show snackbars and dialogs; the desktop shell
+    // has no Scaffold of its own, so the messenger needs one registered here.
+    final canvas = Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: Row(
         children: [
           widget.sidebar,
           Expanded(

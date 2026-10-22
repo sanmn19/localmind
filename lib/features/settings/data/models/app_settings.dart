@@ -129,7 +129,7 @@ class AppSettings {
     this.fontSize = 16.0,
     this.showSystemMessages = false,
     this.hapticFeedbackEnabled = true,
-    this.sendOnEnter = false,
+    this.sendOnEnter = true,
     this.defaultServerId,
     this.showDataIndicator = true,
     this.autoGenerateTitle = true,
