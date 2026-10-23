@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:marionette_flutter/marionette_flutter.dart';
 import 'package:marionette_logger/marionette_logger.dart';
@@ -11,6 +12,7 @@ import 'package:pdfrx/pdfrx.dart';
 import 'bootstrap/bootstrap_host.dart';
 import 'core/logger/app_logger.dart';
 import 'core/services/crash_report_service.dart';
+import 'core/utils/platform_support.dart';
 import 'core/widgets/crash_error_widget.dart';
 import 'core/widgets/inline_build_error.dart';
 
@@ -27,6 +29,11 @@ Future<void> main() async {
         );
       } else {
         WidgetsFlutterBinding.ensureInitialized();
+      }
+      // Exposes the widget tree to macOS accessibility clients so UI tests and
+      // assistive tools can find and drive real elements. Off unless asked for.
+      if (const bool.fromEnvironment('LOCALMIND_SEMANTICS')) {
+        SemanticsBinding.instance.ensureSemantics();
       }
       await pdfrxFlutterInitialize();
       final crashReports = CrashReportService.instance;
@@ -79,12 +86,16 @@ Future<void> main() async {
             : const SizedBox.shrink();
       };
 
-      await JustAudioBackground.init(
-        androidNotificationChannelId:
-            'com.abdulmominsakib.localmind.channel.audio',
-        androidNotificationChannelName: 'LocalMind Audio TTS Playback',
-        androidNotificationOngoing: true,
-      );
+      // The media-session notification only exists on Android/iOS; the macOS
+      // desktop build plays audio without it.
+      if (supportsAudioBackground) {
+        await JustAudioBackground.init(
+          androidNotificationChannelId:
+              'com.abdulmominsakib.localmind.channel.audio',
+          androidNotificationChannelName: 'LocalMind Audio TTS Playback',
+          androidNotificationOngoing: true,
+        );
+      }
       runApp(const CrashFallbackApp());
     },
     (error, stack) {

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hugeicons/hugeicons.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'l10n/app_localizations.dart';
 
@@ -12,12 +13,18 @@ import 'core/routes/app_routes.dart';
 import 'core/routes/shell_back_scope.dart';
 import 'core/theme/app_theme.dart';
 import 'core/utils/locale_utils.dart';
+import 'core/utils/platform_support.dart';
 import 'core/widgets/android_assistant_invocation_host.dart';
 import 'core/widgets/web_server_registration_host.dart';
+import 'features/chat/providers/chat_mcp_providers.dart';
 import 'features/chat/providers/chat_providers.dart';
+import 'features/conversations/data/models/conversation.dart';
 import 'features/conversations/providers/conversation_providers.dart' as conv;
 import 'features/chat/views/chat_screen.dart';
 import 'features/conversations/views/chat_history_screen.dart';
+import 'features/desktop/data/models/desktop_window.dart';
+import 'features/desktop/views/components/desktop_command_palette.dart';
+import 'features/desktop/views/desktop_host.dart';
 import 'features/mcp/views/mcp_tools_screen.dart';
 import 'features/on_device/views/model_manager_screen.dart';
 import 'features/os_widget/views/os_widget_invocation_host.dart';
@@ -30,6 +37,7 @@ import 'features/onboarding/screens/onboarding_theme_screen.dart';
 import 'features/personas/views/create_persona_screen.dart';
 import 'features/personas/views/persona_list_screen.dart';
 import 'features/servers/data/models/server.dart';
+import 'features/servers/providers/server_providers.dart';
 import 'features/servers/views/add_server_screen.dart';
 import 'features/servers/views/server_list_screen.dart';
 import 'features/tts/views/tts_model_manager_screen.dart';
@@ -377,9 +385,26 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   @override
   Widget build(BuildContext context) {
+    final location = GoRouterState.of(context).uri.path;
+    _isHome = location == AppRoutes.home;
+
+    // macOS runs one native window with an in-app window manager. Every other
+    // platform keeps the router-driven shell.
+    if (isMacDesktop) {
+      return DesktopHost(
+        initialRoute: location,
+        sidebar: const SidebarWidget(),
+        screenBuilder: buildDesktopScreen,
+        conversationCommands: () => _desktopConversationCommands(ref),
+        startNewChat: () async {
+          await ref.read(chatProvider.notifier).startNewConversation();
+          return ref.read(conv.activeConversationIdProvider);
+        },
+      );
+    }
+
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    _isHome = GoRouterState.of(context).uri.path == AppRoutes.home;
     _hasActiveChat = ref.watch(conv.activeConversationProvider) != null;
     final hasOverride = ShellBackOverride.maybeOf(context) != null;
 
@@ -424,4 +449,340 @@ class _AppShellState extends ConsumerState<AppShell> {
       },
     );
   }
+}
+
+/// Builds the screen hosted by one desktop tab.
+///
+/// This is the only place that maps tabs onto feature screens, so the desktop
+/// feature itself never imports a sibling feature. Chat tabs that belong to a
+/// conversation are composed by [DesktopChatWindow] here as well. Tabs that need
+/// router `extra` (add-server, persona, skill editor, model browser) open without
+/// one after a relaunch and fall back to their create state.
+Widget buildDesktopScreen(DesktopWindowState window) {
+  return switch (window.kind) {
+    DesktopWindowKind.chat => window.isDraft
+        ? const DesktopChatWindow.draft()
+        : window.conversationId == null
+        ? const ChatScreen()
+        : DesktopChatWindow(conversationId: window.conversationId!),
+    DesktopWindowKind.history => const ChatHistoryScreen(),
+    DesktopWindowKind.savedMessages => const SavedMessagesScreen(),
+    DesktopWindowKind.servers => const ServerListScreen(),
+    DesktopWindowKind.addServer => const AddServerScreen(),
+    DesktopWindowKind.personas => const PersonaListScreen(),
+    DesktopWindowKind.createPersona => const CreatePersonaScreen(),
+    DesktopWindowKind.settings => const SettingsViews(),
+    DesktopWindowKind.cloudSync => const CloudSyncScreen(),
+    DesktopWindowKind.mcpTools => const McpToolsScreen(),
+    DesktopWindowKind.skills => const SkillsScreen(),
+    DesktopWindowKind.skillEditor => const SkillEditorScreen(),
+    DesktopWindowKind.background => const BackgroundTasksPage(),
+    DesktopWindowKind.onDeviceModels => const OnDeviceModelManagerScreen(),
+    DesktopWindowKind.ttsModels => const TtsModelManagerScreen(),
+    DesktopWindowKind.lmStudioModels => const _DesktopLmStudioBrowser(),
+    DesktopWindowKind.onboarding => const OnboardingLanguageScreen(),
+  };
+}
+
+/// One chat tab, bound to a single conversation.
+///
+/// It composes the chat screen and the conversation that screen is fixed to,
+/// which is why it lives beside [buildDesktopScreen] in the app layer instead of
+/// in the desktop feature.
+class DesktopChatWindow extends ConsumerWidget {
+  const DesktopChatWindow({super.key, required this.conversationId});
+
+  /// A fresh chat tab: its own notifier and no conversation to load.
+  const DesktopChatWindow.draft({super.key}) : conversationId = null;
+
+  final String? conversationId;
+
+  bool get _isDraft => conversationId == null;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (_isDraft) {
+      return ProviderScope(
+        key: const ValueKey('desktop-draft-chat'),
+        overrides: [
+          chatProvider.overrideWith(() => ChatNotifier(resumeLastChat: false)),
+          // A draft never touches the app-wide chat, active conversation or
+          // generation state; everything it can reach is scoped here.
+          conv.activeConversationIdProvider.overrideWith(
+            _DraftActiveConversationIdNotifier.new,
+          ),
+          conv.activeConversationProvider.overrideWith(
+            _DraftActiveConversationNotifier.new,
+          ),
+          activeGenerationsProvider.overrideWith(ActiveGenerationsNotifier.new),
+          isStreamingProvider.overrideWith(IsStreamingNotifier.new),
+          chatMcpConfigProvider.overrideWith(ChatMcpConfigNotifier.new),
+        ],
+        child: const ChatScreen(),
+      );
+    }
+    return ref
+        .watch(conv.conversationsProvider)
+        .when(
+          data: (conversations) {
+            final conversation = conversations
+                .where((candidate) => candidate.id == conversationId)
+                .firstOrNull;
+            if (conversation == null) {
+              return const _MissingConversationState();
+            }
+            return ProviderScope(
+              // A window keeps one session per conversation; a different
+              // conversation in the same slot gets a fresh notifier.
+              key: ValueKey(conversation.id),
+              overrides: [
+                chatProvider.overrideWith(
+                  () => ChatNotifier(resumeLastChat: false),
+                ),
+                // Every piece of app-wide chat state this window's screen can
+                // touch is scoped, so a window never changes the main chat.
+                conv.activeConversationIdProvider.overrideWith(
+                  () => _FixedActiveConversationIdNotifier(conversation.id),
+                ),
+                conv.activeConversationProvider.overrideWith(
+                  () => _FixedActiveConversationNotifier(conversation),
+                ),
+                activeGenerationsProvider.overrideWith(
+                  ActiveGenerationsNotifier.new,
+                ),
+                isStreamingProvider.overrideWith(IsStreamingNotifier.new),
+                chatMcpConfigProvider.overrideWith(ChatMcpConfigNotifier.new),
+              ],
+              child: _ConversationLoader(conversation: conversation),
+            );
+          },
+          loading: () =>
+              const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          error: (error, stackTrace) => const _MissingConversationState(),
+        );
+  }
+}
+
+/// Loads the window's conversation into its own [ChatNotifier] once.
+class _ConversationLoader extends ConsumerStatefulWidget {
+  const _ConversationLoader({required this.conversation});
+
+  final Conversation conversation;
+
+  @override
+  ConsumerState<_ConversationLoader> createState() =>
+      _ConversationLoaderState();
+}
+
+class _ConversationLoaderState extends ConsumerState<_ConversationLoader> {
+  String? _loadedConversationId;
+  bool _isReady = false;
+  bool _hasFailed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleLoad();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ConversationLoader oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_loadedConversationId != widget.conversation.id) {
+      _isReady = false;
+      _hasFailed = false;
+      _scheduleLoad();
+    }
+  }
+
+  void _scheduleLoad() {
+    final id = widget.conversation.id;
+    if (_loadedConversationId == id) return;
+    _loadedConversationId = id;
+    // Provider state can't be written while the tree is building, so the load
+    // starts after the first frame. `activate: false` keeps the app-wide active
+    // conversation untouched: opening a second window must not steal the first
+    // one's active chat.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      var failed = false;
+      try {
+        await ref
+            .read(chatProvider.notifier)
+            .loadConversation(widget.conversation, activate: false);
+      } catch (_) {
+        failed = true;
+      } finally {
+        if (mounted) {
+          setState(() {
+            _hasFailed = failed;
+            _isReady = true;
+          });
+        }
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isReady) {
+      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+    }
+    if (_hasFailed) {
+      return const _MissingConversationState();
+    }
+    return const ChatScreen();
+  }
+}
+
+/// The window's active conversation id, fixed to the one it was opened for.
+class _FixedActiveConversationIdNotifier
+    extends conv.ActiveConversationIdNotifier {
+  _FixedActiveConversationIdNotifier(this.conversationId);
+
+  final String conversationId;
+
+  @override
+  String? build() => conversationId;
+
+  @override
+  void setActiveConversation(Conversation? conversation) {
+    // Window-side loads and new chats stay inside this scope.
+    state = conversation?.id;
+  }
+
+  @override
+  void setActiveConversationId(String? id) {
+    state = id;
+  }
+}
+
+/// The draft tab's active id: it never has one and never writes the app-wide id.
+class _DraftActiveConversationIdNotifier
+    extends conv.ActiveConversationIdNotifier {
+  @override
+  String? build() => null;
+
+  @override
+  void setActiveConversation(Conversation? conversation) {
+    state = conversation?.id;
+  }
+
+  @override
+  void setActiveConversationId(String? id) {
+    state = id;
+  }
+}
+
+/// The draft tab's active conversation, resolved inside its own scope.
+class _DraftActiveConversationNotifier extends conv.ActiveConversationNotifier {
+  @override
+  Conversation? build() {
+    final id = ref.watch(conv.activeConversationIdProvider);
+    if (id == null) return null;
+    final conversations =
+        ref.watch(conv.conversationsProvider).value ?? const [];
+    return conversations.where((candidate) => candidate.id == id).firstOrNull;
+  }
+
+  @override
+  void setActiveConversation(Conversation? conversation) {
+    ref
+        .read(conv.activeConversationIdProvider.notifier)
+        .setActiveConversation(conversation);
+    state = conversation;
+  }
+}
+
+/// The window's active conversation, following its scoped active id.
+class _FixedActiveConversationNotifier extends conv.ActiveConversationNotifier {
+  _FixedActiveConversationNotifier(this.conversation);
+
+  final Conversation conversation;
+
+  @override
+  Conversation? build() {
+    final id = ref.watch(conv.activeConversationIdProvider);
+    if (id == null) return null;
+    final conversations =
+        ref.watch(conv.conversationsProvider).value ?? const [];
+    return conversations.where((candidate) => candidate.id == id).firstOrNull;
+  }
+
+  @override
+  void setActiveConversation(Conversation? conversation) {
+    // The scoped id notifier absorbs the change; the global active
+    // conversation belongs to whichever window the user last worked in.
+    ref
+        .read(conv.activeConversationIdProvider.notifier)
+        .setActiveConversation(conversation);
+    state = conversation;
+  }
+}
+
+class _MissingConversationState extends StatelessWidget {
+  const _MissingConversationState();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
+
+    return Center(
+      key: const ValueKey('desktop-chat-missing'),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          HugeIcon(
+            icon: HugeIcons.strokeRoundedAiChat01,
+            size: 32,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            l10n.history_missing_title,
+            style: TextStyle(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The LM Studio model browser for the active server.
+///
+/// The browser needs a server, which the router used to pass as `extra`. A window
+/// keeps no extra after a relaunch, so it falls back to the active server.
+class _DesktopLmStudioBrowser extends ConsumerWidget {
+  const _DesktopLmStudioBrowser();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final server = ref.watch(activeServerProvider);
+    if (server == null || server.type != ServerType.lmStudio) {
+      return const SizedBox.shrink();
+    }
+    return LmStudioModelBrowserScreen(server: server);
+  }
+}
+
+/// How many of the most recent conversations the palette lists.
+const int _recentDesktopConversations = 8;
+
+/// The most recent conversations as command-palette commands.
+///
+/// The desktop feature does not import conversations, so the app builds these
+/// commands and the palette only lists them.
+List<DesktopCommand> _desktopConversationCommands(WidgetRef ref) {
+  final conversations = ref.watch(conv.conversationsProvider).value ?? const [];
+  return [
+    for (final conversation in conversations.take(_recentDesktopConversations))
+      DesktopCommand(
+        id: '${DesktopCommand.conversationPrefix}${conversation.id}',
+        label: conversation.title,
+        kind: DesktopWindowKind.chat,
+      ),
+  ];
 }

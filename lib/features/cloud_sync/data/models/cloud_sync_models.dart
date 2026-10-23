@@ -2,6 +2,8 @@ import 'dart:convert';
 
 enum CloudSyncPhase { disabled, ready, syncing, synced, error, locked }
 
+enum CloudSyncProviderKind { s3, googleDrive }
+
 enum CloudSyncFailureKind {
   validation,
   credentials,
@@ -34,6 +36,8 @@ class S3SyncConfig {
     this.pathStyle = true,
     this.allowInsecureHttp = false,
     this.enabled = false,
+    this.provider = CloudSyncProviderKind.s3,
+    this.googleAccount,
   });
 
   final String endpoint;
@@ -43,6 +47,12 @@ class S3SyncConfig {
   final bool pathStyle;
   final bool allowInsecureHttp;
   final bool enabled;
+
+  /// Which backend the sync uses; S3 fields are ignored for Drive.
+  final CloudSyncProviderKind provider;
+
+  /// The connected Google account email (non-secret metadata).
+  final String? googleAccount;
 
   Uri get endpointUri => Uri.parse(endpoint);
 
@@ -71,6 +81,8 @@ class S3SyncConfig {
     bool? pathStyle,
     bool? allowInsecureHttp,
     bool? enabled,
+    CloudSyncProviderKind? provider,
+    String? googleAccount,
   }) {
     return S3SyncConfig(
       endpoint: endpoint ?? this.endpoint,
@@ -80,6 +92,8 @@ class S3SyncConfig {
       pathStyle: pathStyle ?? this.pathStyle,
       allowInsecureHttp: allowInsecureHttp ?? this.allowInsecureHttp,
       enabled: enabled ?? this.enabled,
+      provider: provider ?? this.provider,
+      googleAccount: googleAccount ?? this.googleAccount,
     );
   }
 
@@ -91,6 +105,11 @@ class S3SyncConfig {
     pathStyle: json['pathStyle'] as bool? ?? true,
     allowInsecureHttp: json['allowInsecureHttp'] as bool? ?? false,
     enabled: json['enabled'] as bool? ?? false,
+    provider: CloudSyncProviderKind.values.firstWhere(
+      (kind) => kind.name == json['provider'],
+      orElse: () => CloudSyncProviderKind.s3,
+    ),
+    googleAccount: json['googleAccount'] as String?,
   );
 
   Map<String, dynamic> toJson() => {
@@ -101,6 +120,8 @@ class S3SyncConfig {
     'pathStyle': pathStyle,
     'allowInsecureHttp': allowInsecureHttp,
     'enabled': enabled,
+    'provider': provider.name,
+    'googleAccount': googleAccount,
   };
 }
 
@@ -157,16 +178,30 @@ class CloudSyncSnapshot {
     required this.updatedAt,
     required this.payload,
     this.tombstones = const {},
+    this.settingsChangedAt,
   });
 
   final String deviceId;
   final int revision;
   final DateTime updatedAt;
   final Map<String, dynamic> payload;
-  final Map<String, dynamic> tombstones;
+
+  /// Collection → id → ISO-8601 deletion time.
+  final Map<String, Map<String, String>> tombstones;
+
+  /// When this device last changed the settings, which is independent of
+  /// [updatedAt]: that stamp moves on every sync, so using it for settings would
+  /// hand the win to whichever device synced last.
+  ///
+  /// Snapshots written before schema 2 carry no value; [effectiveSettingsChangedAt]
+  /// then falls back to the snapshot time.
+  final DateTime? settingsChangedAt;
+
+  DateTime get effectiveSettingsChangedAt => settingsChangedAt ?? updatedAt;
 
   factory CloudSyncSnapshot.fromJson(Map<String, dynamic> json) {
-    if (json['schema'] != 1 ||
+    final schema = json['schema'];
+    if ((schema != 1 && schema != 2) ||
         json['payload'] is! Map ||
         json['deviceId'] is! String ||
         (json['deviceId'] as String).length < 8 ||
@@ -177,14 +212,17 @@ class CloudSyncSnapshot {
     }
     final payload = Map<String, dynamic>.from(json['payload'] as Map);
     _validatePayload(payload);
-    final tombstones = json['tombstones'] is Map
-        ? Map<String, dynamic>.from(json['tombstones'] as Map)
-        : <String, dynamic>{};
-    for (final entry in tombstones.entries) {
-      if (!_collections.contains(entry.key) ||
-          entry.value is! List ||
-          !(entry.value as List).every((value) => value is String)) {
-        throw const FormatException('Invalid cloud sync tombstones');
+    final tombstones = <String, Map<String, String>>{};
+    final rawTombstones = json['tombstones'];
+    if (rawTombstones != null && rawTombstones is! Map) {
+      throw const FormatException('Invalid cloud sync tombstones');
+    }
+    if (rawTombstones is Map) {
+      for (final entry in rawTombstones.entries) {
+        if (!_collections.contains(entry.key)) {
+          throw const FormatException('Invalid cloud sync tombstones');
+        }
+        tombstones[entry.key as String] = _readTombstoneIds(entry.value);
       }
     }
     return CloudSyncSnapshot(
@@ -193,8 +231,42 @@ class CloudSyncSnapshot {
       updatedAt: DateTime.parse(json['updatedAt'] as String),
       payload: payload,
       tombstones: tombstones,
+      settingsChangedAt: _readTime(json['settingsChangedAt']),
     );
   }
+
+  static DateTime? _readTime(Object? value) =>
+      value is String ? DateTime.tryParse(value)?.toUtc() : null;
+
+  /// Reads the timestamped map shape, falling back to legacy id lists, whose
+  /// deletions are dated at the epoch.
+  static Map<String, String> _readTombstoneIds(Object? value) {
+    if (value is Map) {
+      final ids = <String, String>{};
+      for (final entry in value.entries) {
+        if (entry.key is! String ||
+            entry.value is! String ||
+            DateTime.tryParse(entry.value as String) == null) {
+          throw const FormatException('Invalid cloud sync tombstones');
+        }
+        ids[entry.key as String] = entry.value as String;
+      }
+      return ids;
+    }
+    if (value is List) {
+      final ids = <String, String>{};
+      for (final id in value) {
+        if (id is! String) {
+          throw const FormatException('Invalid cloud sync tombstones');
+        }
+        ids[id] = _legacyTombstoneTime;
+      }
+      return ids;
+    }
+    throw const FormatException('Invalid cloud sync tombstones');
+  }
+
+  static final _legacyTombstoneTime = DateTime.utc(1970).toIso8601String();
 
   static const _collections = {
     'conversations',
@@ -343,12 +415,14 @@ class CloudSyncSnapshot {
   }
 
   Map<String, dynamic> toJson() => {
-    'schema': 1,
+    'schema': 2,
     'deviceId': deviceId,
     'revision': revision,
     'updatedAt': updatedAt.toUtc().toIso8601String(),
     'payload': payload,
     'tombstones': tombstones,
+    if (settingsChangedAt != null)
+      'settingsChangedAt': settingsChangedAt!.toUtc().toIso8601String(),
   };
 
   String encode() => jsonEncode(toJson());
@@ -359,4 +433,35 @@ class CloudSyncRemoteState {
 
   final List<int> bytes;
   final String? etag;
+}
+
+/// The single-device sync lease (Drive): the holder owns writes until the
+/// heartbeat goes stale.
+class CloudSyncLease {
+  const CloudSyncLease({required this.deviceId, required this.heartbeatAt});
+
+  /// A lease that stops blocking other devices after this long without a refresh.
+  static const ttl = Duration(minutes: 10);
+
+  final String deviceId;
+
+  final DateTime heartbeatAt;
+
+  /// A foreign device with a recent heartbeat owns the sync right now.
+  bool isHeldByOther(String otherDeviceId, DateTime now) {
+    if (deviceId == otherDeviceId) return false;
+    return now.difference(heartbeatAt) < ttl;
+  }
+
+  factory CloudSyncLease.fromJson(Map<String, dynamic> json) => CloudSyncLease(
+    deviceId: json['deviceId'] as String? ?? '',
+    heartbeatAt:
+        DateTime.tryParse(json['heartbeatAt'] as String? ?? '')?.toUtc() ??
+        DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+  );
+
+  String encode() => jsonEncode({
+    'deviceId': deviceId,
+    'heartbeatAt': heartbeatAt.toUtc().toIso8601String(),
+  });
 }

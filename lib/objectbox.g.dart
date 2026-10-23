@@ -213,7 +213,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(2, 196881068437544233),
     name: 'MessageEntity',
-    lastPropertyId: const obx_int.IdUid(29, 6028398201373029019),
+    lastPropertyId: const obx_int.IdUid(30, 5637926539220219208),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -394,6 +394,13 @@ final _entities = <obx_int.ModelEntity>[
         name: 'contentTokenCount',
         type: 6,
         flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(30, 5637926539220219208),
+        name: 'updatedAt',
+        type: 10,
+        flags: 8,
+        indexId: const obx_int.IdUid(20, 5245853774246854643),
       ),
     ],
     relations: <obx_int.ModelRelation>[],
@@ -978,7 +985,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
     generatorVersion: obx_int.GeneratorVersion.v2025_12_16,
     entities: _entities,
     lastEntityId: const obx_int.IdUid(10, 7335998010881530624),
-    lastIndexId: const obx_int.IdUid(19, 9141168625428584864),
+    lastIndexId: const obx_int.IdUid(20, 5245853774246854643),
     lastRelationId: const obx_int.IdUid(0, 0),
     lastSequenceId: const obx_int.IdUid(0, 0),
     retiredEntityUids: const [],
@@ -1289,7 +1296,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final stopReasonOffset = object.stopReason == null
             ? null
             : fbb.writeString(object.stopReason!);
-        fbb.startTable(30);
+        fbb.startTable(31);
         fbb.addInt64(0, object.internalId);
         fbb.addOffset(1, idOffset);
         fbb.addInt64(2, object.conversation.targetId);
@@ -1319,12 +1326,18 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addInt64(26, object.ttftMs);
         fbb.addOffset(27, stopReasonOffset);
         fbb.addInt64(28, object.contentTokenCount);
+        fbb.addInt64(29, object.updatedAt?.millisecondsSinceEpoch);
         fbb.finish(fbb.endTable());
         return object.internalId;
       },
       objectFromFB: (obx.Store store, ByteData fbData) {
         final buffer = fb.BufferContext(fbData);
         final rootOffset = buffer.derefObject(0);
+        final updatedAtValue = const fb.Int64Reader().vTableGetNullable(
+          buffer,
+          rootOffset,
+          62,
+        );
         final internalIdParam = const fb.Int64Reader().vTableGet(
           buffer,
           rootOffset,
@@ -1349,6 +1362,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final createdAtParam = DateTime.fromMillisecondsSinceEpoch(
           const fb.Int64Reader().vTableGet(buffer, rootOffset, 16, 0),
         );
+        final updatedAtParam = updatedAtValue == null
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(updatedAtValue);
         final statusIndexParam = const fb.Int32Reader().vTableGet(
           buffer,
           rootOffset,
@@ -1449,6 +1465,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           roleIndex: roleIndexParam,
           content: contentParam,
           createdAt: createdAtParam,
+          updatedAt: updatedAtParam,
           statusIndex: statusIndexParam,
           modelId: modelIdParam,
           tokenCount: tokenCountParam,
@@ -2472,6 +2489,11 @@ class MessageEntity_ {
   /// See [MessageEntity.contentTokenCount].
   static final contentTokenCount = obx.QueryIntegerProperty<MessageEntity>(
     _entities[1].properties[28],
+  );
+
+  /// See [MessageEntity.updatedAt].
+  static final updatedAt = obx.QueryDateProperty<MessageEntity>(
+    _entities[1].properties[29],
   );
 }
 

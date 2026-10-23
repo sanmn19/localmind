@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:localmind/l10n/app_localizations.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../../core/routes/app_routes.dart';
+import '../../../core/routes/desktop_window_scope.dart';
 import '../../../core/utils/system_insets.dart';
 import '../data/skills_provider.dart';
 import '../data/skills_store.dart';
@@ -81,7 +81,9 @@ class _SkillEditorScreenState extends ConsumerState<SkillEditorScreen> {
       return;
     }
     await ref.read(skillsProvider.notifier).refresh();
-    if (mounted) context.pop();
+    if (mounted) {
+      DesktopWindowScope.popOrClose(context, AppRoutes.skills);
+    }
   }
 
   Future<void> _confirmDelete() async {
@@ -106,7 +108,9 @@ class _SkillEditorScreenState extends ConsumerState<SkillEditorScreen> {
                 ref.read(skillsFileHostProvider),
               ).delete(entry.name);
               await ref.read(skillsProvider.notifier).refresh();
-              if (mounted) context.pop();
+              if (mounted) {
+                DesktopWindowScope.popOrClose(context, AppRoutes.skills);
+              }
             },
           ),
         ],
@@ -146,9 +150,8 @@ class _SkillEditorScreenState extends ConsumerState<SkillEditorScreen> {
             children: [
               IconButton(
                 icon: const HugeIcon(icon: HugeIcons.strokeRoundedArrowLeft01),
-                onPressed: () => context.canPop()
-                    ? context.pop()
-                    : context.go(AppRoutes.skills),
+                onPressed: () =>
+                    DesktopWindowScope.popOrClose(context, AppRoutes.skills),
               ),
               const SizedBox(width: 8),
               Expanded(

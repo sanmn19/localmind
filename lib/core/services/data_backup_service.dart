@@ -64,7 +64,8 @@ class DataBackupService {
     'conversationId': message.conversationId,
     'role': message.role.name,
     'content': message.content,
-    'createdAt': message.createdAt.toIso8601String(),
+    'createdAt': message.createdAt.toUtc().toIso8601String(),
+    'updatedAt': message.effectiveUpdatedAt.toUtc().toIso8601String(),
     'status': message.status.name,
     'modelId': message.modelId,
     'tokenCount': message.tokenCount,
@@ -92,8 +93,8 @@ class DataBackupService {
   Map<String, dynamic> _conversationToMap(Conversation domain) => {
     'id': domain.id,
     'title': domain.title,
-    'createdAt': domain.createdAt.toIso8601String(),
-    'updatedAt': domain.updatedAt.toIso8601String(),
+    'createdAt': domain.createdAt.toUtc().toIso8601String(),
+    'updatedAt': domain.updatedAt.toUtc().toIso8601String(),
     'isPinned': domain.isPinned,
     'personaId': domain.personaId,
     'serverId': domain.serverId,
@@ -818,6 +819,7 @@ class DataBackupService {
             role: MessageRole.values.byName(item['role'] as String? ?? 'user'),
             content: item['content'] as String? ?? '',
             createdAt: createdAt,
+            updatedAt: backupImportDateTime(item['updatedAt']) ?? createdAt,
             status: MessageStatus.values.byName(
               item['status'] as String? ?? 'complete',
             ),

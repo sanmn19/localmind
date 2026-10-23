@@ -134,6 +134,14 @@ final chatProvider = NotifierProvider<ChatNotifier, ChatState>(() {
 });
 
 class ChatNotifier extends Notifier<ChatState> {
+  ChatNotifier({this.resumeLastChat = true});
+
+  /// Whether [build] may restore the last active conversation from the previous
+  /// session. Floating desktop windows pass `false`: each window loads the
+  /// conversation it was opened for instead of racing the global resume, and it
+  /// never takes over the app-wide "last active chat" persistence.
+  final bool resumeLastChat;
+
   MessageSaveService? _saveService;
   PendingToolApproval? _pendingToolApproval;
   final Set<String> _titleGenerationsInFlight = <String>{};
@@ -430,7 +438,7 @@ class ChatNotifier extends Notifier<ChatState> {
         pending.completer.complete(false);
       }
     });
-    if (!_attemptedResume) {
+    if (resumeLastChat && !_attemptedResume) {
       _attemptedResume = true;
       Future.microtask(_tryResumeLastChat);
     }
@@ -473,7 +481,10 @@ class ChatNotifier extends Notifier<ChatState> {
         .setString(_lastActiveConversationKey, conversationId);
   }
 
-  Future<void> loadConversation(Conversation conversation) async {
+  Future<void> loadConversation(
+    Conversation conversation, {
+    bool activate = true,
+  }) async {
     if (!ref.mounted) return;
     // Leave an eligible reply streaming in the background (#94). Only the
     // open chat's own stream may be cancelled here; a reply already running
@@ -507,12 +518,14 @@ class ChatNotifier extends Notifier<ChatState> {
         isStreaming: liveMessage != null,
         streamingMessage: liveMessage,
       );
-      ref
-          .read(conv.activeConversationIdProvider.notifier)
-          .setActiveConversation(conversation);
+      if (activate) {
+        ref
+            .read(conv.activeConversationIdProvider.notifier)
+            .setActiveConversation(conversation);
+      }
       _publishGenerations();
 
-      if (!conversation.isTemporary) {
+      if (activate && resumeLastChat && !conversation.isTemporary) {
         _persistLastActiveConversation(conversation.id);
       }
 
@@ -790,7 +803,9 @@ class ChatNotifier extends Notifier<ChatState> {
     ref
         .read(conv.activeConversationIdProvider.notifier)
         .setActiveConversation(conversation);
-    _persistLastActiveConversation(conversation.id);
+    if (resumeLastChat) {
+      _persistLastActiveConversation(conversation.id);
+    }
     // A conversationsProvider refresh triggered later in this same send
     // (e.g. syncConversationStats) rebuilds activeConversationProvider
     // from the reloaded list; use this captured value for this send so
@@ -1674,8 +1689,8 @@ class ChatNotifier extends Notifier<ChatState> {
       result.insert(0, message);
     }
 
-      return result;
-    }
+    return result;
+  }
 
   /// Fork-context slice (selection-fork feature): the composed API history
   /// for the OPEN conversation truncated at [anchorMessageId] inclusive —
@@ -3213,7 +3228,10 @@ class ChatNotifier extends Notifier<ChatState> {
     if (newContent.trim().isEmpty) return;
     if (newContent == message.content) return;
 
-    final updated = message.copyWith(content: newContent);
+    final updated = message.copyWith(
+      content: newContent,
+      updatedAt: DateTime.now().toUtc(),
+    );
     await _saveMessage(updated);
     _replaceMessageInAll(updated);
   }
@@ -3371,7 +3389,9 @@ class ChatNotifier extends Notifier<ChatState> {
     if (!ref.mounted) return;
     if (persist == false) return;
     if (persist == null && _isInMemoryChat) return;
-    await persistMessage(message);
+    await persistMessage(
+      message.copyWith(updatedAt: message.updatedAt ?? DateTime.now().toUtc()),
+    );
   }
 
   /// Reads a conversation's messages from ObjectBox. Overridden in tests.
@@ -3404,6 +3424,14 @@ class ChatNotifier extends Notifier<ChatState> {
   Future<void> debugSaveMessageForTest(Message message) =>
       _saveMessage(message);
 
+  /// Test-only hook that exposes [_saveMessageInBackground] so persistence
+  /// timestamp preservation can be verified without a real store.
+  @visibleForTesting
+  static void debugSaveMessageInBackgroundForTest(
+    Store store,
+    Message message,
+  ) => _saveMessageInBackground(store, message);
+
   static void _saveMessageInBackground(Store store, Message message) {
     final box = store.box<MessageEntity>();
     final convBox = store.box<ConversationEntity>();
@@ -3415,6 +3443,9 @@ class ChatNotifier extends Notifier<ChatState> {
     final entity = MessageEntity.fromDomain(message);
     if (existing != null) {
       entity.internalId = existing.internalId;
+      // A full-row save must never erase a completion timestamp written by an
+      // earlier streaming checkpoint.
+      entity.updatedAt ??= existing.updatedAt;
     }
 
     final convQuery = convBox

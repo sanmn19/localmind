@@ -6,6 +6,7 @@ import 'package:hugeicons/hugeicons.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../../core/routes/app_routes.dart';
+import '../../core/routes/desktop_workspace.dart';
 import '../../core/components/app_sizes.dart';
 import '../../core/models/enums.dart';
 import '../../l10n/app_localizations.dart';
@@ -37,7 +38,6 @@ class SidebarWidget extends ConsumerWidget {
     final isTtsModels = location.startsWith(AppRoutes.ttsModels);
     final isCloudSync = location.startsWith(AppRoutes.cloudSync);
     final isSettings = location == AppRoutes.settings;
-    final isHome = location == AppRoutes.home || location == '/';
     final hasActiveChat = ref.watch(hasActiveChatSessionProvider);
     final isTemporary = ref.watch(chatProvider.select((s) => s.isTemporary));
     final activeServer = ref.watch(activeServerProvider);
@@ -54,6 +54,11 @@ class SidebarWidget extends ConsumerWidget {
 
     void open(String route) {
       closeDrawer();
+      final workspace = ref.read(desktopWorkspaceProvider);
+      if (workspace != null) {
+        workspace.openRoute(context, route);
+        return;
+      }
       context.go(route);
     }
 
@@ -89,10 +94,7 @@ class SidebarWidget extends ConsumerWidget {
                     ),
                     onPressed: () {
                       ref.read(chatProvider.notifier).startNewConversation();
-                      context.go(AppRoutes.home);
-                      if (Scaffold.maybeOf(context)?.isDrawerOpen ?? false) {
-                        Navigator.pop(context);
-                      }
+                      open(AppRoutes.home);
                     },
                     child: Text(l10n.nav_new_chat),
                   ),
@@ -114,11 +116,7 @@ class SidebarWidget extends ConsumerWidget {
                               size: 18,
                             ),
                             onPressed: () {
-                              if (!isHome) context.go(AppRoutes.home);
-                              if (Scaffold.maybeOf(context)?.isDrawerOpen ??
-                                  false) {
-                                Navigator.pop(context);
-                              }
+                              open(AppRoutes.home);
                             },
                             child: Text(l10n.return_to_temp_chat),
                           )
@@ -130,11 +128,7 @@ class SidebarWidget extends ConsumerWidget {
                               size: 18,
                             ),
                             onPressed: () {
-                              if (!isHome) context.go(AppRoutes.home);
-                              if (Scaffold.maybeOf(context)?.isDrawerOpen ??
-                                  false) {
-                                Navigator.pop(context);
-                              }
+                              open(AppRoutes.home);
                             },
                             child: Text(l10n.return_to_chat),
                           ),
@@ -194,6 +188,13 @@ class SidebarWidget extends ConsumerWidget {
                               compact: true,
                             ),
                             onTap: () {
+                              final workspace = ref.read(
+                                desktopWorkspaceProvider,
+                              );
+                              if (workspace != null) {
+                                open(AppRoutes.lmStudioModelBrowser);
+                                return;
+                              }
                               closeDrawer();
                               context.push(
                                 AppRoutes.lmStudioModelBrowser,

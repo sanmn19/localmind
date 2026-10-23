@@ -161,7 +161,7 @@
     },
     {
       "id": "2:196881068437544233",
-      "lastPropertyId": "29:6028398201373029019",
+      "lastPropertyId": "30:5637926539220219208",
       "name": "MessageEntity",
       "properties": [
         {
@@ -316,6 +316,13 @@
           "id": "29:6028398201373029019",
           "name": "contentTokenCount",
           "type": 6
+        },
+        {
+          "id": "30:5637926539220219208",
+          "name": "updatedAt",
+          "indexId": "20:5245853774246854643",
+          "type": 10,
+          "flags": 8
         }
       ],
       "relations": []
@@ -789,7 +796,7 @@
     }
   ],
   "lastEntityId": "10:7335998010881530624",
-  "lastIndexId": "19:9141168625428584864",
+  "lastIndexId": "20:5245853774246854643",
   "lastRelationId": "0:0",
   "lastSequenceId": "0:0",
   "modelVersion": 5,

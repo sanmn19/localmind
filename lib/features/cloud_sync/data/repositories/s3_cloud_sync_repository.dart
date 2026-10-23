@@ -5,8 +5,9 @@ import 'package:aws_common/aws_common.dart';
 import 'package:aws_signature_v4/aws_signature_v4.dart';
 
 import '../models/cloud_sync_models.dart';
+import '../storage/cloud_sync_storage.dart';
 
-class S3CloudSyncRepository {
+class S3CloudSyncRepository implements CloudSyncStorage {
   S3CloudSyncRepository({required this.config, required this.credentials})
     : _signer = AWSSigV4Signer(
         credentialsProvider: AWSCredentialsProvider(
@@ -24,9 +25,53 @@ class S3CloudSyncRepository {
 
   final _scopeTimeout = const Duration(seconds: 30);
 
+  @override
   String get stateKey => _key('v1/state.enc');
+
+  @override
+  String get backupPrefix => _key('backups');
+
+  @override
+  String backupKey(DateTime at) {
+    final stamp = at
+        .toUtc()
+        .toIso8601String()
+        .replaceAll(':', '-')
+        .replaceAll('.', '-');
+    return _key('backups/$stamp.enc');
+  }
+
+  @override
+  Future<List<String>> listBackups() async {
+    // S3 ListObjectsV2 under the backups prefix; keys are returned sorted.
+    final uri = _objectUri(
+      '',
+    ).replace(queryParameters: {'list-type': '2', 'prefix': _key('backups/')});
+    final response = await _send(
+      AWSHttpRequest.get(uri, headers: {AWSHeaders.host: uri.authority}),
+    );
+    final body = utf8.decode(response.bodyBytes, allowMalformed: true);
+    final keys = RegExp(
+      r'<Key>([^<]+)</Key>',
+    ).allMatches(body).map((match) => match.group(1)!).toList()..sort();
+    return keys;
+  }
+
+  @override
   String attachmentKey(String identifier) =>
       _key('v1/attachments/$identifier.enc');
+
+  @override
+  bool get requiresLease => false;
+
+  @override
+  Future<CloudSyncLease?> readLease() async => null;
+
+  @override
+  Future<void> writeLease(CloudSyncLease lease) async {}
+
+  @override
+  Future<void> deleteLease() async {}
 
   String _key(String suffix) {
     final prefix = config.prefix.trim().replaceAll(RegExp(r'^/+|/+$'), '');
@@ -111,8 +156,10 @@ class S3CloudSyncRepository {
     };
   }
 
+  @override
   Future<CloudSyncRemoteState?> readState() => readObject(stateKey);
 
+  @override
   Future<bool> objectExists(String key) async {
     final uri = _objectUri(key);
     final response = await _send(
@@ -122,6 +169,7 @@ class S3CloudSyncRepository {
     return response.statusCode == 200;
   }
 
+  @override
   Future<CloudSyncRemoteState?> readObject(String key) async {
     final uri = _objectUri(key);
     final response = await _send(
@@ -146,6 +194,7 @@ class S3CloudSyncRepository {
     createOnly: createOnly,
   );
 
+  @override
   Future<String?> writeObject(
     String key,
     List<int> bytes, {
@@ -166,6 +215,7 @@ class S3CloudSyncRepository {
     return response.headers['etag'];
   }
 
+  @override
   Future<void> deleteObject(String key) async {
     final uri = _objectUri(key);
     await _send(
@@ -174,6 +224,7 @@ class S3CloudSyncRepository {
     );
   }
 
+  @override
   Future<void> testConnection() async {
     final validation = config.validate();
     if (validation != null) {
