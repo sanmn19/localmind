@@ -6,6 +6,10 @@ import '../../../core/providers/storage_providers.dart';
 import '../../../core/providers/service_providers.dart';
 import '../../../core/storage/entities.dart';
 import '../../models/data/model_cache.dart';
+import '../../models/data/models/rig_model_entry.dart';
+import '../../models/providers/manual_model_providers.dart';
+import '../../models/providers/rig_switcher_providers.dart';
+import '../../models/utils/manual_model_merge.dart';
 
 import '../../../objectbox.g.dart';
 import '../../models/data/models/model_info.dart';
@@ -135,7 +139,7 @@ final loadedModelsProvider = FutureProvider.family<Set<String>, Server>((
   }
 });
 
-final availableModelsProvider = FutureProvider.family<List<dynamic>, String>((
+final availableModelsProvider = FutureProvider.family<List<ModelInfo>, String>((
   ref,
   serverId,
 ) async {
@@ -192,9 +196,38 @@ final availableModelsProvider = FutureProvider.family<List<dynamic>, String>((
   final cached = _modelCache.get(serverId);
   if (cached != null) return cached;
 
-  final models = await apiService.fetchModels(server);
-  _modelCache.put(serverId, models);
-  return models;
+  var detectionFailed = false;
+  Object? detectionError;
+  var detected = <ModelInfo>[];
+  try {
+    detected = await apiService.fetchModels(server);
+  } catch (error) {
+    detectionFailed = true;
+    detectionError = error;
+  }
+
+  final manual = await ref.watch(manualModelsProvider(serverId).future);
+  if (detectionFailed && manual.isEmpty) {
+    throw detectionError!;
+  }
+
+  final switcherBaseUrl = server.switcherBaseUrl;
+  List<RigModelEntry>? roster;
+  if (switcherBaseUrl != null) {
+    roster = await ref.watch(rigRosterProvider(switcherBaseUrl).future);
+  }
+
+  final merged = mergeManualModels(
+    detected,
+    manual,
+    serverId: serverId,
+    serverType: server.type,
+    rosterConfigured: switcherBaseUrl != null,
+    roster: roster,
+    detectionFailed: detectionFailed,
+  );
+  _modelCache.put(serverId, merged);
+  return merged;
 });
 
 class ServersNotifier extends AsyncNotifier<List<Server>> {
@@ -298,6 +331,9 @@ class ServersNotifier extends AsyncNotifier<List<Server>> {
 
   Future<void> deleteServer(String serverId) async {
     if (!ref.mounted) return;
+    await ref
+        .read(manualModelsNotifierProvider.notifier)
+        .clearForServer(serverId);
     final db = ref.read(databaseProvider);
     final query = db.serverBox.query(ServerEntity_.id.equals(serverId)).build();
     db.serverBox.removeMany(query.findIds());

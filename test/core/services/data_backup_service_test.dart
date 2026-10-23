@@ -284,7 +284,8 @@ class _FakeStore extends Fake implements Store {
   final Map<Type, Object> _boxes;
 
   @override
-  Box<T> box<T>() => _boxes[T] as Box<T>;
+  Box<T> box<T>() =>
+      _boxes.putIfAbsent(T, () => _FakeBox<T>(<T>[])) as Box<T>;
 }
 
 class _FakeBox<T> extends Fake implements Box<T> {

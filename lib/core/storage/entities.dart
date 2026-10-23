@@ -39,6 +39,7 @@ class ServerEntity {
   String? pathPrefix;
   int? availableRamGb;
   int? availableVramGb;
+  String? switcherBaseUrl;
 
   ServerEntity({
     this.internalId = 0,
@@ -56,6 +57,7 @@ class ServerEntity {
     this.pathPrefix,
     this.availableRamGb,
     this.availableVramGb,
+    this.switcherBaseUrl,
   });
 
   factory ServerEntity.fromDomain(Server server) {
@@ -74,6 +76,7 @@ class ServerEntity {
       pathPrefix: server.pathPrefix,
       availableRamGb: server.availableRamGb,
       availableVramGb: server.availableVramGb,
+      switcherBaseUrl: server.switcherBaseUrl,
     );
   }
 
@@ -156,6 +159,7 @@ class ServerEntity {
       pathPrefix: pathPrefix,
       availableRamGb: availableRamGb,
       availableVramGb: availableVramGb,
+      switcherBaseUrl: switcherBaseUrl,
     );
   }
 }
@@ -280,6 +284,10 @@ class ConversationEntity {
   bool isFork;
   bool isBackground;
 
+  /// Overlay/marker tag for special system conversations (e.g.
+  /// `ask_local` for the Ask Local overlay chat). Null for user chats.
+  String? specialKind;
+
   @Backlink()
   final messages = ToMany<MessageEntity>();
 
@@ -312,6 +320,7 @@ class ConversationEntity {
     this.forkSpan,
     this.isFork = false,
     this.isBackground = false,
+    this.specialKind,
   });
 
   factory ConversationEntity.fromDomain(Conversation conversation) {
@@ -345,6 +354,7 @@ class ConversationEntity {
       forkSpan: conversation.forkSpan,
       isFork: conversation.isFork,
       isBackground: conversation.isBackground,
+      specialKind: conversation.specialKind,
     );
   }
 
@@ -389,6 +399,7 @@ class ConversationEntity {
       forkSpan: forkSpan,
       isFork: isFork,
       isBackground: isBackground,
+      specialKind: specialKind,
     );
   }
 }
@@ -819,4 +830,31 @@ class BackgroundTaskEntity {
       ownerMessageId: ownerMessageId,
     );
   }
+}
+
+/// A model the user attached to a provider by hand (the endpoint may not
+/// advertise it). Keyed by [serverId] + [modelId]; uniqueness is enforced in
+/// `ManualModelRepository`.
+@Entity()
+class ManualModelEntity {
+  @Id()
+  int internalId = 0;
+
+  @Index()
+  String serverId;
+
+  String modelId;
+
+  String? displayName;
+
+  @Property(type: PropertyType.date)
+  DateTime createdAt;
+
+  ManualModelEntity({
+    this.internalId = 0,
+    required this.serverId,
+    required this.modelId,
+    this.displayName,
+    required this.createdAt,
+  });
 }

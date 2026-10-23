@@ -5,6 +5,7 @@ import 'package:hugeicons/hugeicons.dart';
 import 'package:localmind/l10n/app_localizations.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
+import '../../ask_local/data/ask_local_overlay_access.dart';
 import '../../chat/data/mcp_server_manager.dart';
 import '../../chat/data/models/background_task.dart';
 import '../../chat/data/tools/calendar_service.dart';
@@ -223,6 +224,8 @@ class McpToolsScreen extends ConsumerWidget {
                           const _BackgroundCard(),
                           const SizedBox(height: 16),
                           const _NotificationsCard(),
+                          const SizedBox(height: 16),
+                          const _AskLocalCard(),
                           if (settings.mcpEnabled) ...[
                             const SizedBox(height: 16),
                             _ConfiguredMcpServersCard(
@@ -1344,10 +1347,8 @@ class _BackgroundCard extends ConsumerWidget {
                     ),
                   ),
                 ),
-                error: (error, _) => Text(
-                  error.toString(),
-                  style: theme.textTheme.bodyMedium,
-                ),
+                error: (error, _) =>
+                    Text(error.toString(), style: theme.textTheme.bodyMedium),
                 data: (rows) {
                   if (rows.isEmpty) {
                     return Text(
@@ -1360,8 +1361,7 @@ class _BackgroundCard extends ConsumerWidget {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      for (final row in rows)
-                        _BackgroundTaskRow(row: row),
+                      for (final row in rows) _BackgroundTaskRow(row: row),
                     ],
                   );
                 },
@@ -1413,21 +1413,20 @@ class _BackgroundTaskRowState extends ConsumerState<_BackgroundTaskRow> {
       List<List<dynamic>> icon,
       String tooltip,
       VoidCallback? onPressed,
-    ) =>
-        Tooltip(
-          message: tooltip,
-          child: ShadIconButton.ghost(
-            key: key,
-            icon: HugeIcon(
-              icon: icon,
-              size: 18,
-              color: onPressed == null
-                  ? theme.disabledColor
-                  : theme.colorScheme.onSurfaceVariant,
-            ),
-            onPressed: onPressed,
-          ),
-        );
+    ) => Tooltip(
+      message: tooltip,
+      child: ShadIconButton.ghost(
+        key: key,
+        icon: HugeIcon(
+          icon: icon,
+          size: 18,
+          color: onPressed == null
+              ? theme.disabledColor
+              : theme.colorScheme.onSurfaceVariant,
+        ),
+        onPressed: onPressed,
+      ),
+    );
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -1546,6 +1545,13 @@ final notificationsListenerGrantProvider = FutureProvider<bool>((ref) {
   return const NotificationListenerChannel().isListenerEnabled();
 });
 
+/// Live "display over other apps" state for the Ask Local card's grant
+/// row: a fresh [Settings.canDrawOverlays] channel read per watch
+/// (re-invalidated after returning from the settings deep-link).
+final askLocalOverlayGrantProvider = FutureProvider<bool>((ref) {
+  return const AskLocalOverlayAccess().isOverlayPermitted();
+});
+
 /// Notifications reader card: settings toggle + Notification access grant
 /// row with a live granted read and a settings deep-link button. Rows
 /// themselves live session-scoped on the Kotlin ring; nothing renders them
@@ -1657,9 +1663,7 @@ class _GrantAccessRow extends ConsumerWidget {
               ? HugeIcons.strokeRoundedCheckmarkCircle01
               : HugeIcons.strokeRoundedAlertCircle,
           size: 18,
-          color: granted
-              ? const Color(0xFF22C55E)
-              : theme.colorScheme.outline,
+          color: granted ? const Color(0xFF22C55E) : theme.colorScheme.outline,
         ),
         const SizedBox(width: 8),
         Expanded(
@@ -1681,6 +1685,129 @@ class _GrantAccessRow extends ConsumerWidget {
             ref.invalidate(notificationsListenerGrantProvider);
           },
           child: Text(l10n.notifications_grant_action),
+        ),
+      ],
+    );
+  }
+}
+
+/// Ask Local card: the system-wide selection card needs the one-time
+/// "display over other apps" grant; v1 surface = status-only (the grant
+/// row), no extra tool toggle (tool gating stays global).
+class _AskLocalCard extends ConsumerStatefulWidget {
+  const _AskLocalCard();
+
+  @override
+  ConsumerState<_AskLocalCard> createState() => _AskLocalCardState();
+}
+
+class _AskLocalCardState extends ConsumerState<_AskLocalCard>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Returning to the app re-probes the overlay grant: the user grants
+    // (or revokes) in the system settings while the app is away, and the
+    // Kotlin side answered while the row was stale — the row must catch up
+    // on resume (the notifications grant-row precedent).
+    if (state == AppLifecycleState.resumed) {
+      ref.invalidate(askLocalOverlayGrantProvider);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final grantAsync = ref.watch(askLocalOverlayGrantProvider);
+
+    return KeyedSubtree(
+      key: const Key('ask_local_card'),
+      child: _McpSectionCard(
+        title: l10n.ask_local_card_title,
+        accent: const Color(0xFF6366F1),
+        icon: HugeIcons.strokeRoundedMagicWand01,
+        children: [
+          Text(
+            l10n.ask_local_card_desc,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          _McpPanel(
+            child: grantAsync.when(
+              loading: () => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 4),
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+              // A failed capability probe reads like "off" but keeps the
+              // grant button visible so recovery stays one tap away.
+              error: (_, _) => const _OverlayGrantRow(granted: false),
+              data: (granted) => _OverlayGrantRow(granted: granted),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The overlay grant row: state icon + label and the never-hidden settings
+/// deep-link button, shared by the granted/off/probe-error renders so all
+/// three keep the same recovery tap target.
+class _OverlayGrantRow extends ConsumerWidget {
+  const _OverlayGrantRow({required this.granted});
+
+  final bool granted;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    return Row(
+      key: Key(granted ? 'ask_local_grant_row_on' : 'ask_local_grant_row_off'),
+      children: [
+        HugeIcon(
+          icon: granted
+              ? HugeIcons.strokeRoundedCheckmarkCircle01
+              : HugeIcons.strokeRoundedAlertCircle,
+          size: 18,
+          color: granted ? const Color(0xFF22C55E) : theme.colorScheme.outline,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            granted
+                ? l10n.ask_local_access_granted
+                : l10n.ask_local_access_missing,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        ShadButton.outline(
+          key: const Key('ask_local_grant_access'),
+          size: ShadButtonSize.sm,
+          onPressed: () async {
+            await const AskLocalOverlayAccess().openOverlaySettings();
+            ref.invalidate(askLocalOverlayGrantProvider);
+          },
+          child: Text(l10n.ask_local_grant_action),
         ),
       ],
     );

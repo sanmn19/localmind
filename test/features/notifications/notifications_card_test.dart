@@ -22,12 +22,28 @@ import 'package:shared_preferences/shared_preferences.dart';
 // returns here) + the settings deep-link button re-checking the state.
 
 const _notificationsChannel = MethodChannel('localmind/notifications');
+const _askLocalChannel = MethodChannel('localmind/ask_local');
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    // The MCP Tools screen also mounts the Ask Local card whose overlay
+    // grant probe hits its own channel; without a mock its 3s-bounded
+    // read leaves a pending Timer at test end.
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_askLocalChannel, (call) async {
+      switch (call.method) {
+        case 'isOverlayPermitted':
+          return false;
+        default:
+          return null;
+      }
+    });
+    addTearDown(() => TestDefaultBinaryMessengerBinding
+        .instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_askLocalChannel, null));
   });
 
   Future<(ProviderContainer, _SpySettingsNotifier)> pumpCardHarness(

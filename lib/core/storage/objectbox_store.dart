@@ -18,6 +18,7 @@ class ObjectBoxStore {
   late final Box<ConversationFolderEntity> conversationFolderBox;
   late final Box<SavedMessageEntity> savedMessageBox;
   late final Box<SavedMessageFolderEntity> savedMessageFolderBox;
+  late final Box<ManualModelEntity> manualModelBox;
 
   ObjectBoxStore.fromStore(this.store) {
     serverBox = Box<ServerEntity>(store);
@@ -27,6 +28,7 @@ class ObjectBoxStore {
     conversationFolderBox = Box<ConversationFolderEntity>(store);
     savedMessageBox = Box<SavedMessageEntity>(store);
     savedMessageFolderBox = Box<SavedMessageFolderEntity>(store);
+    manualModelBox = Box<ManualModelEntity>(store);
   }
 
   static ObjectBoxStore? _instance;
@@ -73,6 +75,17 @@ class ObjectBoxStore {
       await storeDir.create(recursive: true);
     }
     final store = Store.attach(getObjectBoxModel(), storeDir.path);
+    return ObjectBoxStore.fromStore(store);
+  }
+
+  /// Attach variant for isolates without path-provider channels (the Ask
+  /// Local card engine): the directory is HANDED OVER by the hosting
+  /// engine in its bootstrap payload instead of resolved plugin-side. The
+  /// card's directory never exists check happens in [create]'s process.
+  static Future<ObjectBoxStore> attachAsSecondaryIsolateAt(
+    String storeDirPath,
+  ) async {
+    final store = Store.attach(getObjectBoxModel(), storeDirPath);
     return ObjectBoxStore.fromStore(store);
   }
 }

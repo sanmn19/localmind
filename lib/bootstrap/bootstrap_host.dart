@@ -27,6 +27,7 @@ import '../features/skills/data/skills_provider.dart';
 import '../features/cloud_sync/views/cloud_sync_lifecycle_host.dart';
 import '../core/logger/app_logger.dart';
 import '../core/utils/locale_utils.dart';
+import '../features/ask_local/data/ask_local_main_channel.dart';
 import '../objectbox.g.dart';
 import 'bootstrap_screen.dart';
 import 'bootstrap_state.dart';
@@ -151,6 +152,12 @@ class _BootstrapHostState extends State<BootstrapHost> {
       // skills refresh above.
       _registerBackgroundResultRouting();
 
+      // The ask-local MAIN half: Kotlin's staging pushes, the pending pull
+      // and the card engine's execute-tool forwards land here once the
+      // live app container exists (a snapshot envelope is resolved
+      // MAIN-side, so the card receives every field at overlay-open).
+      _installAskLocalMainChannel(container);
+
       _container = container;
       _updateStage(BootstrapStage.done, 'Ready');
     } catch (e) {
@@ -220,8 +227,22 @@ class _BootstrapHostState extends State<BootstrapHost> {
     }
   }
 
+  /// Ask-local channel seam for unit tests (null = production installer).
+  @visibleForTesting
+  static void Function(ProviderContainer container)? askLocalChannelInstaller;
+
+  void _installAskLocalMainChannel(ProviderContainer container) {
+    final installer = askLocalChannelInstaller;
+    if (installer != null) {
+      installer(container);
+    } else {
+      AskLocalMainChannel.install(container);
+    }
+  }
+
   @override
   void dispose() {
+    AskLocalMainChannel.uninstall();
     _container?.dispose();
     super.dispose();
   }

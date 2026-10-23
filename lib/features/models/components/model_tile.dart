@@ -6,6 +6,7 @@ import 'package:localmind/features/models/data/models/model_info.dart';
 import 'package:localmind/l10n/app_localizations.dart';
 
 import 'inline_thinking_selector.dart';
+import 'model_availability_badge.dart';
 
 class ModelTile extends StatelessWidget {
   const ModelTile({
@@ -70,7 +71,10 @@ class ModelTile extends StatelessWidget {
             : model.pricingLabel!,
     ].join(' · ');
 
-    return Padding(
+    final dimmed = model.availability != ModelAvailability.available;
+    return Opacity(
+      opacity: dimmed ? 0.45 : 1,
+      child: Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Material(
         color: isSelected
@@ -121,6 +125,14 @@ class ModelTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    if (model.availability !=
+                        ModelAvailability.available) ...[
+                      const SizedBox(width: 8),
+                      ModelAvailabilityBadge(
+                        availability: model.availability,
+                        isDark: isDark,
+                      ),
+                    ],
                     if (isDefault) ...[
                       const SizedBox(width: 8),
                       ModelTileBadge(
@@ -192,6 +204,7 @@ class ModelTile extends StatelessWidget {
             ),
           ),
         ),
+      ),
       ),
     );
   }

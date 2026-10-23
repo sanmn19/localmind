@@ -241,6 +241,10 @@ enum MessageStatus { sending, streaming, complete, error, cancelled }
 
 enum ModelStatus { unloaded, loading, loaded, preloaded, thinking }
 
+/// Whether a model can be used right now. [loadable] means the provider does not
+/// advertise it but its model switcher roster has an enabled, inactive entry.
+enum ModelAvailability { available, loadable, unavailable, unknown }
+
 enum OnDeviceEngineStatus { notLoaded, loading, loaded, error }
 
 enum OnDeviceModelState {

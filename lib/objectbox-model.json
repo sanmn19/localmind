@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "1:6060443518060866028",
-      "lastPropertyId": "28:5491618122077238252",
+      "lastPropertyId": "29:2724687612514915050",
       "name": "ConversationEntity",
       "properties": [
         {
@@ -150,13 +150,18 @@
           "id": "28:5491618122077238252",
           "name": "isBackground",
           "type": 1
+        },
+        {
+          "id": "29:2724687612514915050",
+          "name": "specialKind",
+          "type": 9
         }
       ],
       "relations": []
     },
     {
       "id": "2:196881068437544233",
-      "lastPropertyId": "30:4858677457291064666",
+      "lastPropertyId": "30:5637926539220219208",
       "name": "MessageEntity",
       "properties": [
         {
@@ -313,9 +318,9 @@
           "type": 6
         },
         {
-          "id": "30:4858677457291064666",
+          "id": "30:5637926539220219208",
           "name": "updatedAt",
-          "indexId": "19:2398385449838413816",
+          "indexId": "20:5245853774246854643",
           "type": 10,
           "flags": 8
         }
@@ -390,7 +395,7 @@
     },
     {
       "id": "4:6971506781199819057",
-      "lastPropertyId": "15:6058370228992885505",
+      "lastPropertyId": "16:7764442332437625176",
       "name": "ServerEntity",
       "properties": [
         {
@@ -470,6 +475,11 @@
           "id": "15:6058370228992885505",
           "name": "availableVramGb",
           "type": 6
+        },
+        {
+          "id": "16:7764442332437625176",
+          "name": "switcherBaseUrl",
+          "type": 9
         }
       ],
       "relations": []
@@ -747,10 +757,46 @@
         }
       ],
       "relations": []
+    },
+    {
+      "id": "10:7335998010881530624",
+      "lastPropertyId": "5:5963172498851303558",
+      "name": "ManualModelEntity",
+      "properties": [
+        {
+          "id": "1:550470327773264788",
+          "name": "internalId",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:5650879860393993673",
+          "name": "serverId",
+          "indexId": "19:9141168625428584864",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "3:761384913517343224",
+          "name": "modelId",
+          "type": 9
+        },
+        {
+          "id": "4:6936401605411023267",
+          "name": "displayName",
+          "type": 9
+        },
+        {
+          "id": "5:5963172498851303558",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
     }
   ],
-  "lastEntityId": "9:4259778768971352693",
-  "lastIndexId": "19:2398385449838413816",
+  "lastEntityId": "10:7335998010881530624",
+  "lastIndexId": "20:5245853774246854643",
   "lastRelationId": "0:0",
   "lastSequenceId": "0:0",
   "modelVersion": 5,
