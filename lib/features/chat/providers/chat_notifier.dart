@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:localmind/core/logger/app_logger.dart';
 import 'package:localmind/core/models/enums.dart';
@@ -36,6 +36,7 @@ import '../data/mcp_server_manager.dart' show webMcpServerUrl;
 import '../data/models/chat_parameters.dart';
 import '../data/models/message.dart' hide ToolCallData;
 import '../data/models/message.dart' as msg_model show ToolCallData;
+import '../data/chat_completion_notifier.dart';
 import '../data/title_generation_service.dart';
 import '../data/tool_budget.dart';
 import '../data/tools/tool_definition.dart';
@@ -385,6 +386,7 @@ class ChatNotifier extends Notifier<ChatState> {
       conversationId: conversationId,
       timeline: timeline,
     );
+    _maybeNotifyBackgroundReply(conversationId, finalMessage);
 
     final lastUserMessage = timeline
         .where((m) => m.role == MessageRole.user)
@@ -1879,6 +1881,46 @@ class ChatNotifier extends Notifier<ChatState> {
         _memoryExtractionInFlight = null;
       }
     }();
+  }
+
+  /// Posts a "reply ready" notification when a chat finishes while LocalMind is
+  /// minimized or out of focus. The notification id is per conversation, so
+  /// different chats stack while a newer reply replaces the older one.
+  void _maybeNotifyBackgroundReply(String conversationId, Message finalMessage) {
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    if (lifecycle == null || lifecycle == AppLifecycleState.resumed) return;
+    if (finalMessage.role != MessageRole.assistant ||
+        finalMessage.status != MessageStatus.complete ||
+        finalMessage.content.trim().isEmpty) {
+      return;
+    }
+    final conversation = ref
+        .read(conv.conversationsProvider)
+        .value
+        ?.where((candidate) => candidate.id == conversationId)
+        .firstOrNull;
+    if (conversation == null ||
+        conversation.isTemporary ||
+        conversation.isBackground) {
+      return;
+    }
+    final title = conversation.title.trim().isEmpty ||
+            conversation.title.trim() == 'New Chat'
+        ? 'LocalMind'
+        : conversation.title.trim();
+    unawaited(
+      ref
+          .read(chatCompletionNotifierProvider)
+          .notify(
+            conversationId: conversationId,
+            title: title,
+            body: chatReplyPreview(finalMessage.content),
+          )
+          .catchError((Object error, StackTrace stack) {
+            Log.warning('Chat reply notification failed: $error');
+            return;
+          }),
+    );
   }
 
   Future<void>? _maybeAutoGenerateTitleAfterFirstReply({
