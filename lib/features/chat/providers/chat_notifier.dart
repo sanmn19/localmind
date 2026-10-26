@@ -386,7 +386,7 @@ class ChatNotifier extends Notifier<ChatState> {
       conversationId: conversationId,
       timeline: timeline,
     );
-    _maybeNotifyBackgroundReply(conversationId, finalMessage);
+    _maybeNotifyReplyCompletion(conversationId, finalMessage);
 
     final lastUserMessage = timeline
         .where((m) => m.role == MessageRole.user)
@@ -1883,12 +1883,12 @@ class ChatNotifier extends Notifier<ChatState> {
     }();
   }
 
-  /// Posts a "reply ready" notification when a chat finishes while LocalMind is
-  /// minimized or out of focus. The notification id is per conversation, so
-  /// different chats stack while a newer reply replaces the older one.
-  void _maybeNotifyBackgroundReply(String conversationId, Message finalMessage) {
-    final lifecycle = WidgetsBinding.instance.lifecycleState;
-    if (lifecycle == null || lifecycle == AppLifecycleState.resumed) return;
+  /// Posts a "reply ready" notification whenever a chat finishes. The app
+  /// lifecycle is intentionally not consulted: Android reports `resumed` with a lag
+  /// after minimizing, which silently skipped notifications. The notification id is
+  /// per conversation, so different chats stack while a newer reply replaces the
+  /// older one.
+  void _maybeNotifyReplyCompletion(String conversationId, Message finalMessage) {
     if (finalMessage.role != MessageRole.assistant ||
         finalMessage.status != MessageStatus.complete ||
         finalMessage.content.trim().isEmpty) {
