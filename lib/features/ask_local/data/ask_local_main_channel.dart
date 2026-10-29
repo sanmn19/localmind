@@ -16,6 +16,7 @@ import 'package:localmind/features/chat/providers/model_selection_providers.dart
 import 'package:localmind/features/chat/providers/tooling_providers.dart'
     show forkChatToolsetProvider, toolRegistryProvider;
 import 'package:localmind/features/chat/data/tools/tool_definition.dart';
+import 'package:localmind/features/conversations/providers/conversation_providers.dart';
 import 'package:localmind/features/servers/data/models/server.dart';
 import 'package:path/path.dart' as p;
 
@@ -139,6 +140,10 @@ resolveAskLocalCardBootstrap(ProviderContainer container) async {
         .read(askLocalConversationServiceProvider)
         .create();
     conversationId = conversation.id;
+    // The conversation was written straight to ObjectBox, bypassing the
+    // conversations notifier, so the history list's cached state would not see it
+    // until a later reload. Invalidate so the new Ask Local thread appears now.
+    container.invalidate(conversationsProvider);
   } catch (error) {
     Log.error('Ask Local conversation create failed: $error');
   }
