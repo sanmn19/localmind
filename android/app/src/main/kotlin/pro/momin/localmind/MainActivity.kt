@@ -33,6 +33,7 @@ class MainActivity : AudioServiceActivity() {
     private val ASK_LOCAL_EVENTS_CHANNEL = "localmind/ask_local/events"
     private val DEVICE_TOOLS_CHANNEL = "localmind/device_tools"
     private val NOTIFICATIONS_CHANNEL = "localmind/notifications"
+    private val MCP_HUB_CHANNEL = "pro.momin.localmind/mcp_hub"
 
     private var assistantChannel: MethodChannel? = null
     private var pendingAssistantInvocation = false
@@ -41,6 +42,7 @@ class MainActivity : AudioServiceActivity() {
     private var pendingSharePayload: Map<String, Any?>? = null
     private var askLocalChannel: MethodChannel? = null
     private var askLocalClosedSink: EventChannel.EventSink? = null
+    private var hubMcpClient: HubMcpClient? = null
     private val shareIoExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
     private val shareMainHandler = Handler(Looper.getMainLooper())
 
@@ -65,6 +67,12 @@ class MainActivity : AudioServiceActivity() {
         deliverAssistantInvocation()
         captureSharePayload(intent)
         deliverSharePayload()
+    }
+
+    override fun onDestroy() {
+        hubMcpClient?.dispose()
+        hubMcpClient = null
+        super.onDestroy()
     }
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
@@ -209,6 +217,15 @@ class MainActivity : AudioServiceActivity() {
                 "listInstalledApps" -> listInstalledDeviceApps(result)
                 "screenshot" -> screenshotDeviceTools(call, result)
                 else -> result.notImplemented()
+            }
+        }
+
+        hubMcpClient = HubMcpClient(this).also { client ->
+            MethodChannel(
+                flutterEngine.dartExecutor.binaryMessenger,
+                MCP_HUB_CHANNEL
+            ).setMethodCallHandler { call, result ->
+                client.handle(call, result)
             }
         }
 
