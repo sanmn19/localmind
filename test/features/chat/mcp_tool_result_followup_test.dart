@@ -64,18 +64,24 @@ String _toolCallIdFor(ToolEvent event) {
   final uniqueSuffix = event.eventId.isNotEmpty
       ? event.eventId
       : '${event.toolName}_${event.timestamp.microsecondsSinceEpoch}';
-  return 'call_${uniqueSuffix}_completed';
+  return 'call_${uniqueSuffix}_${event.status.name}';
 }
 
 ({m.Message assistant, List<m.Message> toolMessages}) _buildFollowup({
   required m.Message previousAssistant,
   required List<ToolEvent> toolEvents,
 }) {
-  final completed = toolEvents
-      .where((e) => e.status == ToolEventStatus.completed)
+  // Completed results AND plain failures feed back: the model needs the
+  // failure text to pick an alternate source or retry. Rejections stay out.
+  final feedback = toolEvents
+      .where(
+        (e) =>
+            e.status == ToolEventStatus.completed ||
+            e.status == ToolEventStatus.failed,
+      )
       .toList();
 
-  final toolCallEntries = completed
+  final toolCallEntries = feedback
       .map(
         (e) => m.ToolCallData(
           id: _toolCallIdFor(e),
@@ -91,7 +97,7 @@ String _toolCallIdFor(ToolEvent event) {
     stopReason: 'tool_use',
   );
 
-  final toolMessages = completed.map((e) {
+  final toolMessages = feedback.map((e) {
     final callId = _toolCallIdFor(e);
     return m.Message(
       id: 'tool_${callId}_${e.timestamp.microsecondsSinceEpoch}',
@@ -189,7 +195,7 @@ void main() {
       }
     });
 
-    test('failed tool events are excluded from the follow-up request', () {
+    test('failed tool events feed back with their error text', () {
       final assistant = _previousAssistant(id: 'asst-1', toolName: 'multi');
       final events = [
         _completedEvent(
@@ -213,9 +219,44 @@ void main() {
         toolEvents: events,
       );
 
-      expect(built.assistant.toolCalls!.length, 1);
-      expect(built.toolMessages.length, 1);
-      expect(built.assistant.toolCalls!.first.toolName, 'ok.tool');
+      expect(built.assistant.toolCalls!.length, 2);
+      expect(built.toolMessages.length, 2);
+
+      final failedMessage = built.toolMessages.firstWhere(
+        (message) => message.toolCallId!.endsWith('_failed'),
+      );
+      expect(
+        failedMessage.content,
+        'Permission denied',
+        reason:
+            'The model must see the failure text to choose an alternate '
+            'source or retry instead of the turn ending silently.',
+      );
+      final failedCall = built.assistant.toolCalls!.firstWhere(
+        (call) => call.toolName == 'bad.tool',
+      );
+      expect(failedCall.id, failedMessage.toolCallId);
+    });
+
+    test('rejected tool events stay out of the follow-up request', () {
+      final assistant = _previousAssistant(id: 'asst-1', toolName: 'multi');
+      final built = _buildFollowup(
+        previousAssistant: assistant,
+        toolEvents: [
+          ToolEvent(
+            eventId: 'session-1_1_rejected.tool',
+            timestamp: DateTime.utc(2026, 9, 5, 12, 0, 1),
+            status: ToolEventStatus.rejected,
+            toolName: 'rejected.tool',
+            providerType: ToolProviderType.builtIn,
+            arguments: const {},
+            error: 'Rejected by user',
+          ),
+        ],
+      );
+
+      expect(built.assistant.toolCalls, isEmpty);
+      expect(built.toolMessages, isEmpty);
     });
 
     test('assistant stopReason is set to tool_use', () {

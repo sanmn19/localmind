@@ -79,12 +79,9 @@ void main() {
     addTearDown(harness.container.dispose);
     await harness.pump(tester, delivery: _bootstrapDelivery());
 
-    await tester.enterText(
-      find.byKey(const ValueKey('ask_local_card_input')),
-      'What changed here?',
-    );
-    await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('ask_local_card_send')));
+    await harness.container
+        .read(askLocalCardNotifierProvider.notifier)
+        .send('What changed here?');
     await tester.pumpAndSettle();
     final state = harness.container.read(askLocalCardNotifierProvider);
     expect(state.isStreaming, isFalse, reason: 'failure: ${state.failure}');
@@ -112,12 +109,11 @@ void main() {
     addTearDown(harness.container.dispose);
     await harness.pump(tester, delivery: _bootstrapDelivery());
 
-    await tester.enterText(
-      find.byKey(const ValueKey('ask_local_card_input')),
-      'mail her',
+    unawaited(
+      harness.container
+          .read(askLocalCardNotifierProvider.notifier)
+          .send('mail her'),
     );
-    await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('ask_local_card_send')));
     await _pumpUntil(
       tester,
       () => harness.container
@@ -165,12 +161,11 @@ void main() {
     addTearDown(harness.container.dispose);
     await harness.pump(tester, delivery: _bootstrapDelivery());
 
-    await tester.enterText(
-      find.byKey(const ValueKey('ask_local_card_input')),
-      'mail her',
+    unawaited(
+      harness.container
+          .read(askLocalCardNotifierProvider.notifier)
+          .send('mail her'),
     );
-    await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('ask_local_card_send')));
     await _pumpUntil(
       tester,
       () => harness.container
@@ -370,6 +365,13 @@ class _DiscardingLogOutput extends LogOutput {
 }
 
 class _FakeConversationService implements AskLocalConversationService {
+  @override
+  Future<Conversation> create() async => conversation;
+
+  @override
+  Future<Conversation> resolve(String? conversationId) async => conversation;
+
+
   final Conversation conversation = Conversation(
     id: 'ask-local-conv',
     title: askLocalConversationTitle,

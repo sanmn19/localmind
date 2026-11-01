@@ -58,6 +58,56 @@ class AskLocalConversationService {
     );
   }
 
+  /// Always-fresh Ask Local conversation — the "new chat per popup"
+  /// contract: every PROCESS_TEXT handoff creates its own conversation and
+  /// history keeps the previous asks as separate threads.
+  Future<Conversation> create() async {
+    final db = _database;
+    return db.store.runInTransactionAsync(
+      TxMode.write,
+      _createInBackground,
+      null,
+    );
+  }
+
+  /// Resolves the conversation the bootstrap envelope pinned (the main
+  /// engine created it at handoff). Falls back to [ensure] when the card
+  /// runs degraded (no envelope id) or the pinned row vanished.
+  Future<Conversation> resolve(String? conversationId) async {
+    final db = _database;
+    if (conversationId != null) {
+      final found = await db.store.runInTransactionAsync(
+        TxMode.read,
+        _findByIdInBackground,
+        conversationId,
+      );
+      if (found != null) return found;
+    }
+    return ensure();
+  }
+
+  static Conversation? _findByIdInBackground(Store store, String id) {
+    final box = store.box<ConversationEntity>();
+    final query = box.query(ConversationEntity_.id.equals(id)).build();
+    final rows = query.find();
+    query.close();
+    return rows.isEmpty ? null : rows.first.toDomain();
+  }
+
+  static Conversation _createInBackground(Store store, void _) {
+    final box = store.box<ConversationEntity>();
+    final now = DateTime.now();
+    final created = ConversationEntity(
+      id: generateUuidV4(),
+      title: askLocalConversationTitle,
+      createdAt: now,
+      updatedAt: now,
+      specialKind: askLocalConversationKind,
+    );
+    box.put(created);
+    return created.toDomain();
+  }
+
   static Conversation _ensureInBackground(Store store, void _) {
     final box = store.box<ConversationEntity>();
 

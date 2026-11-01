@@ -231,12 +231,17 @@ void main() {
     );
   }
 
+  Future<Map<String, dynamic>> localPayload() => DataBackupService().exportCloudSync(
+    container.read(databaseProvider).store,
+    AppSettings().toJson(),
+  );
+
   Future<void> seedRemoteState({Map<String, dynamic>? payload}) async {
     final snapshot = CloudSyncSnapshot(
       deviceId: 'remote-device-1',
       revision: 1,
       updatedAt: DateTime.utc(2026, 10, 1),
-      payload: payload ?? _payload(ThemeMode.light.index),
+      payload: payload ?? await localPayload(),
     );
     storage.state = await crypto.encryptState(
       utf8.encode(snapshot.encode()),
@@ -245,11 +250,6 @@ void main() {
     );
     storage.etag = 'remote-1';
   }
-
-  Map<String, dynamic> localPayload() => DataBackupService().exportCloudSync(
-    container.read(databaseProvider).store,
-    AppSettings().toJson(),
-  );
 
   Future<void> setTheme(ThemeMode mode) => container
       .read(settingsProvider.notifier)
@@ -311,7 +311,7 @@ void main() {
 
   test('a read-only sync writes no state and takes no lease', () async {
     await enableDrive();
-    await seedRemoteState(payload: localPayload());
+    await seedRemoteState(payload: await localPayload());
     final controller = container.read(cloudSyncControllerProvider.notifier);
 
     await controller.syncNow(rethrowErrors: true);

@@ -18,6 +18,13 @@ Use FVM so development matches `.fvmrc` (Flutter 3.44.2):
 - `fvm flutter gen-l10n` regenerates localization output.
 - `fvm dart run build_runner build --delete-conflicting-outputs` refreshes ObjectBox output after entity changes.
 
+Verify UI and flow changes on the local Android emulator first, using
+`.agents/skills/android-emulator-testing/SKILL.md` (AVD `localmind-test`): build,
+`emulator.sh install`, `launch`, screenshot, tap, read logcat, repeat. Taildrop
+to the phone only after the emulator pass is clean, or when the change needs
+something the emulator cannot provide (Google OAuth, notifications, real sensors,
+performance, final acceptance).
+
 ### Desktop (macOS)
 
 - `flutter config --enable-swift-package-manager` once per machine: the macOS runner uses SPM for `llamadart_llama_cpp_flutter` and CocoaPods for the rest, with `macos/Podfile` pinned to macOS 14.0.

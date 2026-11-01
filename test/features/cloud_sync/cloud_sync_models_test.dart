@@ -70,6 +70,16 @@ void main() {
     },
   };
 
+  test('unknown setting keys are tolerated for older snapshots', () {
+    final payload = validSnapshot();
+    (payload['payload'] as Map)['settings'] = <String, dynamic>{
+      'fontSize': 16.0,
+      'screenMemoryEnabled': true,
+      'screenMemoryServerId': 'old-server',
+    };
+    expect(CloudSyncSnapshot.fromJson(payload).revision, 1);
+  });
+
   test('snapshot validation rejects incomplete or out-of-scope data', () {
     expect(CloudSyncSnapshot.fromJson(validSnapshot()).revision, 1);
 
