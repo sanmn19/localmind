@@ -25,6 +25,13 @@ to the phone only after the emulator pass is clean, or when the change needs
 something the emulator cannot provide (Google OAuth, notifications, real sensors,
 performance, final acceptance).
 
+### Desktop (macOS)
+
+- `flutter config --enable-swift-package-manager` once per machine: the macOS runner uses SPM for `llamadart_llama_cpp_flutter` and CocoaPods for the rest, with `macos/Podfile` pinned to macOS 14.0.
+- A full Xcode install is required for `flutter run -d macos` / `flutter build macos`; `flutter analyze` and `flutter test` run without it.
+- Desktop-only work lives in `lib/features/desktop/` (window manager, shell, dock, palette). Cross-feature composition, including `DesktopChatWindow`, stays in `lib/app.dart`.
+- See `docs/desktop-macos-setup.md` for setup and the multi-device sync policy.
+
 ## Architecture, Style & UI Libraries
 
 Follow `.agents/skills/flutter-feature-based-architecture/SKILL.md` for every feature or refactor. A feature may import itself and `core/`, never a sibling feature. Keep views thin; place business rules, async work, persistence, and mutations in Riverpod notifiers or repositories. Extract UI sections into named `StatelessWidget` classes under `views/components/`, not private `_build...` helpers. Keep models and providers handwritten; ObjectBox is the existing generation exception.

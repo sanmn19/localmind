@@ -1,5 +1,7 @@
 import 'package:device_calendar_plus/device_calendar_plus.dart';
 
+import '../../../../core/utils/platform_support.dart';
+
 /// Thin wrapper around [DeviceCalendar] for the built-in calendar tools.
 ///
 /// All methods return plain Dart types (strings / maps) so tool results can be
@@ -8,7 +10,20 @@ class CalendarService {
   CalendarService._();
   static final instance = CalendarService._();
 
-  final _plugin = DeviceCalendar.instance;
+  /// Created on first use: constructing the plugin singleton throws on a
+  /// platform without an implementation, and every method checks
+  /// [isAvailable] before touching it.
+  DeviceCalendar get _plugin => DeviceCalendar.instance;
+
+  /// Whether the device calendar plugin exists on this platform. Every public
+  /// method short-circuits to a safe value when this is false, so no caller
+  /// (tools, settings toggles) can reach a missing plugin channel.
+  bool get isAvailable => supportsCalendarPlugin;
+
+  /// The model-facing error every calendar operation reports when the platform
+  /// has no calendar plugin.
+  static const unavailableError =
+      'Calendar tools are unavailable on this platform.';
 
   // ---------------------------------------------------------------------------
   // Permissions
@@ -16,12 +31,14 @@ class CalendarService {
 
   /// Request full calendar access. Returns `true` when granted.
   Future<bool> requestAccess() async {
+    if (!isAvailable) return false;
     final status = await _plugin.requestPermissions();
     return status == CalendarPermissionStatus.granted;
   }
 
   /// Check current permission status without prompting.
   Future<bool> hasAccess() async {
+    if (!isAvailable) return false;
     final status = await _plugin.hasPermissions();
     return status == CalendarPermissionStatus.granted;
   }
@@ -32,6 +49,7 @@ class CalendarService {
 
   /// Returns a JSON-friendly list of available calendars.
   Future<List<Map<String, dynamic>>> listCalendars() async {
+    if (!isAvailable) return const [];
     final calendars = await _plugin.listCalendars();
     return calendars
         .map(
@@ -55,6 +73,7 @@ class CalendarService {
     DateTime? start,
     DateTime? end,
   }) async {
+    if (!isAvailable) return const [];
     final from = start ?? _todayStart();
     final to = end ?? from.add(const Duration(days: 7));
 
@@ -88,6 +107,9 @@ class CalendarService {
     String? location,
     String? calendarId,
   }) async {
+    if (!isAvailable) {
+      return {'success': false, 'error': unavailableError};
+    }
     try {
       final eventId = await _plugin.createEvent(
         title: title,

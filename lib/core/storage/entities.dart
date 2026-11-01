@@ -513,6 +513,10 @@ class MessageEntity {
   @Property(type: PropertyType.date)
   DateTime createdAt;
 
+  @Index()
+  @Property(type: PropertyType.date)
+  DateTime? updatedAt;
+
   @Property(type: PropertyType.int)
   int statusIndex;
 
@@ -545,6 +549,7 @@ class MessageEntity {
     required this.roleIndex,
     required this.content,
     required this.createdAt,
+    this.updatedAt,
     required this.statusIndex,
     this.modelId,
     this.tokenCount,
@@ -576,6 +581,7 @@ class MessageEntity {
       roleIndex: message.role.index,
       content: message.content,
       createdAt: message.createdAt,
+      updatedAt: message.updatedAt,
       statusIndex: message.status.index,
       modelId: message.modelId,
       tokenCount: message.tokenCount,
@@ -614,6 +620,7 @@ class MessageEntity {
       role: MessageRole.values[roleIndex],
       content: content,
       createdAt: createdAt,
+      updatedAt: updatedAt,
       status: statusIndex >= 0 && statusIndex < MessageStatus.values.length
           ? MessageStatus.values[statusIndex]
           : MessageStatus.values.first,

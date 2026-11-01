@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:localmind/features/chat/views/components/token_usage_indicator.dart';
@@ -120,6 +121,10 @@ class ChatInputBarState extends ConsumerState<ChatInputBar>
 
     _focusNode = widget.focusNode ?? FocusNode();
     _incognitoFocus = FocusNode();
+    // Enter sends and Shift+Enter breaks the line. Handling it on the field's
+    // own focus node runs before the editable text inserts the newline.
+    _focusNode.onKeyEvent = _handleComposerKey;
+    _incognitoFocus.onKeyEvent = _handleComposerKey;
 
     _sendButtonAnimController = AnimationController(
       duration: const Duration(milliseconds: 200),
@@ -530,6 +535,22 @@ class ChatInputBarState extends ConsumerState<ChatInputBar>
         ),
       ],
     );
+  }
+
+  KeyEventResult _handleComposerKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final isEnter =
+        event.logicalKey == LogicalKeyboardKey.enter ||
+        event.logicalKey == LogicalKeyboardKey.numpadEnter;
+    if (!isEnter) return KeyEventResult.ignored;
+    // `sendOnEnter` decides which of Enter and Shift+Enter sends; the other
+    // inserts a newline through the field's default handling.
+    final sends =
+        ref.read(settingsProvider).sendOnEnter !=
+        HardwareKeyboard.instance.isShiftPressed;
+    if (!sends) return KeyEventResult.ignored;
+    _handleSubmit();
+    return KeyEventResult.handled;
   }
 
   void _handleSubmit() {

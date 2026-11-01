@@ -22,7 +22,10 @@ class _FakeChatNotifier extends ChatNotifier {
   ChatState build() => const ChatState();
 
   @override
-  Future<void> loadConversation(Conversation conversation) async {
+  Future<void> loadConversation(
+    Conversation conversation, {
+    bool activate = true,
+  }) async {
     loadedConversation = conversation;
   }
 }

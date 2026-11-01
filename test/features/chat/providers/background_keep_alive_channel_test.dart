@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'
@@ -41,5 +42,22 @@ void main() {
     // Every notif-channel call must precede the first background-service
     // channel traffic (configure) — pinned via recording order when mocked;
     // here it suffices that the creation happened at all.
+  });
+
+  test('macOS never touches the Android foreground-service channel', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('dexterous.com/flutter/local_notifications'),
+      (call) async {
+        calls.add(call);
+        return true;
+      },
+    );
+
+    await expectLater(startBackgroundKeepAliveService(), completes);
+    expect(calls, isEmpty);
   });
 }

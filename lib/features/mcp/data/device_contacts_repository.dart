@@ -2,6 +2,8 @@ import '../../../core/services/device_tools_service.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../../core/utils/platform_support.dart';
+
 /// Raised by [DeviceContactsRepository] when the READ_CONTACTS runtime
 /// permission could not be obtained. The device server renders it as a
 /// deliberate settings-guidance result line — never a raw plugin failure —
@@ -32,17 +34,22 @@ class ContactsPermissionClientImpl implements ContactsPermissionClient {
   const ContactsPermissionClientImpl();
 
   @override
-  Future<bool> isGranted() {
+  Future<bool> isGranted() async {
+    // permission_handler has no macOS implementation; the contacts plugin
+    // prompts through TCC itself, so there is nothing to ask here.
+    if (!supportsMobileOnlyPlugins) return true;
     return Permission.contacts.isGranted;
   }
 
   @override
-  Future<bool> isPermanentlyDenied() {
+  Future<bool> isPermanentlyDenied() async {
+    if (!supportsMobileOnlyPlugins) return false;
     return Permission.contacts.isPermanentlyDenied;
   }
 
   @override
-  Future<bool> request() {
+  Future<bool> request() async {
+    if (!supportsMobileOnlyPlugins) return true;
     return Permission.contacts.request().then((status) => status.isGranted);
   }
 }
