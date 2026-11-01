@@ -329,7 +329,7 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
         'Cloud sync was cancelled.',
       );
     }
-    final payload = DataBackupService().exportCloudSync(
+    final payload = await DataBackupService().exportCloudSync(
       ref.read(databaseProvider).store,
       ref.read(settingsProvider).toJson(),
     );

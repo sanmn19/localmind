@@ -102,3 +102,47 @@ class WebToolBudget {
     }
   }
 }
+
+/// Bounds how many times a plain tool failure is fed back to the model in one
+/// chain. The model gets [maxPerToolPerTurn] chances to retry or pick an
+/// alternate source; after that the failure is no longer turned into a follow-up,
+/// so a broken tool cannot loop the conversation forever.
+class ToolFailureFeedbackBudget {
+  static const maxPerToolPerTurn = 2;
+  static const maxTrackedChains = 64;
+
+  final Map<String, int> _counts = {};
+  final List<String> _recency = [];
+
+  bool allow(String chainKey, String toolName) {
+    _touch(chainKey);
+    return (_counts[_key(chainKey, toolName)] ?? 0) < maxPerToolPerTurn;
+  }
+
+  void record(String chainKey, String toolName) {
+    final key = _key(chainKey, toolName);
+    _counts[key] = (_counts[key] ?? 0) + 1;
+    _touch(chainKey);
+  }
+
+  int countFor(String chainKey, String toolName) =>
+      _counts[_key(chainKey, toolName)] ?? 0;
+
+  void reset(String chainKey) {
+    _counts.removeWhere((key, _) => key.startsWith('$chainKey|'));
+    _recency.remove(chainKey);
+  }
+
+  static String _key(String chainKey, String toolName) =>
+      '$chainKey|$toolName';
+
+  void _touch(String chainKey) {
+    _recency
+      ..remove(chainKey)
+      ..add(chainKey);
+    while (_recency.length > maxTrackedChains) {
+      final evicted = _recency.removeAt(0);
+      _counts.removeWhere((key, _) => key.startsWith('$evicted|'));
+    }
+  }
+}

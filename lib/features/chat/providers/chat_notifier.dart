@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:localmind/core/logger/app_logger.dart';
 import 'package:localmind/core/models/enums.dart';
@@ -22,6 +22,9 @@ import 'package:localmind/features/on_device/providers/on_device_providers.dart'
 import 'package:localmind/features/personas/providers/personas_providers.dart';
 import 'package:localmind/features/personas/utils/persona_prompt_utils.dart';
 import 'package:localmind/features/skills/data/skills_provider.dart';
+import 'package:localmind/features/memories/data/memory_context_section.dart';
+import 'package:localmind/features/memories/providers/memory_providers.dart';
+import 'package:localmind/features/memories/providers/memory_retrieval_providers.dart';
 import 'package:localmind/features/skills/data/skills_store.dart'
     show buildSkillsSystemSection;
 import 'package:localmind/features/servers/data/models/server.dart';
@@ -33,6 +36,7 @@ import '../data/mcp_server_manager.dart' show webMcpServerUrl;
 import '../data/models/chat_parameters.dart';
 import '../data/models/message.dart' hide ToolCallData;
 import '../data/models/message.dart' as msg_model show ToolCallData;
+import '../data/chat_completion_notifier.dart';
 import '../data/title_generation_service.dart';
 import '../data/tool_budget.dart';
 import '../data/tools/tool_definition.dart';
@@ -386,6 +390,11 @@ class ChatNotifier extends Notifier<ChatState> {
         );
     if (!ref.mounted) return;
     _recomputeConversationTotal(conversationId, messages: timeline);
+    _maybeAutoExtractMemories(
+      conversationId: conversationId,
+      timeline: timeline,
+    );
+    _maybeNotifyReplyCompletion(conversationId, finalMessage);
 
     final lastUserMessage = timeline
         .where((m) => m.role == MessageRole.user)
@@ -977,7 +986,10 @@ class ChatNotifier extends Notifier<ChatState> {
     session.resetCheckpointMetrics();
     session.updateSavedMetrics(assistantMessage);
 
-    final messagesForApi = _buildMessagesForApi(selectedModel);
+    final messagesForApi = _buildMessagesForApi(
+      selectedModel,
+      memoriesSection: await _buildMemoriesSection(state.messages),
+    );
 
     try {
       String reasoningContent = '';
@@ -1426,8 +1438,47 @@ class ChatNotifier extends Notifier<ChatState> {
     }
   }
 
-  List<Message> _buildMessagesForApi(ModelInfo? selectedModel) =>
-      _assembleApiMessages(selectedModel, state.messages);
+  List<Message> _buildMessagesForApi(
+    ModelInfo? selectedModel, {
+    String? memoriesSection,
+  }) => _assembleApiMessages(
+        selectedModel,
+        state.messages,
+        memoriesSection: memoriesSection,
+      );
+
+  /// Retrieves the memories relevant to the latest user turn and renders the
+  /// `# Memories` section. Best-effort: a failure never blocks the request.
+  Future<String?> _buildMemoriesSection(
+    List<Message> timeline, {
+    String? conversationId,
+  }) async {
+    try {
+      String? query;
+      for (final message in timeline.reversed) {
+        if (message.role == MessageRole.user) {
+          query = message.content;
+          break;
+        }
+      }
+      if (query == null || query.trim().isEmpty) return null;
+      final memories = await ref
+          .read(memoryRetrieverProvider)
+          .retrieve(
+            query,
+            conversationId:
+                conversationId ?? timeline.lastOrNull?.conversationId,
+          );
+      if (memories.isEmpty) return null;
+      for (final memory in memories) {
+        ref.read(memoryRepositoryProvider).touch(memory.id);
+      }
+      final section = buildMemoriesSystemSection(memories);
+      return section.isEmpty ? null : section;
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// Shared request-assembly path for the open chat's sends and the
   /// fork-context slice: composes the system message (persona + skills
@@ -1436,8 +1487,9 @@ class ChatNotifier extends Notifier<ChatState> {
   /// path so fork contexts can never drift from what the main thread sends.
   List<Message> _assembleApiMessages(
     ModelInfo? selectedModel,
-    List<Message> mainTimeline,
-  ) {
+    List<Message> mainTimeline, {
+    String? memoriesSection,
+  }) {
     final settings = ref.read(settingsProvider);
     final messages = <Message>[];
 
@@ -1477,6 +1529,15 @@ class ChatNotifier extends Notifier<ChatState> {
             ? skillsSection
             : '$systemContent\n\n$skillsSection';
       }
+    }
+
+    // Memories are passive facts, injected beside skills and never in the
+    // persona slot. They are retrieved per request (best-effort) and omitted
+    // when nothing is relevant.
+    if (memoriesSection != null && memoriesSection.trim().isNotEmpty) {
+      systemContent = (systemContent == null || systemContent.trim().isEmpty)
+          ? memoriesSection
+          : '$systemContent\n\n$memoriesSection';
     }
 
     if (shouldDisableThinking) {
@@ -1615,9 +1676,13 @@ class ChatNotifier extends Notifier<ChatState> {
 
   List<Message> _buildMessagesForContinue(
     ModelInfo? selectedModel,
-    Message assistantMessage,
-  ) {
-    final messages = _buildMessagesForApi(selectedModel);
+    Message assistantMessage, {
+    String? memoriesSection,
+  }) {
+    final messages = _buildMessagesForApi(
+      selectedModel,
+      memoriesSection: memoriesSection,
+    );
     if (messages.isEmpty) return messages;
     if (messages.last.role != MessageRole.assistant) return messages;
 
@@ -1752,6 +1817,127 @@ class ChatNotifier extends Notifier<ChatState> {
   /// Titles a chat after its first reply. Defaults to the open chat; pass
   /// [conversationId] and its [timeline] for a reply that finished in the
   /// background.
+  /// Per-conversation throttle for the hidden auto-memory call. Extraction
+  /// is a bonus, never a reason to spend a model call on every turn.
+  /// Per-chain budget for feeding plain tool failures back to the model.
+  final _toolFailureFeedback = ToolFailureFeedbackBudget();
+
+  final Map<String, DateTime> _lastMemoryExtraction = {};
+  Future<void>? _memoryExtractionInFlight;
+
+  /// Asks the same provider, in the background, whether the completed turn
+  /// contains anything worth remembering. Silent: the call is not added to the
+  /// transcript and failures only log.
+  void _maybeAutoExtractMemories({
+    required String conversationId,
+    required List<Message> timeline,
+  }) {
+    final settings = ref.read(settingsProvider);
+    if (!settings.memoriesEnabled || !settings.autoMemoryEnabled) return;
+    if (timeline.length < 2) return;
+    if (_memoryExtractionInFlight != null) return;
+    final lastRun = _lastMemoryExtraction[conversationId];
+    if (lastRun != null &&
+        DateTime.now().difference(lastRun) < const Duration(seconds: 90)) {
+      return;
+    }
+
+    final conversation = ref
+        .read(conv.conversationsProvider)
+        .value
+        ?.where((candidate) => candidate.id == conversationId)
+        .firstOrNull;
+    if (conversation == null || conversation.isTemporary) return;
+
+    final server = _resolveServerForTitle(conversation);
+    final modelId = _resolveModelIdForTitle(conversation);
+    if (server == null || modelId == null) return;
+    final chatService = _resolveChatServiceForTitle(server);
+    if (chatService == null) return;
+
+    final existingTitles = ref
+        .read(memoryRepositoryProvider)
+        .list()
+        .map((memory) => memory.title)
+        .toList();
+
+    _lastMemoryExtraction[conversationId] = DateTime.now();
+    _memoryExtractionInFlight = () async {
+      try {
+        final extracted = await ref
+            .read(memoryExtractionServiceProvider)
+            .extract(
+              chatService: chatService,
+              server: server,
+              modelId: modelId,
+              params: ref.read(chatParamsProvider),
+              messages: timeline,
+              existingTitles: existingTitles,
+            );
+        if (!ref.mounted || extracted.isEmpty) return;
+        final repository = ref.read(memoryRepositoryProvider);
+        for (final item in extracted) {
+          repository.remember(
+            title: item.title,
+            content: item.content,
+            kind: item.kind,
+            importance: item.importance,
+            scopeConversationId: item.conversationScoped
+                ? conversationId
+                : null,
+            tags: item.tags,
+            shortSummary: item.shortSummary,
+          );
+        }
+        ref.invalidate(memoriesProvider);
+      } catch (error) {
+        Log.warning('Auto memory extraction failed: $error');
+      } finally {
+        _memoryExtractionInFlight = null;
+      }
+    }();
+  }
+
+  /// Posts a "reply ready" notification whenever a chat finishes. The app
+  /// lifecycle is intentionally not consulted: Android reports `resumed` with a lag
+  /// after minimizing, which silently skipped notifications. The notification id is
+  /// per conversation, so different chats stack while a newer reply replaces the
+  /// older one.
+  void _maybeNotifyReplyCompletion(String conversationId, Message finalMessage) {
+    if (finalMessage.role != MessageRole.assistant ||
+        finalMessage.status != MessageStatus.complete ||
+        finalMessage.content.trim().isEmpty) {
+      return;
+    }
+    final conversation = ref
+        .read(conv.conversationsProvider)
+        .value
+        ?.where((candidate) => candidate.id == conversationId)
+        .firstOrNull;
+    if (conversation == null ||
+        conversation.isTemporary ||
+        conversation.isBackground) {
+      return;
+    }
+    final title = conversation.title.trim().isEmpty ||
+            conversation.title.trim() == 'New Chat'
+        ? 'LocalMind'
+        : conversation.title.trim();
+    unawaited(
+      ref
+          .read(chatCompletionNotifierProvider)
+          .notify(
+            conversationId: conversationId,
+            title: title,
+            body: chatReplyPreview(finalMessage.content),
+          )
+          .catchError((Object error, StackTrace stack) {
+            Log.warning('Chat reply notification failed: $error');
+            return;
+          }),
+    );
+  }
+
   Future<void>? _maybeAutoGenerateTitleAfterFirstReply({
     String? conversationId,
     List<Message>? timeline,
@@ -2248,6 +2434,7 @@ class ChatNotifier extends Notifier<ChatState> {
   Future<void> _sendFollowupWithToolResults({
     required Message previousAssistant,
     required List<ToolEvent> toolEvents,
+    Set<String> failureFeedbackEventIds = const {},
     String? attachedScreenshotId,
     required Server server,
     required ModelInfo? selectedModel,
@@ -2269,7 +2456,9 @@ class ChatNotifier extends Notifier<ChatState> {
         .where(
           (e) =>
               e.status == ToolEventStatus.completed ||
-              isWebBudgetSkipFailure(e),
+              isWebBudgetSkipFailure(e) ||
+              (e.status == ToolEventStatus.failed &&
+                  failureFeedbackEventIds.contains(e.eventId)),
         )
         .toList();
     if (feedback.isEmpty) return;
@@ -2282,7 +2471,7 @@ class ChatNotifier extends Notifier<ChatState> {
       final uniqueSuffix = event.eventId.isNotEmpty
           ? event.eventId
           : '${event.toolName}_${event.timestamp.microsecondsSinceEpoch}';
-      return 'call_${uniqueSuffix}_completed';
+      return 'call_${uniqueSuffix}_${event.status.name}';
     }
 
     final toolCallEntries = feedback
@@ -2481,6 +2670,7 @@ class ChatNotifier extends Notifier<ChatState> {
         }
       }
 
+      final failureFeedbackEventIds = <String>{};
       if (clientExecuted.isNotEmpty && ref.mounted) {
         final registry = ref.read(toolRegistryProvider);
         final adapter = createAdapterForServerType(server.type);
@@ -2502,7 +2692,10 @@ class ChatNotifier extends Notifier<ChatState> {
         // anonymous keyless vendors. Non-local-web names pass through.
         final chainKey = WebToolBudget.chainKeyFor(finalMessage);
         final budget = ref.read(webToolBudgetProvider);
-        if (isChainStart) budget.reset(chainKey);
+        if (isChainStart) {
+          budget.reset(chainKey);
+          _toolFailureFeedback.reset(chainKey);
+        }
 
         final ownedTools = {
           for (final tool in await registry.listTools()) tool.name: tool,
@@ -2588,6 +2781,18 @@ class ChatNotifier extends Notifier<ChatState> {
           toolEvents.addAll(loopResult.events);
         }
 
+        // Plain failures (network errors, timeouts) are fed back too, so the
+        // model can retry or choose an alternate source instead of the turn
+        // ending on the failed tool row. Bounded per tool per chain so a
+        // broken tool cannot loop forever.
+        for (final event in toolEvents) {
+          if (event.status != ToolEventStatus.failed) continue;
+          if (isWebBudgetSkipFailure(event)) continue;
+          if (!_toolFailureFeedback.allow(chainKey, event.toolName)) continue;
+          _toolFailureFeedback.record(chainKey, event.toolName);
+          failureFeedbackEventIds.add(event.eventId);
+        }
+
         // Skipped overdraws surface as failed tool events so the tool rows
         // stay readable AND the failure text flows to the model through
         // the same tool-message feedback path.
@@ -2655,10 +2860,13 @@ class ChatNotifier extends Notifier<ChatState> {
           .toList();
       final budgetSkips = toolEvents.where(isWebBudgetSkipFailure).toList();
       if (ref.mounted &&
-          (completedResults.isNotEmpty || budgetSkips.isNotEmpty)) {
+          (completedResults.isNotEmpty ||
+              budgetSkips.isNotEmpty ||
+              failureFeedbackEventIds.isNotEmpty)) {
         await _sendFollowupWithToolResults(
           previousAssistant: finalMessage,
           toolEvents: toolEvents,
+          failureFeedbackEventIds: failureFeedbackEventIds,
           attachedScreenshotId: attachedScreenshotRow?.id,
           server: server,
           selectedModel: selectedModel,
@@ -2792,9 +3000,17 @@ class ChatNotifier extends Notifier<ChatState> {
     final chatService = session.chatService;
     final chatParams = ref.read(chatParamsProvider);
 
+    final memoriesSection = await _buildMemoriesSection(state.messages);
     final messagesForApi = continueGeneration
-        ? _buildMessagesForContinue(selectedModel, assistantMessage)
-        : _buildMessagesForApi(selectedModel);
+        ? _buildMessagesForContinue(
+            selectedModel,
+            assistantMessage,
+            memoriesSection: memoriesSection,
+          )
+        : _buildMessagesForApi(
+            selectedModel,
+            memoriesSection: memoriesSection,
+          );
 
     try {
       session.resetStreamMetrics();

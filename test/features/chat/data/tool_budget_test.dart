@@ -132,6 +132,38 @@ void main() {
     });
   });
 
+  group('ToolFailureFeedbackBudget', () {
+    test('allows two failure feedback rounds per tool, then stops', () {
+      final budget = ToolFailureFeedbackBudget();
+      expect(budget.allow('chain', 'web.fetch'), isTrue);
+      budget.record('chain', 'web.fetch');
+      expect(budget.allow('chain', 'web.fetch'), isTrue);
+      budget.record('chain', 'web.fetch');
+      expect(
+        budget.allow('chain', 'web.fetch'),
+        isFalse,
+        reason: 'the model gets two retries, not an endless loop',
+      );
+    });
+
+    test('each tool has its own failure budget', () {
+      final budget = ToolFailureFeedbackBudget();
+      budget.record('chain', 'web.fetch');
+      budget.record('chain', 'web.fetch');
+      expect(budget.allow('chain', 'web.fetch'), isFalse);
+      expect(budget.allow('chain', 'web.search'), isTrue);
+      expect(budget.allow('other', 'web.fetch'), isTrue);
+    });
+
+    test('reset() starts a new turn', () {
+      final budget = ToolFailureFeedbackBudget();
+      budget.record('chain', 'web.fetch');
+      budget.record('chain', 'web.fetch');
+      budget.reset('chain');
+      expect(budget.allow('chain', 'web.fetch'), isTrue);
+    });
+  });
+
   group('web budget failure feedback', () {
     test('failure message carries the exact used/limit copy', () {
       expect(

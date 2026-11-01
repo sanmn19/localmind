@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'
-    show NotificationResponse;
+    show FlutterLocalNotificationsPlugin, NotificationResponse;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -12,9 +12,11 @@ import '../core/providers/app_providers.dart';
 import '../core/providers/highlighter_provider.dart';
 import '../core/providers/storage_providers.dart';
 import '../core/storage/objectbox_store.dart';
+import '../core/widgets/screen_memory_lifecycle_host.dart';
 import '../features/on_device/data/on_device_gemma_service.dart';
 import '../features/on_device/providers/on_device_providers.dart';
 import '../core/models/enums.dart';
+import '../core/routes/app_routes.dart';
 import '../features/personas/providers/personas_providers.dart';
 import '../features/servers/data/models/server.dart';
 import '../features/servers/providers/server_providers.dart';
@@ -160,6 +162,9 @@ class _BootstrapHostState extends State<BootstrapHost> {
 
       _container = container;
       _updateStage(BootstrapStage.done, 'Ready');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_handleNotificationLaunch());
+      });
     } catch (e) {
       _state = BootstrapState(
         stage: BootstrapStage.error,
@@ -189,6 +194,22 @@ class _BootstrapHostState extends State<BootstrapHost> {
     };
   }
 
+  /// A tap that launches the app from a terminated state arrives through the
+  /// plugin's launch details instead of the live callback. Route it through the same
+  /// owner-chat opener.
+  Future<void> _handleNotificationLaunch() async {
+    try {
+      final details = await FlutterLocalNotificationsPlugin()
+          .getNotificationAppLaunchDetails();
+      final ownerId = BgNotificationPayload.tryParse(
+        details?.notificationResponse?.payload,
+      );
+      if (ownerId != null) await _openOwnerChatForBgResult(ownerId);
+    } catch (error) {
+      Log.warning('Notification launch routing failed: $error');
+    }
+  }
+
   /// Opens the owner conversation and scrolls to the active timeline's LAST
   /// row — by contract that is the delivered background result row (the same
   /// resolver the engine anchors with). v1: set active id + scroll target.
@@ -207,6 +228,12 @@ class _BootstrapHostState extends State<BootstrapHost> {
     container
         .read(conv.activeConversationIdProvider.notifier)
         .setActiveConversationId(ownerId);
+    try {
+      container.read(routerProvider).go(AppRoutes.home);
+    } catch (_) {
+      // The router may not be mounted yet on a cold start; the active id is
+      // already set, so the home screen opens the right chat once it mounts.
+    }
 
     final rows = db.messageBox
         .query(MessageEntity_.conversationUid.equals(ownerId))
@@ -254,7 +281,9 @@ class _BootstrapHostState extends State<BootstrapHost> {
         container: _container!,
         child: SafeRiverpodScopeHost(
           container: _container!,
-          child: const CloudSyncLifecycleHost(child: App()),
+          child: const ScreenMemoryLifecycleHost(
+            child: CloudSyncLifecycleHost(child: App()),
+          ),
         ),
       );
     }
