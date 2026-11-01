@@ -235,6 +235,20 @@ WebSearchProvider webSearchProviderFromName(String name) {
   }
 }
 
+/// Registers the built-in [hubMcpServerLabel] server through the Binder
+/// client. The hub app may be missing or refuse the bind; [McpServerManager]
+/// turns that into `false`, so the card stays visible while the tool list stays
+/// empty. On success the tool registry is invalidated so the hub's tools join the
+/// same list the other built-ins feed.
+final hubServerRegistrationProvider = FutureProvider<void>((ref) async {
+  final manager = ref.watch(mcpServerManagerProvider);
+  if (manager.hasHubServer()) return;
+
+  final registered = await manager.addHubServer();
+  if (!ref.mounted) return;
+  if (registered) ref.invalidate(availableToolsProvider);
+});
+
 /// Keeps the in-process local MCP servers in step with their settings.
 ///
 /// A [Provider] only runs while it is being watched, so a UI surface that

@@ -19,6 +19,7 @@ class WebServerRegistrationHost extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(webServerRegistrationProvider);
+    ref.watch(hubServerRegistrationProvider);
     return child;
   }
 }

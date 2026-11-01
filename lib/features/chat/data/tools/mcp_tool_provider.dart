@@ -77,4 +77,5 @@ const localServerManagerUrls = {
   deviceMcpServerUrl,
   bgMcpServerUrl,
   notificationsMcpServerUrl,
+  hubMcpServerUrl,
 };
