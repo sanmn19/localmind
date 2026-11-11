@@ -44,22 +44,34 @@ class S3CloudSyncRepository implements CloudSyncStorage {
   @override
   Future<List<String>> listBackups() async {
     // S3 ListObjectsV2 under the backups prefix; keys are returned sorted.
-    final uri = _objectUri('')
-    .replace(queryParameters: {'list-type': '2', 'prefix': _key('backups/')});
+    final uri = _objectUri(
+      '',
+    ).replace(queryParameters: {'list-type': '2', 'prefix': _key('backups/')});
     final response = await _send(
       AWSHttpRequest.get(uri, headers: {AWSHeaders.host: uri.authority}),
     );
     final body = utf8.decode(response.bodyBytes, allowMalformed: true);
-    final keys = RegExp(r'<Key>([^<]+)</Key>')
-        .allMatches(body)
-        .map((match) => match.group(1)!)
-        .toList()
-      ..sort();
+    final keys = RegExp(
+      r'<Key>([^<]+)</Key>',
+    ).allMatches(body).map((match) => match.group(1)!).toList()..sort();
     return keys;
   }
+
   @override
   String attachmentKey(String identifier) =>
       _key('v1/attachments/$identifier.enc');
+
+  @override
+  bool get requiresLease => false;
+
+  @override
+  Future<CloudSyncLease?> readLease() async => null;
+
+  @override
+  Future<void> writeLease(CloudSyncLease lease) async {}
+
+  @override
+  Future<void> deleteLease() async {}
 
   String _key(String suffix) {
     final prefix = config.prefix.trim().replaceAll(RegExp(r'^/+|/+$'), '');

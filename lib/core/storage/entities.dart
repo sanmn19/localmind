@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../utils/json_safe.dart';
 import 'dart:typed_data';
 import 'package:objectbox/objectbox.dart';
 import '../models/enums.dart';
@@ -513,6 +514,10 @@ class MessageEntity {
   @Property(type: PropertyType.date)
   DateTime createdAt;
 
+  @Index()
+  @Property(type: PropertyType.date)
+  DateTime? updatedAt;
+
   @Property(type: PropertyType.int)
   int statusIndex;
 
@@ -545,6 +550,7 @@ class MessageEntity {
     required this.roleIndex,
     required this.content,
     required this.createdAt,
+    this.updatedAt,
     required this.statusIndex,
     this.modelId,
     this.tokenCount,
@@ -576,6 +582,7 @@ class MessageEntity {
       roleIndex: message.role.index,
       content: message.content,
       createdAt: message.createdAt,
+      updatedAt: message.updatedAt,
       statusIndex: message.status.index,
       modelId: message.modelId,
       tokenCount: message.tokenCount,
@@ -590,13 +597,17 @@ class MessageEntity {
       generationTimeMs: message.generationTimeMs,
       reasoningContent: message.reasoningContent,
       toolCallsJson: message.toolCalls != null
-          ? jsonEncode(message.toolCalls!.map((e) => e.toMap()).toList())
+          ? jsonEncode(
+              message.toolCalls!.map((e) => jsonSafe(e.toMap())).toList(),
+            )
           : null,
       toolCallId: message.toolCallId,
       isProcessing: message.isProcessing,
       toolSessionId: message.toolSessionId,
       toolEventsJson: message.toolEvents != null
-          ? jsonEncode(message.toolEvents!.map((e) => e.toMap()).toList())
+          ? jsonEncode(
+              message.toolEvents!.map((e) => jsonSafe(e.toMap())).toList(),
+            )
           : null,
       variantGroupId: message.variantGroupId,
       variantIndex: message.variantIndex,
@@ -614,6 +625,7 @@ class MessageEntity {
       role: MessageRole.values[roleIndex],
       content: content,
       createdAt: createdAt,
+      updatedAt: updatedAt,
       status: statusIndex >= 0 && statusIndex < MessageStatus.values.length
           ? MessageStatus.values[statusIndex]
           : MessageStatus.values.first,

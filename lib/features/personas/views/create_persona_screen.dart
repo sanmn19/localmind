@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:localmind/l10n/app_localizations.dart';
+import '../../../core/routes/app_routes.dart';
+import '../../../core/routes/desktop_window_scope.dart';
 import '../data/models/persona.dart';
 import '../providers/personas_providers.dart';
 
@@ -144,8 +146,11 @@ class _CreatePersonaScreenState extends ConsumerState<CreatePersonaScreen> {
       if (mounted) {
         final l10n = AppLocalizations.of(context);
         final messenger = ScaffoldMessenger.maybeOf(context);
+        final window = DesktopWindowScope.maybeOf(context);
         hasPopped = true;
-        if (Navigator.canPop(context)) {
+        if (window != null) {
+          window.close();
+        } else if (Navigator.canPop(context)) {
           Navigator.pop(context);
         } else {
           context.pop();
@@ -191,7 +196,8 @@ class _CreatePersonaScreenState extends ConsumerState<CreatePersonaScreen> {
         title: Text(_isEditing ? l10n.edit_persona : l10n.create_persona),
         leading: IconButton(
           icon: const HugeIcon(icon: HugeIcons.strokeRoundedCancel01),
-          onPressed: () => context.pop(),
+          onPressed: () =>
+              DesktopWindowScope.popOrClose(context, AppRoutes.personas),
         ),
         actions: [
           TextButton(

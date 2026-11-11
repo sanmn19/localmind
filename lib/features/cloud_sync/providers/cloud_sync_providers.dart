@@ -9,9 +9,10 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../../core/providers/app_providers.dart';
-import '../../../core/services/google_sign_in_session.dart';
 import '../../../core/providers/storage_providers.dart';
 import '../../../core/services/data_backup_service.dart';
+import '../../../core/services/google_sign_in_session.dart';
+import '../../../core/utils/platform_support.dart';
 import '../../conversations/providers/conversation_providers.dart';
 import '../../personas/providers/personas_providers.dart';
 import '../../saved_messages/providers/saved_message_providers.dart';
@@ -21,11 +22,11 @@ import '../data/repositories/cloud_sync_local_repository.dart';
 import '../data/repositories/google_drive_cloud_sync_repository.dart';
 import '../data/repositories/s3_cloud_sync_repository.dart';
 import '../data/storage/cloud_sync_storage.dart';
+import '../services/cloud_attachment_reference_resolver.dart';
 import '../services/cloud_backup_rotation_service.dart';
-import '../services/google_drive_api.dart';
 import '../services/cloud_sync_crypto_service.dart';
 import '../services/cloud_sync_merge_service.dart';
-import '../services/cloud_attachment_reference_resolver.dart';
+import '../services/google_drive_api.dart';
 
 final cloudSyncLocalRepositoryProvider = Provider<CloudSyncLocalRepository>(
   (ref) => CloudSyncLocalRepository(ref.watch(sharedPreferencesProvider)),
@@ -49,9 +50,39 @@ final cloudSyncControllerProvider =
       CloudSyncController.new,
     );
 
+typedef CloudSyncStorageFactory =
+    CloudSyncStorage Function(
+      S3SyncConfig config,
+      CloudSyncCredentials? credentials,
+    );
+
+/// Builds the backend for a config; overridden in tests to fake the transport.
+final cloudSyncStorageFactoryProvider = Provider<CloudSyncStorageFactory>(
+  (ref) => (config, credentials) {
+    if (config.provider == CloudSyncProviderKind.googleDrive) {
+      return GoogleDriveCloudSyncRepository(
+        api: GoogleDriveApi(
+          Dio(),
+          ({bool interactive = false}) => ref
+              .read(googleSignInSessionProvider)
+              .accessToken(interactive: interactive),
+        ),
+      );
+    }
+    if (credentials == null) {
+      throw const CloudSyncFailure(
+        CloudSyncFailureKind.credentials,
+        'S3 credentials are missing.',
+      );
+    }
+    return S3CloudSyncRepository(config: config, credentials: credentials);
+  },
+);
+
 class CloudSyncController extends Notifier<CloudSyncStatus> {
   Timer? _debounce;
   Timer? _retryTimer;
+  Timer? _periodicPull;
   bool _running = false;
   bool _pending = false;
   bool _applyingRemote = false;
@@ -60,6 +91,8 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
   bool _forceBackup = false;
 
   bool get isApplyingRemote => _applyingRemote;
+
+  bool get isPeriodicPullActive => _periodicPull != null;
 
   CloudSyncLocalRepository get _local =>
       ref.read(cloudSyncLocalRepositoryProvider);
@@ -72,10 +105,14 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
   @override
   CloudSyncStatus build() {
     ref.onDispose(() {
+      stopPeriodicPull();
       _debounce?.cancel();
       _retryTimer?.cancel();
     });
     final config = _local.loadConfig();
+    if (config?.enabled == true && isMacDesktop) {
+      startPeriodicPull();
+    }
     return CloudSyncStatus(
       phase: config?.enabled == true
           ? CloudSyncPhase.ready
@@ -92,30 +129,11 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
   CloudSyncStorage _storageFor(
     S3SyncConfig config,
     CloudSyncCredentials? credentials,
-  ) {
-    if (config.provider == CloudSyncProviderKind.googleDrive) {
-      return GoogleDriveCloudSyncRepository(
-        api: GoogleDriveApi(
-          Dio(),
-          ({bool interactive = false}) =>
-              _googleSession.accessToken(interactive: interactive),
-        ),
-      );
-    }
-    if (credentials == null) {
-      throw const CloudSyncFailure(
-        CloudSyncFailureKind.credentials,
-        'S3 credentials are missing.',
-      );
-    }
-    return S3CloudSyncRepository(config: config, credentials: credentials);
-  }
+  ) => ref.read(cloudSyncStorageFactoryProvider)(config, credentials);
 
   Future<Directory> _rotationRoot(CloudSyncProviderKind provider) async {
     final support = await getApplicationSupportDirectory();
-    return Directory(
-      p.join(support.path, 'cloud-backups', provider.name),
-    );
+    return Directory(p.join(support.path, 'cloud-backups', provider.name));
   }
 
   Future<CloudSyncStorage> testConnectionStorage(
@@ -180,6 +198,8 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
         message: 'Cloud sync enabled.',
       );
       await syncNow(rethrowErrors: true);
+      if (!ref.mounted) return;
+      if (isMacDesktop) startPeriodicPull();
     } catch (error) {
       if (ref.mounted) {
         state = state.copyWith(
@@ -195,6 +215,18 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
     if (_applyingRemote || config?.enabled != true) return;
     _debounce?.cancel();
     _debounce = Timer(delay, () => unawaited(syncNow()));
+  }
+
+  /// Pulls on a timer while the desktop app stays open, so remote edits from
+  /// other devices arrive without waiting for a resume or a local edit.
+  void startPeriodicPull({Duration interval = const Duration(seconds: 30)}) {
+    _periodicPull?.cancel();
+    _periodicPull = Timer.periodic(interval, (_) => unawaited(syncNow()));
+  }
+
+  void stopPeriodicPull() {
+    _periodicPull?.cancel();
+    _periodicPull = null;
   }
 
   Future<void> syncNow({bool rethrowErrors = false}) async {
@@ -301,6 +333,8 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
       ref.read(databaseProvider).store,
       ref.read(settingsProvider).toJson(),
     );
+    final now = DateTime.now().toUtc();
+    final settingsChangedAt = await _settingsChangedAt(payload, journal, now);
     final warnings = <String>[];
     await _prepareAttachments(
       payload,
@@ -317,27 +351,14 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
     final local = CloudSyncSnapshot(
       deviceId: deviceId,
       revision: revision,
-      updatedAt: DateTime.now().toUtc(),
+      updatedAt: now,
       payload: payload,
       tombstones: _buildTombstones(payload, journal),
+      settingsChangedAt: settingsChangedAt,
     );
 
     for (var attempt = 0; attempt < 3; attempt++) {
       _ensureActive(generation);
-      if (config.provider == CloudSyncProviderKind.googleDrive &&
-          repository is GoogleDriveCloudSyncRepository) {
-        final now = DateTime.now().toUtc();
-        final lease = await repository.readLease();
-        if (repository.isLeaseHeldByOther(lease, deviceId, now)) {
-          throw const CloudSyncFailure(
-            CloudSyncFailureKind.conflict,
-            'Another device is syncing. Try again when it finishes.',
-          );
-        }
-        await repository.writeLease(
-          CloudSyncLease(deviceId: deviceId, heartbeatAt: now),
-        );
-      }
       final remoteObject = await repository.readState();
       _ensureActive(generation);
       if (remoteObject != null && remoteObject.etag == null) {
@@ -369,40 +390,48 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
           result.snapshot.payload,
         );
         var etag = remoteObject?.etag;
-        if (remoteHash != mergedStateHash || remote == null) {
-          _ensureActive(generation);
-          if (remoteObject != null) {
-            final now = DateTime.now().toUtc();
-            final lastBackup = DateTime.tryParse(
-              journal['lastBackupAt'] as String? ?? '',
-            );
-            if (_forceBackup ||
-                lastBackup == null ||
-                now.difference(lastBackup) >=
-                    CloudBackupRotationService.minimumInterval) {
-              _forceBackup = false;
-              final root = await _rotationRoot(config.provider);
-              await CloudBackupRotationService(localRoot: root)
-                  .rotateBeforeWrite(
-                    storage: repository,
-                    existingState: remoteObject.bytes,
-                    now: now,
-                  );
-              journal['lastBackupAt'] = now.toIso8601String();
+        // A read-only pull leaves the state object (and the write lease) alone.
+        if (remote == null || remoteHash != mergedStateHash) {
+          final leased = await _acquireLease(repository, deviceId);
+          try {
+            _ensureActive(generation);
+            if (remoteObject != null) {
+              final writeNow = DateTime.now().toUtc();
+              final lastBackup = DateTime.tryParse(
+                journal['lastBackupAt'] as String? ?? '',
+              );
+              if (CloudBackupRotationService.shouldRotate(
+                forced: _forceBackup,
+                lastBackupAt: lastBackup,
+                now: writeNow,
+              )) {
+                _forceBackup = false;
+                final root = await _rotationRoot(config.provider);
+                await CloudBackupRotationService(
+                  localRoot: root,
+                ).rotateBeforeWrite(
+                  storage: repository,
+                  existingState: remoteObject.bytes,
+                  now: writeNow,
+                );
+                journal['lastBackupAt'] = writeNow.toIso8601String();
+              }
             }
+            final encrypted = await _crypto.encryptState(
+              utf8.encode(result.snapshot.encode()),
+              masterKey: masterKey,
+              salt: salt,
+            );
+            etag = await repository.writeObject(
+              repository.stateKey,
+              encrypted,
+              expectedEtag: remoteObject?.etag,
+              createOnly: remoteObject == null,
+            );
+            _ensureActive(generation);
+          } finally {
+            if (leased) await _releaseLease(repository);
           }
-          final encrypted = await _crypto.encryptState(
-            utf8.encode(result.snapshot.encode()),
-            masterKey: masterKey,
-            salt: salt,
-          );
-          etag = await repository.writeObject(
-            repository.stateKey,
-            encrypted,
-            expectedEtag: remoteObject?.etag,
-            createOnly: remoteObject == null,
-          );
-          _ensureActive(generation);
         }
         _ensureActive(generation);
         await _applySnapshot(
@@ -413,14 +442,19 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
           generation,
         );
         _ensureActive(generation);
-        final now = DateTime.now().toUtc();
+        final savedAt = DateTime.now().toUtc();
         await _local.saveJournal({
           'localRevision': result.snapshot.revision,
           'remoteRevision': result.snapshot.revision,
           'remoteDeviceId': result.snapshot.deviceId,
           'payloadHash': mergedPayloadHash,
+          'settingsHash': await _merge.fingerprint({
+            'settings': payload['settings'] ?? const <String, dynamic>{},
+          }),
+          'settingsChangedAt': settingsChangedAt.toIso8601String(),
           'etag': etag,
-          'lastSyncedAt': now.toIso8601String(),
+          'lastSyncedAt': savedAt.toIso8601String(),
+          'lastBackupAt': ?journal['lastBackupAt'],
           'ids': _snapshotIds(result.snapshot.payload),
           'recordHashes': await _merge.recordHashes(result.snapshot.payload),
           'tombstones': result.snapshot.tombstones,
@@ -437,21 +471,57 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
     return warnings;
   }
 
-  Map<String, dynamic> _buildTombstones(
+  /// Retains tombstones for this long so peers can still learn about deletes.
+  static const _tombstoneRetention = Duration(days: 30);
+
+  /// Tombstones without a time (legacy lists) predate this change.
+  static final _legacyTombstoneTime = DateTime.utc(1970).toIso8601String();
+  static final _legacyTombstoneCutoff = DateTime.utc(1970);
+
+  @visibleForTesting
+  static Map<String, Map<String, String>> debugBuildTombstones(
+    Map<String, dynamic> payload,
+    Map<String, dynamic> journal,
+  ) => _buildTombstones(payload, journal);
+
+  static Map<String, Map<String, String>> _buildTombstones(
     Map<String, dynamic> payload,
     Map<String, dynamic> journal,
   ) {
+    final now = DateTime.now().toUtc();
+    final deletedAt = now.toIso8601String();
+    final cutoff = now.subtract(_tombstoneRetention);
     final previous = journal['ids'] is Map
         ? Map<String, dynamic>.from(journal['ids'] as Map)
         : const <String, dynamic>{};
     final current = _snapshotIds(payload);
-    final result = <String, dynamic>{
-      if (journal['tombstones'] is Map)
-        for (final entry in (journal['tombstones'] as Map).entries)
-          entry.key.toString(): entry.value is List
-              ? List<String>.from((entry.value as List).whereType<String>())
-              : <String>[],
-    };
+    final result = <String, Map<String, String>>{};
+    final retained = journal['tombstones'];
+    if (retained is Map) {
+      for (final entry in retained.entries) {
+        if (!current.containsKey(entry.key)) continue;
+        final ids = <String, String>{};
+        final value = entry.value;
+        if (value is Map) {
+          for (final tombstone in value.entries) {
+            if (tombstone.key is! String || tombstone.value is! String) {
+              continue;
+            }
+            final at = DateTime.tryParse(tombstone.value as String);
+            if (at == null) continue;
+            if (at.isAfter(_legacyTombstoneCutoff) && at.isBefore(cutoff)) {
+              continue;
+            }
+            ids[tombstone.key as String] = tombstone.value as String;
+          }
+        } else if (value is List) {
+          for (final id in value.whereType<String>()) {
+            ids[id] = _legacyTombstoneTime;
+          }
+        }
+        if (ids.isNotEmpty) result[entry.key as String] = ids;
+      }
+    }
     for (final collection in current.keys) {
       final oldIds = previous[collection] is List
           ? (previous[collection] as List).whereType<String>().toSet()
@@ -460,18 +530,16 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
           .whereType<String>()
           .toSet();
       final deleted = oldIds.difference(currentIds);
-      if (deleted.isNotEmpty) {
-        final cumulative =
-            (result[collection] as List?)?.whereType<String>().toSet() ??
-            <String>{};
-        cumulative.addAll(deleted);
-        result[collection] = cumulative.toList();
+      if (deleted.isEmpty) continue;
+      final ids = result[collection] ??= <String, String>{};
+      for (final id in deleted) {
+        ids.putIfAbsent(id, () => deletedAt);
       }
     }
     return result;
   }
 
-  Map<String, dynamic> _snapshotIds(Map<String, dynamic> payload) => {
+  static Map<String, dynamic> _snapshotIds(Map<String, dynamic> payload) => {
     for (final collection in const [
       'conversations',
       'messages',
@@ -504,6 +572,72 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
         CloudSyncFailureKind.cancelled,
         'Cloud sync was cancelled.',
       );
+    }
+  }
+
+  /// Settings have their own change clock: the snapshot stamp moves on every
+  /// sync, so resolving settings by it would always hand the win to whichever
+  /// device synced last.
+  static final _unknownSettingsTime = DateTime.utc(1970);
+
+  Future<DateTime> _settingsChangedAt(
+    Map<String, dynamic> payload,
+    Map<String, dynamic> journal,
+    DateTime now,
+  ) async {
+    final hash = await _merge.fingerprint({
+      'settings': payload['settings'] ?? const <String, dynamic>{},
+    });
+    final previousHash = journal['settingsHash'];
+    if (previousHash is String && previousHash != hash) return now;
+    return DateTime.tryParse(journal['settingsChangedAt'] as String? ?? '') ??
+        _unknownSettingsTime;
+  }
+
+  /// Takes the single-writer lease when the backend needs one. Returns whether
+  /// this call holds it, so only an acquired lease is released afterwards.
+  Future<bool> _acquireLease(
+    CloudSyncStorage repository,
+    String deviceId,
+  ) async {
+    if (!repository.requiresLease) return false;
+    final now = DateTime.now().toUtc();
+    final lease = await repository.readLease();
+    if (lease != null && lease.isHeldByOther(deviceId, now)) {
+      throw const CloudSyncFailure(
+        CloudSyncFailureKind.conflict,
+        'Another device is syncing. Try again when it finishes.',
+      );
+    }
+    await repository.writeLease(
+      CloudSyncLease(deviceId: deviceId, heartbeatAt: now),
+    );
+    return true;
+  }
+
+  /// Clears the lease after a write, even a failed one, so the next device does
+  /// not have to wait for the heartbeat to expire.
+  Future<void> _releaseLease(CloudSyncStorage repository) async {
+    try {
+      await repository.deleteLease();
+    } catch (_) {
+      // A lease left behind expires on its own; the sync result is what counts.
+    }
+  }
+
+  /// Drops a lease this device still holds on disconnect.
+  Future<void> _releaseOwnedLease(S3SyncConfig config) async {
+    if (config.provider != CloudSyncProviderKind.googleDrive) return;
+    try {
+      final storage = _storageFor(config, null);
+      if (!storage.requiresLease) return;
+      final lease = await storage.readLease();
+      if (lease == null || lease.deviceId != _local.getOrCreateDeviceId()) {
+        return;
+      }
+      await storage.deleteLease();
+    } catch (_) {
+      // Best effort: an orphaned lease expires after its TTL anyway.
     }
   }
 
@@ -711,8 +845,8 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
           '=',
         );
         final decodedName = utf8.decode(base64Url.decode(padded));
-        final localName = cloudAttachmentLocalName(identifier, decodedName);
-        final destination = File(p.join(dir.path, localName));
+        final safeName = p.basename(decodedName);
+        final destination = File(p.join(dir.path, '$identifier-$safeName'));
         if (!await destination.exists()) {
           final remote = await repository.readObject(
             repository.attachmentKey(identifier),
@@ -759,16 +893,6 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
     );
   }
 
-  Future<void> disconnectGoogle() async {
-    _operationGeneration++;
-    _debounce?.cancel();
-    _retryTimer?.cancel();
-    await _googleSession.disconnect();
-    await _local.disconnect(provider: CloudSyncProviderKind.googleDrive);
-    if (!ref.mounted) return;
-    state = const CloudSyncStatus();
-  }
-
   /// Forces the next upload to rotate a backup even inside the hourly window.
   Future<void> backUpNow() async {
     _forceBackup = true;
@@ -777,9 +901,20 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
 
   Future<void> disconnect() async {
     _operationGeneration++;
+    stopPeriodicPull();
+    _pending = false;
     _debounce?.cancel();
     _retryTimer?.cancel();
-    await _local.disconnect(provider: config?.provider);
+    final config = _local.loadConfig();
+    final provider = config?.provider;
+    if (config != null) await _releaseOwnedLease(config);
+    // Disconnecting Drive signs the shared Google session out too (design:
+    // Mail and Drive share one account); S3 keeps no session to clear.
+    if (provider == CloudSyncProviderKind.googleDrive) {
+      await _googleSession.disconnect();
+    }
+    await _local.disconnect(provider: provider);
+    if (!ref.mounted) return;
     state = const CloudSyncStatus();
   }
 }
