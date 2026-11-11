@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import '../../../../core/utils/json_safe.dart';
+
 import '../../../../core/models/enums.dart';
 import '../tools/tool_event.dart';
 
@@ -148,8 +150,8 @@ class ToolCallData {
     return {
       'id': id,
       'toolName': toolName,
-      'arguments': arguments,
-      'result': result,
+      'arguments': jsonSafe(arguments),
+      'result': jsonSafe(result),
     };
   }
 

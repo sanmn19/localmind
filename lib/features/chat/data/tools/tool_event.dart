@@ -1,3 +1,4 @@
+import '../../../../core/utils/json_safe.dart';
 import 'tool_definition.dart';
 
 enum ToolEventStatus {
@@ -58,9 +59,9 @@ class ToolEvent {
       'toolName': toolName,
       'providerType': providerType.name,
       'providerRef': providerRef,
-      'arguments': arguments,
-      'result': result,
-      'error': error,
+      'arguments': jsonSafe(arguments),
+      'result': jsonSafe(result),
+      'error': jsonSafe(error),
       'durationMs': durationMs,
     };
   }
