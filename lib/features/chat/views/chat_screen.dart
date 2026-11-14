@@ -18,6 +18,7 @@ import 'package:localmind/features/personas/providers/personas_providers.dart';
 import 'package:localmind/features/servers/providers/server_providers.dart';
 import 'package:localmind/features/tts/views/components/tts_player_bar.dart';
 import '../data/export_service.dart';
+import '../data/tool_approval_policy.dart';
 import '../providers/chat_providers.dart';
 import '../providers/fork_panel_overlay.dart';
 import 'components/notification_permission_banner.dart';
@@ -205,7 +206,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     setState(() => _isApprovalDialogOpen = true);
     final l10n = AppLocalizations.of(context)!;
 
-    showShadDialog<bool>(
+    showShadDialog<ToolApprovalDecision>(
       context: context,
       barrierDismissible: false,
       builder: (context) => ShadDialog.alert(
@@ -236,13 +237,34 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
           ],
         ),
         actions: [
-          ShadButton.outline(
-            child: Text(l10n.reject),
-            onPressed: () => Navigator.of(context).pop(false),
-          ),
-          ShadButton(
-            child: Text(l10n.approve),
-            onPressed: () => Navigator.of(context).pop(true),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.end,
+            children: [
+              ShadButton.outline(
+                child: Text(l10n.reject),
+                onPressed: () =>
+                    Navigator.of(context).pop(ToolApprovalDecision.deny),
+              ),
+              ShadButton.outline(
+                child: Text(l10n.approve),
+                onPressed: () =>
+                    Navigator.of(context).pop(ToolApprovalDecision.once),
+              ),
+              ShadButton.outline(
+                child: Text(l10n.tool_approval_always_chat),
+                onPressed: () => Navigator.of(
+                  context,
+                ).pop(ToolApprovalDecision.alwaysChat),
+              ),
+              ShadButton(
+                child: Text(l10n.tool_approval_always_global),
+                onPressed: () => Navigator.of(
+                  context,
+                ).pop(ToolApprovalDecision.alwaysGlobal),
+              ),
+            ],
           ),
         ],
       ),
@@ -252,7 +274,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       // "Using 'ref' when a widget is about to or has been unmounted is unsafe".
       if (!mounted) return;
       setState(() => _isApprovalDialogOpen = false);
-      ref.read(chatProvider.notifier).approveTool(value ?? false);
+      ref
+          .read(chatProvider.notifier)
+          .approveToolDecision(
+            approval.id,
+            value ?? ToolApprovalDecision.deny,
+          );
     });
   }
 }

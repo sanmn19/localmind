@@ -123,7 +123,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // The consolidated card renders above the final answer...
-    expect(find.text('Web activity'), findsOneWidget);
+    expect(find.text('Tool calls'), findsOneWidget);
     expect(find.text(_chainTailContent), findsOneWidget);
     // ...and the per-round tool-result bubble is gone.
     expect(find.byType(ToolBubble), findsNothing);
@@ -172,7 +172,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Web activity'), findsNothing);
+    expect(find.text('Tool calls'), findsNothing);
     expect(find.byType(ToolBubble), findsOneWidget);
     expect(find.text('orphan result text'), findsOneWidget);
     expect(find.text('a plain answer'), findsOneWidget);
