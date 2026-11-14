@@ -31,6 +31,7 @@ import '../features/conversations/providers/conversation_providers.dart'
 import '../features/skills/data/skills_provider.dart';
 import '../features/cloud_sync/views/cloud_sync_lifecycle_host.dart';
 import '../core/logger/app_logger.dart';
+import '../core/services/notification_tap_router.dart';
 import '../core/utils/locale_utils.dart';
 import '../features/ask_local/data/ask_local_main_channel.dart';
 import '../objectbox.g.dart';
@@ -222,6 +223,9 @@ class _BootstrapHostState extends State<BootstrapHost> {
         // The router may not be mounted yet; the active id is already set.
       }
     };
+    NotificationTapRouter.onBackgroundTap =
+        BackgroundResultNotifier.onNotificationTap;
+    NotificationTapRouter.onToolApprovalTap = ToolApprovalNotifier.onAction;
   }
 
   /// A tap that launches the app from a terminated state arrives through the
