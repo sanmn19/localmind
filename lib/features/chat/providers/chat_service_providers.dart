@@ -14,6 +14,7 @@ import 'package:localmind/features/on_device/data/models/on_device_model.dart';
 import 'package:localmind/features/on_device/data/on_device_mlx_service.dart';
 import '../data/chat_service.dart';
 import '../data/smart_reply_service.dart';
+import '../data/chat_completion_notifier.dart';
 import '../data/title_generation_service.dart';
 
 final chatServiceProvider = Provider<ChatService?>((ref) {
@@ -116,3 +117,7 @@ final smartReplyServiceProvider = Provider<SmartReplyService>((ref) {
 final titleGenerationServiceProvider = Provider<TitleGenerationService>((ref) {
   return TitleGenerationService();
 });
+
+final chatCompletionNotifierProvider = Provider<ChatCompletionNotifier>(
+  (ref) => ChatCompletionNotifier(),
+);
