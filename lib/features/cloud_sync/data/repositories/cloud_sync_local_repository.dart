@@ -41,8 +41,12 @@ class CloudSyncLocalRepository {
     }
   }
 
-  Future<void> saveConfig(S3SyncConfig config) =>
-      _preferences.setString(_configKey, jsonEncode(config.toJson()));
+  /// Writes the v2 config and drops the pre-port v1 key, so a later
+  /// [disconnect] cannot resurrect the old backend through the fallback.
+  Future<void> saveConfig(S3SyncConfig config) async {
+    await _preferences.setString(_configKey, jsonEncode(config.toJson()));
+    await _preferences.remove(_legacyConfigKey);
+  }
 
   String _masterKeyKey(CloudSyncProviderKind provider) =>
       'cloudSync.${provider.name}.masterKey.v1';
@@ -78,7 +82,10 @@ class CloudSyncLocalRepository {
       ),
       if (provider == CloudSyncProviderKind.s3 && credentials != null) ...[
         _secureStorage.write(key: _accessKey, value: credentials.accessKeyId),
-        _secureStorage.write(key: _secretKey, value: credentials.secretAccessKey),
+        _secureStorage.write(
+          key: _secretKey,
+          value: credentials.secretAccessKey,
+        ),
         if (credentials.sessionToken?.isNotEmpty == true)
           _secureStorage.write(
             key: _sessionKey,
@@ -91,7 +98,8 @@ class CloudSyncLocalRepository {
   }
 
   Future<List<int>?> loadMasterKey(CloudSyncProviderKind provider) async {
-    final value = await _secureStorage.read(key: _masterKeyKey(provider)) ??
+    final value =
+        await _secureStorage.read(key: _masterKeyKey(provider)) ??
         (provider == CloudSyncProviderKind.s3
             ? await _secureStorage.read(key: _masterKey)
             : null);
@@ -99,7 +107,8 @@ class CloudSyncLocalRepository {
   }
 
   Future<List<int>?> loadSalt(CloudSyncProviderKind provider) async {
-    final value = await _secureStorage.read(key: _saltKeyFor(provider)) ??
+    final value =
+        await _secureStorage.read(key: _saltKeyFor(provider)) ??
         (provider == CloudSyncProviderKind.s3
             ? await _secureStorage.read(key: _saltKey)
             : null);
@@ -157,6 +166,7 @@ class CloudSyncLocalRepository {
   Future<void> disconnect({CloudSyncProviderKind? provider}) async {
     final active = loadConfig()?.provider;
     await _preferences.remove(_configKey);
+    await _preferences.remove(_legacyConfigKey);
     await _preferences.remove(_journalKey);
     await _preferences.remove(_lastSyncKey);
     final journal = await _journalFile();

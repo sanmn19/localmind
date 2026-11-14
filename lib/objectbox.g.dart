@@ -213,7 +213,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(2, 196881068437544233),
     name: 'MessageEntity',
-    lastPropertyId: const obx_int.IdUid(29, 6028398201373029019),
+    lastPropertyId: const obx_int.IdUid(30, 5637926539220219208),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -394,6 +394,13 @@ final _entities = <obx_int.ModelEntity>[
         name: 'contentTokenCount',
         type: 6,
         flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(30, 5637926539220219208),
+        name: 'updatedAt',
+        type: 10,
+        flags: 8,
+        indexId: const obx_int.IdUid(20, 5245853774246854643),
       ),
     ],
     relations: <obx_int.ModelRelation>[],
@@ -933,44 +940,44 @@ final _entities = <obx_int.ModelEntity>[
     backlinks: <obx_int.ModelBacklink>[],
   ),
   obx_int.ModelEntity(
-    id: const obx_int.IdUid(11, 344570830110125797),
+    id: const obx_int.IdUid(11, 7326596530697461456),
     name: 'MemoryEmbeddingEntity',
-    lastPropertyId: const obx_int.IdUid(6, 1741312766451779504),
+    lastPropertyId: const obx_int.IdUid(6, 7994390061756191836),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(1, 3739910779584128296),
+        id: const obx_int.IdUid(1, 1318885386255397339),
         name: 'internalId',
         type: 6,
         flags: 1,
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(2, 7592414719667282777),
+        id: const obx_int.IdUid(2, 1992239900378803240),
         name: 'memoryId',
         type: 9,
         flags: 2048,
-        indexId: const obx_int.IdUid(20, 4064235471376385509),
+        indexId: const obx_int.IdUid(21, 5475649097999969627),
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(3, 104906701710319834),
+        id: const obx_int.IdUid(3, 4091045077941235970),
         name: 'modelId',
         type: 9,
         flags: 0,
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(4, 1761409342601601762),
+        id: const obx_int.IdUid(4, 8829125956212780272),
         name: 'dims',
         type: 6,
         flags: 0,
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(5, 4325817375072488009),
+        id: const obx_int.IdUid(5, 6015547198507428457),
         name: 'vector',
         type: 28,
         flags: 0,
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(6, 1741312766451779504),
+        id: const obx_int.IdUid(6, 7994390061756191836),
         name: 'createdAt',
         type: 10,
         flags: 0,
@@ -980,122 +987,122 @@ final _entities = <obx_int.ModelEntity>[
     backlinks: <obx_int.ModelBacklink>[],
   ),
   obx_int.ModelEntity(
-    id: const obx_int.IdUid(12, 1157530772597595285),
+    id: const obx_int.IdUid(12, 3375136275410153944),
     name: 'MemoryEntity',
-    lastPropertyId: const obx_int.IdUid(19, 2641398600035886234),
+    lastPropertyId: const obx_int.IdUid(19, 2977409380215110752),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(1, 6626835057537217192),
+        id: const obx_int.IdUid(1, 4913553659918113458),
         name: 'internalId',
         type: 6,
         flags: 1,
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(2, 4373282373379323540),
+        id: const obx_int.IdUid(2, 7042691655291193566),
         name: 'id',
         type: 9,
         flags: 2048,
-        indexId: const obx_int.IdUid(21, 2012758969991147949),
+        indexId: const obx_int.IdUid(22, 2273443780077385363),
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(3, 4550052434022580920),
+        id: const obx_int.IdUid(3, 5394145847872210561),
         name: 'kindIndex',
         type: 6,
         flags: 0,
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(4, 2033625437709155446),
+        id: const obx_int.IdUid(4, 4072915710769237920),
         name: 'title',
         type: 9,
         flags: 0,
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(5, 5852007063018317528),
+        id: const obx_int.IdUid(5, 358014542648742725),
         name: 'content',
         type: 9,
         flags: 0,
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(6, 3506563999153151734),
+        id: const obx_int.IdUid(6, 2614263382429031333),
         name: 'importance',
         type: 6,
         flags: 0,
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(7, 9149886955336759779),
+        id: const obx_int.IdUid(7, 5459770799785992601),
         name: 'createdAt',
         type: 10,
         flags: 0,
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(8, 3380424357586532831),
+        id: const obx_int.IdUid(8, 7686592443200875926),
         name: 'updatedAt',
         type: 10,
         flags: 0,
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(9, 5339625394738406733),
+        id: const obx_int.IdUid(9, 2803273495768887286),
         name: 'lastUsedAt',
         type: 10,
         flags: 0,
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(10, 8918486341619991709),
+        id: const obx_int.IdUid(10, 95247497448995612),
         name: 'useCount',
         type: 6,
         flags: 0,
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(11, 9003486325753782994),
-        name: 'sourceConversationId',
-        type: 9,
-        flags: 0,
-      ),
-      obx_int.ModelProperty(
-        id: const obx_int.IdUid(12, 3570397396766524340),
-        name: 'sourceMessageId',
-        type: 9,
-        flags: 0,
-      ),
-      obx_int.ModelProperty(
-        id: const obx_int.IdUid(13, 3280964599812132135),
-        name: 'supersededById',
-        type: 9,
-        flags: 0,
-      ),
-      obx_int.ModelProperty(
-        id: const obx_int.IdUid(14, 991201696784785310),
-        name: 'archived',
-        type: 1,
-        flags: 0,
-      ),
-      obx_int.ModelProperty(
-        id: const obx_int.IdUid(15, 6525833735150016625),
+        id: const obx_int.IdUid(11, 5672890281664379827),
         name: 'scopeConversationId',
         type: 9,
         flags: 0,
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(16, 2128569499334731958),
+        id: const obx_int.IdUid(12, 231888134091839333),
+        name: 'sourceConversationId',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(13, 1894896516869187480),
+        name: 'sourceMessageId',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(14, 3270790806575475726),
+        name: 'supersededById',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(15, 2959073338060711381),
+        name: 'archived',
+        type: 1,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(16, 7392434546239665992),
         name: 'tags',
         type: 30,
         flags: 0,
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(17, 5707979345040627879),
+        id: const obx_int.IdUid(17, 5212829434779572845),
         name: 'shortSummary',
         type: 9,
         flags: 0,
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(18, 423563684729519270),
+        id: const obx_int.IdUid(18, 9130760849577381186),
         name: 'expiresAt',
         type: 10,
         flags: 0,
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(19, 2641398600035886234),
+        id: const obx_int.IdUid(19, 2977409380215110752),
         name: 'sourceApp',
         type: 9,
         flags: 0,
@@ -1105,94 +1112,94 @@ final _entities = <obx_int.ModelEntity>[
     backlinks: <obx_int.ModelBacklink>[],
   ),
   obx_int.ModelEntity(
-    id: const obx_int.IdUid(13, 8613029486712728898),
+    id: const obx_int.IdUid(13, 8779895219575169718),
     name: 'MemoryRelationEntity',
-    lastPropertyId: const obx_int.IdUid(6, 5210792842061974525),
+    lastPropertyId: const obx_int.IdUid(6, 6206543223682175757),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(1, 1878717035168539030),
+        id: const obx_int.IdUid(1, 380557380285178797),
         name: 'internalId',
         type: 6,
         flags: 1,
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(2, 3443386797861147441),
+        id: const obx_int.IdUid(2, 5617852484246172287),
+        name: 'id',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(23, 8239284284158429181),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 4796288025467901580),
         name: 'fromMemoryId',
         type: 9,
         flags: 2048,
-        indexId: const obx_int.IdUid(22, 8338107769014504188),
+        indexId: const obx_int.IdUid(24, 8851896788023619408),
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(3, 7186694290044862110),
+        id: const obx_int.IdUid(4, 2273577849118893074),
         name: 'toMemoryId',
         type: 9,
         flags: 2048,
-        indexId: const obx_int.IdUid(23, 2622125567475855692),
+        indexId: const obx_int.IdUid(25, 2608168778741755093),
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(4, 419881938285970356),
+        id: const obx_int.IdUid(5, 5109990009779710788),
         name: 'label',
         type: 9,
         flags: 0,
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(5, 7047900427854367103),
+        id: const obx_int.IdUid(6, 6206543223682175757),
         name: 'createdAt',
         type: 10,
         flags: 0,
-      ),
-      obx_int.ModelProperty(
-        id: const obx_int.IdUid(6, 5210792842061974525),
-        name: 'id',
-        type: 9,
-        flags: 2048,
-        indexId: const obx_int.IdUid(24, 3734785072290076025),
       ),
     ],
     relations: <obx_int.ModelRelation>[],
     backlinks: <obx_int.ModelBacklink>[],
   ),
   obx_int.ModelEntity(
-    id: const obx_int.IdUid(14, 7290961308421388323),
+    id: const obx_int.IdUid(14, 7621503397536551979),
     name: 'ScreenSampleEntity',
-    lastPropertyId: const obx_int.IdUid(6, 1543794969499748401),
+    lastPropertyId: const obx_int.IdUid(6, 3457558821385429129),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(1, 2914463186436894855),
+        id: const obx_int.IdUid(1, 5360258966182298318),
         name: 'internalId',
         type: 6,
         flags: 1,
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(2, 3749610397584863900),
+        id: const obx_int.IdUid(2, 5331460332643780904),
         name: 'capturedAt',
         type: 10,
         flags: 0,
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(3, 8785051406051049327),
+        id: const obx_int.IdUid(3, 5428265323556700716),
         name: 'packageName',
         type: 9,
         flags: 2048,
-        indexId: const obx_int.IdUid(25, 7334307555973898391),
+        indexId: const obx_int.IdUid(26, 2870655181667065811),
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(4, 5001260089664176565),
+        id: const obx_int.IdUid(4, 5886882581571980488),
         name: 'text',
         type: 9,
         flags: 0,
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(5, 622846149103655308),
+        id: const obx_int.IdUid(5, 3336317791889565851),
         name: 'hash',
         type: 9,
         flags: 2048,
-        indexId: const obx_int.IdUid(26, 3638442091653412889),
+        indexId: const obx_int.IdUid(27, 1481975324047598380),
       ),
       obx_int.ModelProperty(
-        id: const obx_int.IdUid(6, 1543794969499748401),
+        id: const obx_int.IdUid(6, 3457558821385429129),
         name: 'processedAt',
         type: 10,
         flags: 0,
@@ -1246,8 +1253,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
     // Typically, this is done with `dart run build_runner build`.
     generatorVersion: obx_int.GeneratorVersion.v2025_12_16,
     entities: _entities,
-    lastEntityId: const obx_int.IdUid(14, 7290961308421388323),
-    lastIndexId: const obx_int.IdUid(26, 3638442091653412889),
+    lastEntityId: const obx_int.IdUid(14, 7621503397536551979),
+    lastIndexId: const obx_int.IdUid(27, 1481975324047598380),
     lastRelationId: const obx_int.IdUid(0, 0),
     lastSequenceId: const obx_int.IdUid(0, 0),
     retiredEntityUids: const [],
@@ -1558,7 +1565,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final stopReasonOffset = object.stopReason == null
             ? null
             : fbb.writeString(object.stopReason!);
-        fbb.startTable(30);
+        fbb.startTable(31);
         fbb.addInt64(0, object.internalId);
         fbb.addOffset(1, idOffset);
         fbb.addInt64(2, object.conversation.targetId);
@@ -1588,12 +1595,18 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addInt64(26, object.ttftMs);
         fbb.addOffset(27, stopReasonOffset);
         fbb.addInt64(28, object.contentTokenCount);
+        fbb.addInt64(29, object.updatedAt?.millisecondsSinceEpoch);
         fbb.finish(fbb.endTable());
         return object.internalId;
       },
       objectFromFB: (obx.Store store, ByteData fbData) {
         final buffer = fb.BufferContext(fbData);
         final rootOffset = buffer.derefObject(0);
+        final updatedAtValue = const fb.Int64Reader().vTableGetNullable(
+          buffer,
+          rootOffset,
+          62,
+        );
         final internalIdParam = const fb.Int64Reader().vTableGet(
           buffer,
           rootOffset,
@@ -1618,6 +1631,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final createdAtParam = DateTime.fromMillisecondsSinceEpoch(
           const fb.Int64Reader().vTableGet(buffer, rootOffset, 16, 0),
         );
+        final updatedAtParam = updatedAtValue == null
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(updatedAtValue);
         final statusIndexParam = const fb.Int32Reader().vTableGet(
           buffer,
           rootOffset,
@@ -1718,6 +1734,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           roleIndex: roleIndexParam,
           content: contentParam,
           createdAt: createdAtParam,
+          updatedAt: updatedAtParam,
           statusIndex: statusIndexParam,
           modelId: modelIdParam,
           tokenCount: tokenCountParam,
@@ -2513,6 +2530,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final idOffset = fbb.writeString(object.id);
         final titleOffset = fbb.writeString(object.title);
         final contentOffset = fbb.writeString(object.content);
+        final scopeConversationIdOffset = object.scopeConversationId == null
+            ? null
+            : fbb.writeString(object.scopeConversationId!);
         final sourceConversationIdOffset = object.sourceConversationId == null
             ? null
             : fbb.writeString(object.sourceConversationId!);
@@ -2522,9 +2542,6 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final supersededByIdOffset = object.supersededById == null
             ? null
             : fbb.writeString(object.supersededById!);
-        final scopeConversationIdOffset = object.scopeConversationId == null
-            ? null
-            : fbb.writeString(object.scopeConversationId!);
         final tagsOffset = fbb.writeList(
           object.tags.map(fbb.writeString).toList(growable: false),
         );
@@ -2543,11 +2560,11 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addInt64(7, object.updatedAt.millisecondsSinceEpoch);
         fbb.addInt64(8, object.lastUsedAt?.millisecondsSinceEpoch);
         fbb.addInt64(9, object.useCount);
-        fbb.addOffset(10, sourceConversationIdOffset);
-        fbb.addOffset(11, sourceMessageIdOffset);
-        fbb.addOffset(12, supersededByIdOffset);
-        fbb.addBool(13, object.archived);
-        fbb.addOffset(14, scopeConversationIdOffset);
+        fbb.addOffset(10, scopeConversationIdOffset);
+        fbb.addOffset(11, sourceConversationIdOffset);
+        fbb.addOffset(12, sourceMessageIdOffset);
+        fbb.addOffset(13, supersededByIdOffset);
+        fbb.addBool(14, object.archived);
         fbb.addOffset(15, tagsOffset);
         fbb.addOffset(16, shortSummaryOffset);
         fbb.addInt64(17, object.expiresAt?.millisecondsSinceEpoch);
@@ -2612,20 +2629,20 @@ obx_int.ModelDefinition getObjectBoxModel() {
         );
         final scopeConversationIdParam = const fb.StringReader(
           asciiOptimization: true,
-        ).vTableGetNullable(buffer, rootOffset, 32);
+        ).vTableGetNullable(buffer, rootOffset, 24);
         final sourceConversationIdParam = const fb.StringReader(
           asciiOptimization: true,
-        ).vTableGetNullable(buffer, rootOffset, 24);
+        ).vTableGetNullable(buffer, rootOffset, 26);
         final sourceMessageIdParam = const fb.StringReader(
           asciiOptimization: true,
-        ).vTableGetNullable(buffer, rootOffset, 26);
+        ).vTableGetNullable(buffer, rootOffset, 28);
         final supersededByIdParam = const fb.StringReader(
           asciiOptimization: true,
-        ).vTableGetNullable(buffer, rootOffset, 28);
+        ).vTableGetNullable(buffer, rootOffset, 30);
         final archivedParam = const fb.BoolReader().vTableGet(
           buffer,
           rootOffset,
-          30,
+          32,
           false,
         );
         final tagsParam = const fb.ListReader<String>(
@@ -2675,17 +2692,17 @@ obx_int.ModelDefinition getObjectBoxModel() {
         object.internalId = id;
       },
       objectToFB: (MemoryRelationEntity object, fb.Builder fbb) {
+        final idOffset = fbb.writeString(object.id);
         final fromMemoryIdOffset = fbb.writeString(object.fromMemoryId);
         final toMemoryIdOffset = fbb.writeString(object.toMemoryId);
         final labelOffset = fbb.writeString(object.label);
-        final idOffset = fbb.writeString(object.id);
         fbb.startTable(7);
         fbb.addInt64(0, object.internalId);
-        fbb.addOffset(1, fromMemoryIdOffset);
-        fbb.addOffset(2, toMemoryIdOffset);
-        fbb.addOffset(3, labelOffset);
-        fbb.addInt64(4, object.createdAt.millisecondsSinceEpoch);
-        fbb.addOffset(5, idOffset);
+        fbb.addOffset(1, idOffset);
+        fbb.addOffset(2, fromMemoryIdOffset);
+        fbb.addOffset(3, toMemoryIdOffset);
+        fbb.addOffset(4, labelOffset);
+        fbb.addInt64(5, object.createdAt.millisecondsSinceEpoch);
         fbb.finish(fbb.endTable());
         return object.internalId;
       },
@@ -2700,18 +2717,18 @@ obx_int.ModelDefinition getObjectBoxModel() {
         );
         final idParam = const fb.StringReader(
           asciiOptimization: true,
-        ).vTableGet(buffer, rootOffset, 14, '');
+        ).vTableGet(buffer, rootOffset, 6, '');
         final fromMemoryIdParam = const fb.StringReader(
           asciiOptimization: true,
-        ).vTableGet(buffer, rootOffset, 6, '');
+        ).vTableGet(buffer, rootOffset, 8, '');
         final toMemoryIdParam = const fb.StringReader(
           asciiOptimization: true,
-        ).vTableGet(buffer, rootOffset, 8, '');
+        ).vTableGet(buffer, rootOffset, 10, '');
         final labelParam = const fb.StringReader(
           asciiOptimization: true,
-        ).vTableGet(buffer, rootOffset, 10, '');
+        ).vTableGet(buffer, rootOffset, 12, '');
         final createdAtParam = DateTime.fromMillisecondsSinceEpoch(
-          const fb.Int64Reader().vTableGet(buffer, rootOffset, 12, 0),
+          const fb.Int64Reader().vTableGet(buffer, rootOffset, 14, 0),
         );
         final object = MemoryRelationEntity(
           internalId: internalIdParam,
@@ -3092,6 +3109,11 @@ class MessageEntity_ {
   /// See [MessageEntity.contentTokenCount].
   static final contentTokenCount = obx.QueryIntegerProperty<MessageEntity>(
     _entities[1].properties[28],
+  );
+
+  /// See [MessageEntity.updatedAt].
+  static final updatedAt = obx.QueryDateProperty<MessageEntity>(
+    _entities[1].properties[29],
   );
 }
 
@@ -3567,28 +3589,28 @@ class MemoryEntity_ {
     _entities[11].properties[9],
   );
 
+  /// See [MemoryEntity.scopeConversationId].
+  static final scopeConversationId = obx.QueryStringProperty<MemoryEntity>(
+    _entities[11].properties[10],
+  );
+
   /// See [MemoryEntity.sourceConversationId].
   static final sourceConversationId = obx.QueryStringProperty<MemoryEntity>(
-    _entities[11].properties[10],
+    _entities[11].properties[11],
   );
 
   /// See [MemoryEntity.sourceMessageId].
   static final sourceMessageId = obx.QueryStringProperty<MemoryEntity>(
-    _entities[11].properties[11],
+    _entities[11].properties[12],
   );
 
   /// See [MemoryEntity.supersededById].
   static final supersededById = obx.QueryStringProperty<MemoryEntity>(
-    _entities[11].properties[12],
+    _entities[11].properties[13],
   );
 
   /// See [MemoryEntity.archived].
   static final archived = obx.QueryBooleanProperty<MemoryEntity>(
-    _entities[11].properties[13],
-  );
-
-  /// See [MemoryEntity.scopeConversationId].
-  static final scopeConversationId = obx.QueryStringProperty<MemoryEntity>(
     _entities[11].properties[14],
   );
 
@@ -3620,28 +3642,28 @@ class MemoryRelationEntity_ {
     _entities[12].properties[0],
   );
 
+  /// See [MemoryRelationEntity.id].
+  static final id = obx.QueryStringProperty<MemoryRelationEntity>(
+    _entities[12].properties[1],
+  );
+
   /// See [MemoryRelationEntity.fromMemoryId].
   static final fromMemoryId = obx.QueryStringProperty<MemoryRelationEntity>(
-    _entities[12].properties[1],
+    _entities[12].properties[2],
   );
 
   /// See [MemoryRelationEntity.toMemoryId].
   static final toMemoryId = obx.QueryStringProperty<MemoryRelationEntity>(
-    _entities[12].properties[2],
+    _entities[12].properties[3],
   );
 
   /// See [MemoryRelationEntity.label].
   static final label = obx.QueryStringProperty<MemoryRelationEntity>(
-    _entities[12].properties[3],
+    _entities[12].properties[4],
   );
 
   /// See [MemoryRelationEntity.createdAt].
   static final createdAt = obx.QueryDateProperty<MemoryRelationEntity>(
-    _entities[12].properties[4],
-  );
-
-  /// See [MemoryRelationEntity.id].
-  static final id = obx.QueryStringProperty<MemoryRelationEntity>(
     _entities[12].properties[5],
   );
 }

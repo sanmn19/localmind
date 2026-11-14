@@ -19,8 +19,7 @@ class _FakeStorage implements CloudSyncStorage {
   String get backupPrefix => 'backups';
 
   @override
-  String backupKey(DateTime at) =>
-      'backups/${at.toUtc().toIso8601String()}';
+  String backupKey(DateTime at) => 'backups/${at.toUtc().toIso8601String()}';
 
   @override
   Future<void> testConnection() async {}
@@ -54,8 +53,19 @@ class _FakeStorage implements CloudSyncStorage {
 
   @override
   Future<List<String>> listBackups() async =>
-      objects.keys.where((key) => key.startsWith('backups/')).toList()
-        ..sort();
+      objects.keys.where((key) => key.startsWith('backups/')).toList()..sort();
+
+  @override
+  bool get requiresLease => false;
+
+  @override
+  Future<CloudSyncLease?> readLease() async => null;
+
+  @override
+  Future<void> writeLease(CloudSyncLease lease) async {}
+
+  @override
+  Future<void> deleteLease() async {}
 }
 
 void main() {
@@ -109,17 +119,19 @@ void main() {
       );
     }
 
-    final localFiles = (root
-        .listSync()
-        .whereType<File>()
-        .where((file) => file.path.endsWith('.enc'))
-        .toList())
-      ..sort((a, b) => a.path.compareTo(b.path));
+    final localFiles =
+        (root
+              .listSync()
+              .whereType<File>()
+              .where((file) => file.path.endsWith('.enc'))
+              .toList())
+          ..sort((a, b) => a.path.compareTo(b.path));
     expect(localFiles, hasLength(3));
     expect(storage.objects.keys, hasLength(3));
-    expect(
-      localFiles.map((file) => file.path.split('/').last).toList(),
-      ['2026-10-19T02-00-00-000Z.enc', '2026-10-19T03-00-00-000Z.enc', '2026-10-19T04-00-00-000Z.enc'],
-    );
+    expect(localFiles.map((file) => file.path.split('/').last).toList(), [
+      '2026-10-19T02-00-00-000Z.enc',
+      '2026-10-19T03-00-00-000Z.enc',
+      '2026-10-19T04-00-00-000Z.enc',
+    ]);
   });
 }

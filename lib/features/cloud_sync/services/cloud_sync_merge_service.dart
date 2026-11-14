@@ -11,7 +11,38 @@ class CloudSyncMergeResult {
   final int conflictCount;
 }
 
+/// The settings record that won the merge and the time it changed.
+class _SettingsResolution {
+  const _SettingsResolution(this.settings, this.changedAt);
+
+  final Map<String, dynamic> settings;
+  final DateTime changedAt;
+}
+
 class CloudSyncMergeService {
+  static const _recordCollections = [
+    'personas',
+    'savedMessages',
+    'savedMessageFolders',
+    'conversationFolders',
+  ];
+
+  static const _settledStatuses = {'complete', 'error'};
+
+  static const _timestampFields = <String, List<String>>{
+    'messages': ['updatedAt', 'createdAt'],
+    'conversations': ['updatedAt', 'createdAt'],
+    'personas': ['updatedAt', 'savedAt', 'createdAt'],
+    'savedMessages': ['updatedAt', 'savedAt', 'createdAt'],
+    'savedMessageFolders': ['updatedAt', 'savedAt', 'createdAt'],
+    'conversationFolders': ['updatedAt', 'savedAt', 'createdAt'],
+  };
+
+  static final _legacyTombstoneTime = DateTime.utc(1970);
+
+  /// How long a deletion stays in the shared snapshot so peers can learn it.
+  static const _tombstoneRetention = Duration(days: 30);
+
   Future<String> fingerprint(Map<String, dynamic> payload) async {
     final canonical = _canonicalize(payload);
     final hash = await Sha256().hash(utf8.encode(jsonEncode(canonical)));
@@ -27,13 +58,7 @@ class CloudSyncMergeService {
     Map<String, dynamic> payload,
   ) async {
     final result = <String, dynamic>{};
-    final messages = _groupByConversation(payload['messages']);
-    for (final collection in const [
-      'personas',
-      'savedMessages',
-      'savedMessageFolders',
-      'conversationFolders',
-    ]) {
+    for (final collection in _recordCollections) {
       final hashes = <String, String>{};
       for (final item in _list(payload[collection])) {
         final id = item['id'] as String?;
@@ -41,13 +66,20 @@ class CloudSyncMergeService {
       }
       result[collection] = hashes;
     }
+    final messages = <String, String>{};
+    for (final item in _list(payload['messages'])) {
+      final id = item['id'] as String?;
+      if (id != null) messages[id] = await _hashValue(item);
+    }
+    result['messages'] = messages;
+    final threads = _groupByConversation(payload['messages']);
     final conversationHashes = <String, String>{};
     for (final item in _list(payload['conversations'])) {
       final id = item['id'] as String?;
       if (id != null) {
         conversationHashes[id] = await _hashValue({
           'conversation': item,
-          'messages': messages[id] ?? const [],
+          'messages': threads[id] ?? const [],
         });
       }
     }
@@ -114,260 +146,359 @@ class CloudSyncMergeService {
 
     final payload = Map<String, dynamic>.from(remote.payload);
     var conflicts = 0;
-    payload['settings'] = lastHash == null
-        ? remote.payload['settings']
-        : local.updatedAt.isAfter(remote.updatedAt)
-        ? local.payload['settings']
-        : remote.payload['settings'];
 
-    final personas = _mapById(remote.payload['personas']);
-    for (final item in _list(local.payload['personas'])) {
-      final id = item['id'] as String?;
-      if (id == null) continue;
-      final existing = personas[id];
-      if (existing == null) {
-        personas[id] = item;
-      } else if (!_same(existing, item)) {
-        final base = _baseHash(journal, 'personas', id);
-        final localRecordHash = await _hashValue(item);
-        final remoteRecordHash = await _hashValue(existing);
-        if (base != null && localRecordHash == base) continue;
-        if (base != null && remoteRecordHash == base) {
-          personas[id] = item;
-          continue;
-        }
-        conflicts++;
-        final copy = Map<String, dynamic>.from(item);
-        copy['id'] = _conflictId(id, local);
-        copy['name'] = '${copy['name'] ?? 'Persona'} (Conflict)';
-        personas[copy['id'] as String] = copy;
+    // Settings are a single record: last write wins by the time the settings
+    // themselves changed (not by snapshot time, which moves on every sync), with
+    // the larger device id breaking ties. A first link keeps the remote settings.
+    final localSettingsAt = local.effectiveSettingsChangedAt;
+    final remoteSettingsAt = remote.effectiveSettingsChangedAt;
+    final settings = lastHash == null
+        ? _SettingsResolution(
+            Map<String, dynamic>.from(remote.payload['settings'] as Map),
+            remoteSettingsAt,
+          )
+        : _resolveSettings(local, remote, localSettingsAt, remoteSettingsAt);
+    payload['settings'] = settings.settings;
+
+    final localMessages = _mapById(local.payload['messages']);
+    final remoteMessages = _mapById(remote.payload['messages']);
+    final mergedMessages = <String, Map<String, dynamic>>{};
+    for (final id in {...localMessages.keys, ...remoteMessages.keys}) {
+      final localMessage = localMessages[id];
+      final remoteMessage = remoteMessages[id];
+      if (localMessage == null) {
+        mergedMessages[id] = remoteMessage!;
+        continue;
       }
+      if (remoteMessage == null) {
+        mergedMessages[id] = localMessage;
+        continue;
+      }
+      if (_same(localMessage, remoteMessage)) {
+        mergedMessages[id] = localMessage;
+        continue;
+      }
+      if (await _bothChanged(
+        journal,
+        'messages',
+        id,
+        localMessage,
+        remoteMessage,
+      )) {
+        conflicts++;
+      }
+      mergedMessages[id] = _resolveMessage(localMessage, remoteMessage);
     }
-    payload['personas'] = personas.values.toList();
 
-    final remoteConversations = _mapById(remote.payload['conversations']);
+    final localThreads = _groupByConversation(local.payload['messages']);
+    final remoteThreads = _groupByConversation(remote.payload['messages']);
     final localConversations = _mapById(local.payload['conversations']);
-    final remoteMessages = _groupByConversation(remote.payload['messages']);
-    final localMessages = _groupByConversation(local.payload['messages']);
-    final mergedConversations = Map<String, Map<String, dynamic>>.from(
-      remoteConversations,
-    );
-    final mergedMessages = _mapById(remote.payload['messages']);
-
-    for (final entry in localConversations.entries) {
-      final remoteConversation = remoteConversations[entry.key];
-      if (remoteConversation == null) {
-        mergedConversations[entry.key] = entry.value;
-        for (final message in localMessages[entry.key] ?? const []) {
-          mergedMessages[message['id'] as String] = message;
-        }
-        continue;
-      }
-      final localThread = localMessages[entry.key] ?? const [];
-      final remoteThread = remoteMessages[entry.key] ?? const [];
-      final hasConflict =
-          !_same(remoteConversation, entry.value) ||
-          !_sameList(remoteThread, localThread);
-      if (!hasConflict) continue;
-
-      final base = _baseHash(journal, 'conversations', entry.key);
-      final localRecordHash = await _hashValue({
-        'conversation': entry.value,
-        'messages': localThread,
-      });
-      final remoteRecordHash = await _hashValue({
-        'conversation': remoteConversation,
-        'messages': remoteThread,
-      });
-      if (base != null && localRecordHash == base) continue;
-      if (base != null && remoteRecordHash == base) {
-        mergedConversations[entry.key] = entry.value;
-        for (final message in remoteThread) {
-          mergedMessages.remove(message['id']);
-        }
-        for (final message in localThread) {
-          mergedMessages[message['id'] as String] = message;
-        }
-        continue;
-      }
-
-      conflicts++;
-      final newConversationId = _conflictId(entry.key, local);
-      final idMap = <String, String>{};
-      for (final message in localThread) {
-        final oldId = message['id'] as String;
-        idMap[oldId] = _conflictId(oldId, local);
-      }
-      final copy = Map<String, dynamic>.from(entry.value)
-        ..['id'] = newConversationId
-        ..['title'] = '${entry.value['title'] ?? 'Chat'} (Conflict)'
-        ..['updatedAt'] = DateTime.now().toUtc().toIso8601String();
-      mergedConversations[newConversationId] = copy;
-      for (final message in localThread) {
-        final cloned = Map<String, dynamic>.from(message)
-          ..['id'] = idMap[message['id']]!
-          ..['conversationId'] = newConversationId;
-        final parent = message['parentMessageId'] as String?;
-        if (parent != null) cloned['parentMessageId'] = idMap[parent];
-        final variant = message['variantGroupId'] as String?;
-        if (variant != null) {
-          cloned['variantGroupId'] = _conflictId(variant, local);
-        }
-        mergedMessages[cloned['id'] as String] = cloned;
-      }
-    }
-    payload['conversations'] = mergedConversations.values.toList();
-    payload['messages'] = mergedMessages.values.toList();
-
-    for (final collection in const [
-      'conversationFolders',
-      'savedMessageFolders',
-      'savedMessages',
-    ]) {
-      final records = _mapById(remote.payload[collection]);
-      for (final item in _list(local.payload[collection])) {
-        final id = item['id'] as String?;
-        if (id == null) continue;
-        final existing = records[id];
-        if (existing == null) {
-          records[id] = item;
-          continue;
-        }
-        if (_same(existing, item)) continue;
-        final base = _baseHash(journal, collection, id);
-        if (base != null && await _hashValue(existing) == base) {
-          records[id] = item;
-        }
-      }
-      payload[collection] = records.values.toList();
-    }
-
-    Future<bool> changedFromBase(
-      String collection,
-      String id,
-      Map<String, dynamic> record,
-    ) async {
-      final base = _baseHash(journal, collection, id);
-      return base != null && await _hashValue(record) != base;
-    }
-
-    final mergedPersonaRecords = _mapById(payload['personas']);
-    for (final pair in [(local, remote), (remote, local)]) {
-      final deletingSnapshot = pair.$1;
-      final editedSnapshot = pair.$2;
-      final editedPersonas = _mapById(editedSnapshot.payload['personas']);
-      for (final id in _tombstoneIds(deletingSnapshot, 'personas')) {
-        final edited = editedPersonas[id];
-        if (edited == null || !await changedFromBase('personas', id, edited)) {
-          continue;
-        }
-        final copy = Map<String, dynamic>.from(edited);
-        copy['id'] = _conflictId(id, editedSnapshot);
-        copy['name'] = '${copy['name'] ?? 'Persona'} (Conflict)';
-        mergedPersonaRecords[copy['id'] as String] = copy;
-        conflicts++;
-      }
-    }
-    payload['personas'] = mergedPersonaRecords.values.toList();
-
-    final conflictConversations = _mapById(payload['conversations']);
-    final conflictMessages = _mapById(payload['messages']);
-    for (final pair in [(local, remote), (remote, local)]) {
-      final deletingSnapshot = pair.$1;
-      final editedSnapshot = pair.$2;
-      final editedConversations = _mapById(
-        editedSnapshot.payload['conversations'],
-      );
-      final editedMessages = _groupByConversation(
-        editedSnapshot.payload['messages'],
-      );
-      for (final id in _tombstoneIds(deletingSnapshot, 'conversations')) {
-        final edited = editedConversations[id];
-        if (edited == null) continue;
-        final thread = editedMessages[id] ?? const [];
-        if (!await changedFromBase('conversations', id, {
-          'conversation': edited,
-          'messages': thread,
-        })) {
-          continue;
-        }
-        _cloneConversationBranch(
-          conversation: edited,
-          messages: thread,
-          source: editedSnapshot,
-          conversations: conflictConversations,
-          mergedMessages: conflictMessages,
+    final remoteConversations = _mapById(remote.payload['conversations']);
+    final mergedConversations = <String, Map<String, dynamic>>{};
+    for (final id in {
+      ...localConversations.keys,
+      ...remoteConversations.keys,
+    }) {
+      final localConversation = localConversations[id];
+      final remoteConversation = remoteConversations[id];
+      if (localConversation == null) {
+        mergedConversations[id] = Map<String, dynamic>.from(
+          remoteConversation!,
         );
-        conflicts++;
+        continue;
       }
-    }
-    payload['conversations'] = conflictConversations.values.toList();
-    payload['messages'] = conflictMessages.values.toList();
-
-    final tombstones = <String, dynamic>{};
-    for (final source in [remote.tombstones, local.tombstones]) {
-      for (final entry in source.entries) {
-        final values =
-            (tombstones[entry.key] as List?)?.whereType<String>().toSet() ??
-            <String>{};
-        if (entry.value is List) {
-          values.addAll((entry.value as List).whereType<String>());
+      if (remoteConversation == null) {
+        mergedConversations[id] = Map<String, dynamic>.from(localConversation);
+        continue;
+      }
+      final metadataDiffers = !_sameConversation(
+        localConversation,
+        remoteConversation,
+      );
+      if (metadataDiffers) {
+        if (await _conversationChanged(
+              journal,
+              id,
+              localConversation,
+              localThreads[id] ?? const [],
+            ) &&
+            await _conversationChanged(
+              journal,
+              id,
+              remoteConversation,
+              remoteThreads[id] ?? const [],
+            )) {
+          conflicts++;
         }
-        tombstones[entry.key] = values.toList();
       }
+      final winner = _resolveRecord(
+        localConversation,
+        remoteConversation,
+        'conversations',
+        local.deviceId,
+        remote.deviceId,
+      );
+      final merged = Map<String, dynamic>.from(winner);
+      final createdAt = _earlierTime(
+        localConversation['createdAt'],
+        remoteConversation['createdAt'],
+      );
+      if (createdAt != null) merged['createdAt'] = createdAt;
+      mergedConversations[id] = merged;
     }
+
+    payload['messages'] = mergedMessages.values.toList()
+      ..sort(_compareMessages);
+    payload['conversations'] = _sortedById(mergedConversations);
+
+    for (final collection in _recordCollections) {
+      final localRecords = _mapById(local.payload[collection]);
+      final remoteRecords = _mapById(remote.payload[collection]);
+      final mergedRecords = <String, Map<String, dynamic>>{};
+      for (final id in {...localRecords.keys, ...remoteRecords.keys}) {
+        final localRecord = localRecords[id];
+        final remoteRecord = remoteRecords[id];
+        if (localRecord == null) {
+          mergedRecords[id] = remoteRecord!;
+          continue;
+        }
+        if (remoteRecord == null) {
+          mergedRecords[id] = localRecord;
+          continue;
+        }
+        if (_same(localRecord, remoteRecord)) {
+          mergedRecords[id] = localRecord;
+          continue;
+        }
+        if (await _bothChanged(
+          journal,
+          collection,
+          id,
+          localRecord,
+          remoteRecord,
+        )) {
+          conflicts++;
+        }
+        mergedRecords[id] = _resolveRecord(
+          localRecord,
+          remoteRecord,
+          collection,
+          local.deviceId,
+          remote.deviceId,
+        );
+      }
+      payload[collection] = _sortedById(mergedRecords);
+    }
+
+    final tombstones = _mergeTombstones(local.tombstones, remote.tombstones);
     _applyTombstones(payload, tombstones);
+    _recomputeConversationStats(payload);
+
     return CloudSyncMergeResult(
       CloudSyncSnapshot(
         deviceId: local.deviceId,
-        revision: remote.revision >= local.revision
-            ? remote.revision + 1
-            : local.revision,
+        revision:
+            (local.revision > remote.revision
+                ? local.revision
+                : remote.revision) +
+            1,
         updatedAt: DateTime.now().toUtc(),
         payload: payload,
         tombstones: tombstones,
+        settingsChangedAt: settings.changedAt,
       ),
       conflicts,
     );
   }
 
-  String _conflictId(String id, CloudSyncSnapshot local) =>
-      '$id-conflict-${local.deviceId.substring(0, 8)}-${local.revision}';
-
-  Set<String> _tombstoneIds(CloudSyncSnapshot snapshot, String collection) =>
-      snapshot.tombstones[collection] is List
-      ? (snapshot.tombstones[collection] as List).whereType<String>().toSet()
-      : <String>{};
-
-  void _cloneConversationBranch({
-    required Map<String, dynamic> conversation,
-    required List<Map<String, dynamic>> messages,
-    required CloudSyncSnapshot source,
-    required Map<String, Map<String, dynamic>> conversations,
-    required Map<String, Map<String, dynamic>> mergedMessages,
-  }) {
-    final oldConversationId = conversation['id'] as String;
-    final newConversationId = _conflictId(oldConversationId, source);
-    final idMap = <String, String>{
-      for (final message in messages)
-        message['id'] as String: _conflictId(message['id'] as String, source),
-    };
-    conversations[newConversationId] = Map<String, dynamic>.from(conversation)
-      ..['id'] = newConversationId
-      ..['title'] = '${conversation['title'] ?? 'Chat'} (Conflict)'
-      ..['updatedAt'] = DateTime.now().toUtc().toIso8601String();
-    for (final message in messages) {
-      final cloned = Map<String, dynamic>.from(message)
-        ..['id'] = idMap[message['id']]!
-        ..['conversationId'] = newConversationId;
-      final parent = message['parentMessageId'] as String?;
-      if (parent != null) cloned['parentMessageId'] = idMap[parent];
-      final variant = message['variantGroupId'] as String?;
-      if (variant != null) {
-        cloned['variantGroupId'] = _conflictId(variant, source);
-      }
-      mergedMessages[cloned['id'] as String] = cloned;
+  _SettingsResolution _resolveSettings(
+    CloudSyncSnapshot local,
+    CloudSyncSnapshot remote,
+    DateTime localChangedAt,
+    DateTime remoteChangedAt,
+  ) {
+    final localSettings = Map<String, dynamic>.from(
+      local.payload['settings'] as Map,
+    );
+    final remoteSettings = Map<String, dynamic>.from(
+      remote.payload['settings'] as Map,
+    );
+    if (localChangedAt.isAfter(remoteChangedAt)) {
+      return _SettingsResolution(localSettings, localChangedAt);
     }
+    if (remoteChangedAt.isAfter(localChangedAt)) {
+      return _SettingsResolution(remoteSettings, remoteChangedAt);
+    }
+    final byDevice = local.deviceId.compareTo(remote.deviceId);
+    if (byDevice != 0) {
+      return byDevice > 0
+          ? _SettingsResolution(localSettings, localChangedAt)
+          : _SettingsResolution(remoteSettings, remoteChangedAt);
+    }
+    return _canonicalJson(
+              localSettings,
+            ).compareTo(_canonicalJson(remoteSettings)) >=
+            0
+        ? _SettingsResolution(localSettings, localChangedAt)
+        : _SettingsResolution(remoteSettings, remoteChangedAt);
+  }
+
+  Map<String, dynamic> _resolveMessage(
+    Map<String, dynamic> local,
+    Map<String, dynamic> remote,
+  ) {
+    final localSettled = _isSettled(local);
+    final remoteSettled = _isSettled(remote);
+    if (localSettled != remoteSettled) {
+      return localSettled ? local : remote;
+    }
+    final localTime = _recordTime(local, 'messages');
+    final remoteTime = _recordTime(remote, 'messages');
+    if (localTime != null && remoteTime != null && localTime != remoteTime) {
+      return localTime.isAfter(remoteTime) ? local : remote;
+    }
+    if (localTime != null && remoteTime == null) return local;
+    if (remoteTime != null && localTime == null) return remote;
+    final localContent = '${local['content'] ?? ''}';
+    final remoteContent = '${remote['content'] ?? ''}';
+    if (localContent.length != remoteContent.length) {
+      return localContent.length > remoteContent.length ? local : remote;
+    }
+    final byContent = localContent.compareTo(remoteContent);
+    if (byContent != 0) return byContent > 0 ? local : remote;
+    final byId = '${local['id']}'.compareTo('${remote['id']}');
+    if (byId != 0) return byId > 0 ? local : remote;
+    return _canonicalJson(local).compareTo(_canonicalJson(remote)) >= 0
+        ? local
+        : remote;
+  }
+
+  Map<String, dynamic> _resolveRecord(
+    Map<String, dynamic> local,
+    Map<String, dynamic> remote,
+    String collection,
+    String localDeviceId,
+    String remoteDeviceId,
+  ) {
+    final localTime = _recordTime(local, collection);
+    final remoteTime = _recordTime(remote, collection);
+    if (localTime != null && remoteTime != null && localTime != remoteTime) {
+      return localTime.isAfter(remoteTime) ? local : remote;
+    }
+    if (localTime != null && remoteTime == null) return local;
+    if (remoteTime != null && localTime == null) return remote;
+    final byDevice = localDeviceId.compareTo(remoteDeviceId);
+    if (byDevice != 0) return byDevice > 0 ? local : remote;
+    return _canonicalJson(local).compareTo(_canonicalJson(remote)) >= 0
+        ? local
+        : remote;
+  }
+
+  bool _sameConversation(
+    Map<String, dynamic> local,
+    Map<String, dynamic> remote,
+  ) {
+    Map<String, dynamic> metadata(Map<String, dynamic> conversation) =>
+        Map<String, dynamic>.from(conversation)
+          ..remove('updatedAt')
+          ..remove('messageCount')
+          ..remove('lastMessagePreview');
+    return _same(metadata(local), metadata(remote));
+  }
+
+  bool _isSettled(Map<String, dynamic> message) {
+    final status = message['status'];
+    return status == null || _settledStatuses.contains(status);
+  }
+
+  DateTime? _recordTime(Map<String, dynamic> record, String collection) {
+    final fields = _timestampFields[collection] ?? const ['updatedAt'];
+    for (final field in fields) {
+      final value = record[field];
+      if (value is! String) continue;
+      final parsed = DateTime.tryParse(value);
+      if (parsed != null) return parsed.toUtc();
+    }
+    return null;
+  }
+
+  Future<bool> _bothChanged(
+    Map<String, dynamic> journal,
+    String collection,
+    String id,
+    Map<String, dynamic> local,
+    Map<String, dynamic> remote,
+  ) async {
+    final base = _baseHash(journal, collection, id);
+    if (base == null) return true;
+    return await _hashValue(local) != base && await _hashValue(remote) != base;
+  }
+
+  Future<bool> _conversationChanged(
+    Map<String, dynamic> journal,
+    String id,
+    Map<String, dynamic> conversation,
+    List<Map<String, dynamic>> messages,
+  ) async {
+    final base = _baseHash(journal, 'conversations', id);
+    if (base == null) return true;
+    final hash = await _hashValue({
+      'conversation': conversation,
+      'messages': messages,
+    });
+    return hash != base;
+  }
+
+  Map<String, Map<String, String>> _mergeTombstones(
+    Map<String, Map<String, String>> local,
+    Map<String, Map<String, String>> remote,
+  ) {
+    final cutoff = DateTime.now().toUtc().subtract(_tombstoneRetention);
+    final merged = <String, Map<String, String>>{};
+    for (final source in [local, remote]) {
+      for (final entry in source.entries) {
+        final values = merged[entry.key] ?? <String, String>{};
+        for (final tombstone in entry.value.entries) {
+          final existing = values[tombstone.key];
+          if (existing == null || _isLater(tombstone.value, existing)) {
+            values[tombstone.key] = tombstone.value;
+          }
+        }
+        // Age tombstones out on merge too: a peer that has not synced since
+        // would otherwise keep re-adding every tombstone the union has seen.
+        final retained = <String, String>{};
+        for (final value in values.entries) {
+          final at = DateTime.tryParse(value.value);
+          if (at == null) {
+            retained[value.key] = value.value;
+            continue;
+          }
+          // Legacy epoch tombstones carry no time and never age out.
+          if (at.isAfter(_legacyTombstoneTime) && at.isBefore(cutoff)) {
+            continue;
+          }
+          retained[value.key] = value.value;
+        }
+        if (retained.isEmpty) {
+          merged.remove(entry.key);
+          continue;
+        }
+        merged[entry.key] = {
+          for (final key in retained.keys.toList()..sort()) key: retained[key]!,
+        };
+      }
+    }
+    return {for (final key in merged.keys.toList()..sort()) key: merged[key]!};
+  }
+
+  bool _isLater(String candidate, String existing) {
+    final candidateTime = DateTime.tryParse(candidate);
+    final existingTime = DateTime.tryParse(existing);
+    if (candidateTime == null) return false;
+    if (existingTime == null) return true;
+    if (candidateTime.isAfter(existingTime)) return true;
+    if (existingTime.isAfter(candidateTime)) return false;
+    return candidate.compareTo(existing) > 0;
   }
 
   List<Map<String, dynamic>> _list(dynamic value) => value is List
@@ -386,40 +517,146 @@ class CloudSyncMergeService {
       if (id != null) (result[id] ??= []).add(item);
     }
     for (final items in result.values) {
-      items.sort((a, b) => '${a['id']}'.compareTo('${b['id']}'));
+      items.sort(_compareMessages);
     }
     return result;
   }
 
-  bool _same(Map<String, dynamic> a, Map<String, dynamic> b) =>
-      jsonEncode(_canonicalize(a)) == jsonEncode(_canonicalize(b));
+  List<Map<String, dynamic>> _sortedById(
+    Map<String, Map<String, dynamic>> records,
+  ) =>
+      records.values.toList()
+        ..sort((a, b) => '${a['id']}'.compareTo('${b['id']}'));
 
-  bool _sameList(List<Map<String, dynamic>> a, List<Map<String, dynamic>> b) =>
-      jsonEncode(a.map(_canonicalize).toList()) ==
-      jsonEncode(b.map(_canonicalize).toList());
+  int _compareMessages(Map<String, dynamic> a, Map<String, dynamic> b) {
+    final byCreated = _parseTime(
+      a['createdAt'],
+    ).compareTo(_parseTime(b['createdAt']));
+    if (byCreated != 0) return byCreated;
+    final byThread = _intValue(
+      a['threadOrder'],
+    ).compareTo(_intValue(b['threadOrder']));
+    if (byThread != 0) return byThread;
+    return '${a['id']}'.compareTo('${b['id']}');
+  }
+
+  DateTime _parseTime(dynamic value) =>
+      (value is String ? DateTime.tryParse(value) : null) ??
+      _legacyTombstoneTime;
+
+  int _intValue(dynamic value) => value is num ? value.toInt() : -1;
+
+  String? _earlierTime(dynamic a, dynamic b) {
+    if (a is! String) return b is String ? b : null;
+    if (b is! String) return a;
+    final aTime = DateTime.tryParse(a);
+    final bTime = DateTime.tryParse(b);
+    if (aTime == null) return b;
+    if (bTime == null) return a;
+    if (aTime.isBefore(bTime)) return a;
+    if (bTime.isBefore(aTime)) return b;
+    return a.compareTo(b) <= 0 ? a : b;
+  }
+
+  String? _preview(dynamic content) {
+    if (content is! String) return null;
+    return content.length > 100 ? '${content.substring(0, 100)}...' : content;
+  }
 
   void _applyTombstones(
     Map<String, dynamic> payload,
-    Map<String, dynamic> tombstones,
+    Map<String, Map<String, String>> tombstones,
   ) {
     for (final entry in tombstones.entries) {
-      if (payload[entry.key] is! List || entry.value is! List) continue;
-      final ids = (entry.value as List).whereType<String>().toSet();
-      payload[entry.key] = (payload[entry.key] as List)
-          .where((item) => item is! Map || !ids.contains(item['id']))
-          .toList();
+      final records = payload[entry.key];
+      if (records is! List) continue;
+      final deletions = entry.value;
+      payload[entry.key] = records.where((raw) {
+        if (raw is! Map) return true;
+        final id = raw['id'];
+        if (id is! String) return true;
+        final deletedAt = DateTime.tryParse(deletions[id] ?? '');
+        if (deletedAt == null) return true;
+        final deletedUtc = deletedAt.toUtc();
+        // Legacy list tombstones carry no time and always delete.
+        if (!deletedUtc.isAfter(_legacyTombstoneTime)) return false;
+        final recordTime = _recordTime(
+          Map<String, dynamic>.from(raw),
+          entry.key,
+        );
+        return recordTime != null && recordTime.isAfter(deletedUtc);
+      }).toList();
     }
-    final deletedConversations = tombstones['conversations'] is List
-        ? (tombstones['conversations'] as List).whereType<String>().toSet()
-        : <String>{};
-    if (deletedConversations.isNotEmpty && payload['messages'] is List) {
-      payload['messages'] = (payload['messages'] as List)
+
+    final conversationIds = _mapById(payload['conversations']).keys.toSet();
+    final messages = payload['messages'];
+    if (messages is List) {
+      payload['messages'] = messages
           .where(
-            (item) =>
-                item is! Map ||
-                !deletedConversations.contains(item['conversationId']),
+            (raw) =>
+                raw is! Map || conversationIds.contains(raw['conversationId']),
           )
           .toList();
     }
   }
+
+  void _recomputeConversationStats(Map<String, dynamic> payload) {
+    final threads = _groupByConversation(payload['messages']);
+    final conversations = payload['conversations'];
+    if (conversations is! List) return;
+    for (final raw in conversations) {
+      if (raw is! Map) continue;
+      final id = raw['id'];
+      if (id is! String) continue;
+      final active = _activeTimeline(
+        threads[id] ?? const <Map<String, dynamic>>[],
+      );
+      raw['messageCount'] = active.length;
+      raw['lastMessagePreview'] = active.isEmpty
+          ? null
+          : _preview(active.last['content']);
+    }
+  }
+
+  /// Mirrors `MessageVariants._legacyFlatResolve` for flat sync payloads: one
+  /// active message per variant group, ordered by the conversation timeline.
+  List<Map<String, dynamic>> _activeTimeline(
+    List<Map<String, dynamic>> messages,
+  ) {
+    final byGroup = <String, List<Map<String, dynamic>>>{};
+    for (final message in messages) {
+      final variantGroup = message['variantGroupId'];
+      final id = message['id'];
+      final groupId = variantGroup is String && variantGroup.isNotEmpty
+          ? variantGroup
+          : id is String
+          ? id
+          : null;
+      if (groupId != null) (byGroup[groupId] ??= []).add(message);
+    }
+    final active = <Map<String, dynamic>>[];
+    for (final group in byGroup.values) {
+      group.sort((a, b) {
+        final byIndex = _intValue(
+          a['variantIndex'],
+        ).compareTo(_intValue(b['variantIndex']));
+        if (byIndex != 0) return byIndex;
+        return _compareMessages(a, b);
+      });
+      active.add(
+        group.firstWhere(
+          (message) => message['isActiveVariant'] == true,
+          orElse: () => group.last,
+        ),
+      );
+    }
+    active.sort(_compareMessages);
+    return active;
+  }
+
+  bool _same(Map<String, dynamic> a, Map<String, dynamic> b) =>
+      _canonicalJson(a) == _canonicalJson(b);
+
+  String _canonicalJson(Map<String, dynamic> value) =>
+      jsonEncode(_canonicalize(value));
 }

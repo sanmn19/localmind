@@ -2,9 +2,10 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
+import 'package:hugeicons/hugeicons.dart';
 
 import '../../../core/routes/app_routes.dart';
+import '../../../core/routes/desktop_window_scope.dart';
 import '../../../l10n/app_localizations.dart';
 import '../data/models/cloud_sync_models.dart';
 import '../providers/cloud_sync_providers.dart';
@@ -74,9 +75,7 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
     const prefix = 'Connected as ';
     if (message == null || !message.startsWith(prefix)) return null;
     final email = message.substring(prefix.length);
-    return email.endsWith('.')
-        ? email.substring(0, email.length - 1)
-        : email;
+    return email.endsWith('.') ? email.substring(0, email.length - 1) : email;
   }
 
   S3SyncConfig get _config => S3SyncConfig(
@@ -128,9 +127,7 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
   Future<void> _connectGoogle() async {
     setState(() => _working = true);
     try {
-      await ref
-          .read(cloudSyncControllerProvider.notifier)
-          .connectGoogle();
+      await ref.read(cloudSyncControllerProvider.notifier).connectGoogle();
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.maybeOf(
@@ -158,10 +155,13 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
             child: Row(
               children: [
                 IconButton(
-                  onPressed: () => context.canPop()
-                      ? context.pop()
-                      : context.go(AppRoutes.settings),
-                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () => DesktopWindowScope.popOrClose(
+                    context,
+                    AppRoutes.settings,
+                  ),
+                  icon: const HugeIcon(
+                    icon: HugeIcons.strokeRoundedArrowLeft01,
+                  ),
                 ),
                 Expanded(
                   child: Text(
@@ -204,9 +204,8 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
                                 ),
                             ],
                             selected: {_provider},
-                            onSelectionChanged: (selection) => setState(
-                              () => _provider = selection.first,
-                            ),
+                            onSelectionChanged: (selection) =>
+                                setState(() => _provider = selection.first),
                           ),
                           fieldSpacing,
                           if (_provider ==
@@ -215,11 +214,12 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
                               children: [
                                 Expanded(
                                   child: Text(
-                                    status.message?.startsWith('Connected as') ==
+                                    status.message?.startsWith(
+                                              'Connected as',
+                                            ) ==
                                             true
                                         ? status.message!
-                                        : l10n
-                                              .cloud_sync_provider_google_drive,
+                                        : l10n.cloud_sync_provider_google_drive,
                                   ),
                                 ),
                                 OutlinedButton(
