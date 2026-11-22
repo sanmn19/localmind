@@ -25,6 +25,7 @@ class CloudSyncMergeService {
     'savedMessages',
     'savedMessageFolders',
     'conversationFolders',
+    'forkAnchors',
   ];
 
   static const _settledStatuses = {'complete', 'error'};
@@ -36,6 +37,7 @@ class CloudSyncMergeService {
     'savedMessages': ['updatedAt', 'savedAt', 'createdAt'],
     'savedMessageFolders': ['updatedAt', 'savedAt', 'createdAt'],
     'conversationFolders': ['updatedAt', 'savedAt', 'createdAt'],
+    'forkAnchors': ['createdAt'],
   };
 
   static final _legacyTombstoneTime = DateTime.utc(1970);

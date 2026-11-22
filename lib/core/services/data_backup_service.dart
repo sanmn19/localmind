@@ -126,6 +126,14 @@ class DataBackupService {
     'isArchived': domain.isArchived,
     'characterCount': domain.characterCount,
     'totalTokenCount': domain.totalTokenCount,
+    // Fork/background rows are hidden in every history surface. Losing these
+    // fields on a backup round-trip turns a hidden fork into a normal chat, so
+    // they travel with the conversation record itself.
+    'forkOfMessageId': domain.forkOfMessageId,
+    'forkSpan': domain.forkSpan,
+    'isFork': domain.isFork,
+    'isBackground': domain.isBackground,
+    'specialKind': domain.specialKind,
   };
 
   List<Map<String, dynamic>> _exportSavedMessages(Store store) {
@@ -153,6 +161,20 @@ class DataBackupService {
         'id': e.id,
         'name': e.name,
         'sortOrder': e.sortOrder,
+        'createdAt': e.createdAt.toIso8601String(),
+      };
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> _exportForkAnchors(Store store) {
+    final box = store.box<ForkAnchorEntity>();
+    return box.getAll().map((e) {
+      return {
+        'id': e.id,
+        'mainConversationId': e.mainConversationId,
+        'anchorMessageId': e.anchorMessageId,
+        'selectedText': e.selectedText,
+        'forkConversationId': e.forkConversationId,
         'createdAt': e.createdAt.toIso8601String(),
       };
     }).toList();
@@ -434,6 +456,7 @@ class DataBackupService {
       'servers': _exportServers(store),
       'manualModels': _exportManualModels(store),
       'conversationFolders': _exportConversationFolders(store),
+      'forkAnchors': _exportForkAnchors(store),
       'modelMetadata': modelMetadata,
     };
   }
@@ -473,6 +496,15 @@ class DataBackupService {
       'savedMessages': all['savedMessages'],
       'savedMessageFolders': all['savedMessageFolders'],
       'conversationFolders': all['conversationFolders'],
+      // A fork is part of its parent chat: ship the anchor with the parent so a
+      // restore can still hide the fork (and draw its highlight band) even when
+      // the receiving app predates the conversation's isFork field.
+      'forkAnchors': (all['forkAnchors'] as List)
+          .where(
+            (item) =>
+                conversationIds.contains((item as Map)['mainConversationId']),
+          )
+          .toList(),
       // Cloud sync carries the memory graph too. Screen-memory device settings
       // stay out of `settings` so a restore cannot turn screen watching on.
       'memories': all['memories'],
@@ -523,6 +555,19 @@ class DataBackupService {
         throw FormatException('Invalid cloud sync collection: $collection');
       }
     }
+    // Optional for backward compatibility: backups written before fork anchors
+    // were included still restore; when present they must be well-formed.
+    final forkAnchors = payload['forkAnchors'];
+    if (forkAnchors != null &&
+        (forkAnchors is! List ||
+            !forkAnchors.every(
+              (record) =>
+                  record is Map &&
+                  record['id'] is String &&
+                  (record['id'] as String).isNotEmpty,
+            ))) {
+      throw const FormatException('Invalid cloud sync collection: forkAnchors');
+    }
     if ((payload['conversations'] as List).any(
           (record) => (record as Map)['isTemporary'] == true,
         ) ||
@@ -544,6 +589,7 @@ class DataBackupService {
       'savedMessages': all['savedMessages'],
       'savedMessageFolders': all['savedMessageFolders'],
       'conversationFolders': all['conversationFolders'],
+      'forkAnchors': all['forkAnchors'],
       // Cloud sync carries the memory graph too. Screen-memory device settings
       // stay out of `settings` so a restore cannot turn screen watching on.
       'memories': all['memories'],
@@ -572,6 +618,13 @@ class DataBackupService {
     final conversationFolders = _conversationFoldersForConversationIds(all, {
       conversationId,
     });
+    final forkAnchors = (all['forkAnchors'] as List)
+        .where(
+          (item) =>
+              (item as Map)['mainConversationId'] == conversationId ||
+              item['forkConversationId'] == conversationId,
+        )
+        .toList();
 
     return {
       'version': 3,
@@ -582,6 +635,7 @@ class DataBackupService {
       'savedMessages': savedMessages,
       'savedMessageFolders': savedMessageFolders,
       'conversationFolders': conversationFolders,
+      'forkAnchors': forkAnchors,
     };
   }
 
@@ -610,6 +664,13 @@ class DataBackupService {
       all,
       conversationIds,
     );
+    final forkAnchors = (all['forkAnchors'] as List)
+        .where(
+          (item) =>
+              conversationIds.contains((item as Map)['mainConversationId']) ||
+              conversationIds.contains(item['forkConversationId']),
+        )
+        .toList();
 
     return {
       'version': 3,
@@ -620,6 +681,7 @@ class DataBackupService {
       'savedMessages': savedMessages,
       'savedMessageFolders': savedMessageFolders,
       'conversationFolders': conversationFolders,
+      'forkAnchors': forkAnchors,
     };
   }
 
@@ -760,6 +822,7 @@ class DataBackupService {
       final savedBox = store.box<SavedMessageEntity>();
       final savedFolderBox = store.box<SavedMessageFolderEntity>();
       final conversationFolderBox = store.box<ConversationFolderEntity>();
+      final forkAnchorBox = store.box<ForkAnchorEntity>();
 
       final personas = decoded['personas'];
       if (personas is List) {
@@ -994,6 +1057,16 @@ class DataBackupService {
             isArchived: item['isArchived'] as bool? ?? false,
             characterCount: item['characterCount'] as int? ?? 0,
             totalTokenCount: item['totalTokenCount'] as int?,
+            forkOfMessageId: item['forkOfMessageId'] as String?,
+            forkSpan: item['forkSpan'] as String?,
+            // Older backups lack isFork but still carry the fork anchor
+            // fields on the conversation; derive the hidden flag so a restore
+            // cannot turn a fork into a history row.
+            isFork:
+                item['isFork'] as bool? ??
+                (item['forkOfMessageId'] != null || item['forkSpan'] != null),
+            isBackground: item['isBackground'] as bool? ?? false,
+            specialKind: item['specialKind'] as String?,
           );
           final query = convBox
               .query(ConversationEntity_.id.equals(conversation.id))
@@ -1003,6 +1076,59 @@ class DataBackupService {
           final entity = ConversationEntity.fromDomain(conversation);
           if (existing != null) entity.internalId = existing.internalId;
           convBox.put(entity);
+        }
+      }
+
+      final forkAnchors = decoded['forkAnchors'];
+      if (forkAnchors is List) {
+        for (final item in forkAnchors) {
+          if (item is! Map) continue;
+          final id = backupImportString(item['id']);
+          final mainConversationId = backupImportString(
+            item['mainConversationId'],
+          );
+          final anchorMessageId = backupImportString(item['anchorMessageId']);
+          final forkConversationId = backupImportString(
+            item['forkConversationId'],
+          );
+          final selectedText = backupImportString(item['selectedText']);
+          final createdAt = backupImportDateTime(item['createdAt']);
+          if (id == null ||
+              mainConversationId == null ||
+              anchorMessageId == null ||
+              forkConversationId == null ||
+              selectedText == null ||
+              createdAt == null) {
+            continue;
+          }
+          final entity = ForkAnchorEntity(
+            id: id,
+            mainConversationId: mainConversationId,
+            anchorMessageId: anchorMessageId,
+            selectedText: selectedText,
+            forkConversationId: forkConversationId,
+            createdAt: createdAt,
+          );
+          final query = forkAnchorBox
+              .query(ForkAnchorEntity_.id.equals(entity.id))
+              .build();
+          final existing = query.findFirst();
+          query.close();
+          if (existing != null) entity.internalId = existing.internalId;
+          forkAnchorBox.put(entity);
+        }
+        // An anchor is the durable identity of a fork. If an older payload
+        // lost the conversation's isFork flag, restore it from the anchor so
+        // the fork never surfaces as a normal history row.
+        final forkConversationIds = forkAnchorBox
+            .getAll()
+            .map((anchor) => anchor.forkConversationId)
+            .toSet();
+        for (final entity in convBox.getAll()) {
+          if (forkConversationIds.contains(entity.id) && !entity.isFork) {
+            entity.isFork = true;
+            convBox.put(entity);
+          }
         }
       }
 
@@ -1162,6 +1288,16 @@ class DataBackupService {
           (item) => item.id,
           (item) => item.internalId,
         );
+        // Old payloads have no anchor collection; keep local anchors in that
+        // case instead of deleting the fork's only durable identity.
+        if (decoded['forkAnchors'] is List) {
+          removeMissing<ForkAnchorEntity>(
+            forkAnchorBox,
+            ids(decoded['forkAnchors']),
+            (item) => item.id,
+            (item) => item.internalId,
+          );
+        }
       }
     }, (decoded, attachmentsDir, replaceCloudData));
   }

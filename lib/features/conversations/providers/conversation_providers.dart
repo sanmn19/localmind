@@ -707,8 +707,30 @@ final filteredConversationsProvider = Provider<AsyncValue<List<Conversation>>>((
     // background-task conversations (background sub-agents feature) never
     // surface in history; fork turns live in the fork panel, task turns in
     // the task chat pane.
+    //
+    // The anchor is the durable identity of a fork. Consult it as a second
+    // line of defence for payloads restored from an older backup that lost the
+    // conversation's isFork flag, so a fork can never become a history row.
+    Set<String> anchoredForkIds = const {};
+    try {
+      anchoredForkIds = ref
+          .read(databaseProvider)
+          .store
+          .box<ForkAnchorEntity>()
+          .getAll()
+          .map((anchor) => anchor.forkConversationId)
+          .toSet();
+    } catch (_) {
+      // A store that is still opening (or a test override) has no anchors.
+    }
     var filtered = conversations
-        .where((c) => !c.isTemporary && !c.isFork && !c.isBackground)
+        .where(
+          (c) =>
+              !c.isTemporary &&
+              !c.isFork &&
+              !c.isBackground &&
+              !anchoredForkIds.contains(c.id),
+        )
         .toList();
 
     switch (listFilter) {

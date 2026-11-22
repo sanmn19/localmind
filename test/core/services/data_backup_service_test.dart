@@ -219,6 +219,74 @@ void main() {
     expect(payload['settings'], isNot(contains('screenMemoryBlockedApps')));
   });
 
+  test('cloud export preserves fork identity and its anchor', () async {
+    final main = ConversationEntity.fromDomain(
+      Conversation(
+        id: 'main-1',
+        title: 'Main chat',
+        createdAt: DateTime.utc(2026, 10, 20),
+        updatedAt: DateTime.utc(2026, 10, 20),
+      ),
+    );
+    final fork = ConversationEntity.fromDomain(
+      Conversation(
+        id: 'fork-1',
+        title: 'Fork — Main chat',
+        createdAt: DateTime.utc(2026, 10, 20, 1),
+        updatedAt: DateTime.utc(2026, 10, 20, 1),
+        forkOfMessageId: 'message-1',
+        forkSpan: '{"text":"that"}',
+        isFork: true,
+      ),
+    );
+    final anchor = ForkAnchorEntity(
+      id: 'anchor-1',
+      mainConversationId: main.id,
+      anchorMessageId: 'message-1',
+      selectedText: 'that',
+      forkConversationId: fork.id,
+      createdAt: DateTime.utc(2026, 10, 20, 1),
+    );
+    final store = _FakeStore({
+      ConversationEntity: _FakeBox([main, fork]),
+      MessageEntity: _FakeBox<MessageEntity>(const []),
+      PersonaEntity: _FakeBox<PersonaEntity>(const []),
+      SavedMessageEntity: _FakeBox<SavedMessageEntity>(const []),
+      SavedMessageFolderEntity: _FakeBox<SavedMessageFolderEntity>(const []),
+      ServerEntity: _FakeBox<ServerEntity>(const []),
+      ConversationFolderEntity: _FakeBox<ConversationFolderEntity>(const []),
+      ForkAnchorEntity: _FakeBox([anchor]),
+    });
+    final directory = await Directory.systemTemp.createTemp(
+      'backup-fork-test',
+    );
+    addTearDown(() async {
+      if (await directory.exists()) await directory.delete(recursive: true);
+    });
+    final service = DataBackupService(
+      documentsDirectory: () async => directory,
+    );
+
+    final payload = await service.exportCloudSync(store, jsonEncode({}));
+    final conversations = (payload['conversations'] as List)
+        .cast<Map<String, dynamic>>();
+    final forkRow = conversations.firstWhere((row) => row['id'] == fork.id);
+    expect(forkRow['isFork'], isTrue);
+    expect(forkRow['forkOfMessageId'], 'message-1');
+    expect(forkRow['forkSpan'], '{"text":"that"}');
+    expect(
+      conversations.map((row) => row['id']),
+      containsAll([main.id, fork.id]),
+    );
+
+    final anchors = (payload['forkAnchors'] as List)
+        .cast<Map<String, dynamic>>();
+    expect(anchors.single['id'], anchor.id);
+    expect(anchors.single['mainConversationId'], main.id);
+    expect(anchors.single['forkConversationId'], fork.id);
+    expect(anchors.single['selectedText'], 'that');
+  });
+
   test('memory tags, summary, expiry and source app survive export/import',
       () async {
     final memory = MemoryEntity(
