@@ -1,8 +1,29 @@
+import 'dart:convert';
+
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:localmind/core/logger/app_logger.dart';
 import 'package:localmind/core/services/notification_tap_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 const toolApprovalChannelId = 'localmind_tool_approvals';
+
+/// SharedPreferences key the background action isolate writes and the live chat
+/// notifier polls. A background isolate cannot complete the main isolate's Completer,
+/// so the decision is handed over through this key.
+const toolApprovalActionKey = 'toolApprovalAction';
+
+/// Top-level entry point for notification actions that must not open the UI.
+@pragma('vm:entry-point')
+Future<void> toolApprovalBackgroundAction(NotificationResponse response) async {
+  final parsed = ToolApprovalPayload.tryParse(response.payload);
+  final action = response.actionId;
+  if (parsed == null || (action != 'approve' && action != 'deny')) return;
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString(
+    toolApprovalActionKey,
+    jsonEncode({'approvalId': parsed.approvalId, 'action': action}),
+  );
+}
 
 /// Notification tap/action payload. The approval id identifies the pending
 /// completer; the conversation id lets a tap open the right chat.
@@ -45,6 +66,8 @@ class ToolApprovalNotifier {
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       ),
       onDidReceiveNotificationResponse: NotificationTapRouter.handle,
+      onDidReceiveBackgroundNotificationResponse:
+          toolApprovalBackgroundAction,
     );
     final android = _plugin
         .resolvePlatformSpecificImplementation<
@@ -94,8 +117,16 @@ class ToolApprovalNotifier {
             playSound: true,
             enableVibration: true,
             actions: [
-              AndroidNotificationAction('deny', 'Deny'),
-              AndroidNotificationAction('approve', 'Approve'),
+              AndroidNotificationAction(
+                'deny',
+                'Deny',
+                cancelNotification: true,
+              ),
+              AndroidNotificationAction(
+                'approve',
+                'Approve',
+                cancelNotification: true,
+              ),
               AndroidNotificationAction(
                 'always',
                 'Always…',
