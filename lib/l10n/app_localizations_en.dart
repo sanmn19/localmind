@@ -2404,7 +2404,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tool_status_failed => 'Failed';
 
   @override
-  String get tool_activity_title => 'Web activity';
+  String get tool_activity_title => 'Tool calls';
 
   @override
   String tool_activity_calls(int count) {
@@ -3866,6 +3866,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get screen_memories_processing_model_reset => 'Use chat model';
+
+  @override
+  String get tool_approval_always_chat => 'Always for this chat';
+
+  @override
+  String get tool_approval_always_global => 'Always globally';
 
   @override
   String get screen_memories_sampling_mode => 'Sampling mode';

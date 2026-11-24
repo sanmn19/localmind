@@ -66,7 +66,7 @@ void main() {
     await tester.pumpWidget(_pump(_snapshotTwoCalls('chain mind')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Web activity'), findsOneWidget);
+    expect(find.text('Tool calls'), findsOneWidget);
     expect(find.text('2 calls'), findsOneWidget);
     expect(_sizeFactor(tester), 0.0);
   });
@@ -75,7 +75,7 @@ void main() {
     await tester.pumpWidget(_pump(_snapshotTwoCalls(null)));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Web activity'));
+    await tester.tap(find.text('Tool calls'));
     await tester.pumpAndSettle();
 
     expect(_sizeFactor(tester), 1.0);
@@ -96,9 +96,9 @@ void main() {
 
   testWidgets('expanding again re-collapses the card', (tester) async {
     await tester.pumpWidget(_pump(_snapshotTwoCalls('chain mind')));
-    await tester.tap(find.text('Web activity'));
+    await tester.tap(find.text('Tool calls'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Web activity'));
+    await tester.tap(find.text('Tool calls'));
     await tester.pumpAndSettle();
 
     expect(_sizeFactor(tester), 0.0);
@@ -108,7 +108,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(_pump(_snapshotTwoCalls('chain mind')));
-    await tester.tap(find.text('Web activity'));
+    await tester.tap(find.text('Tool calls'));
     await tester.pumpAndSettle();
 
     expect(find.byType(ReasoningWidget), findsOneWidget);
@@ -118,7 +118,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(_pump(_snapshotTwoCalls(null)));
-    await tester.tap(find.text('Web activity'));
+    await tester.tap(find.text('Tool calls'));
     await tester.pumpAndSettle();
 
     expect(find.byType(ReasoningWidget), findsNothing);

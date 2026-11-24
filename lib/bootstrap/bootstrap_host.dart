@@ -21,6 +21,9 @@ import '../features/personas/providers/personas_providers.dart';
 import '../features/servers/data/models/server.dart';
 import '../features/servers/providers/server_providers.dart';
 import '../features/chat/data/background_engine.dart';
+import '../features/chat/data/tool_approval_notifier.dart';
+import '../features/chat/data/tool_approval_policy.dart';
+import '../features/chat/providers/chat_providers.dart';
 import '../features/chat/providers/tooling_providers.dart';
 import '../features/chat/utils/message_variants.dart';
 import '../features/conversations/providers/conversation_providers.dart'
@@ -192,6 +195,33 @@ class _BootstrapHostState extends State<BootstrapHost> {
       if (ownerId == null) return;
       unawaited(_openOwnerChatForBgResult(ownerId));
     };
+    ToolApprovalNotifier.onAction = (NotificationResponse response) {
+      final parsed = ToolApprovalPayload.tryParse(response.payload);
+      final container = _container;
+      if (parsed == null || container == null) return;
+      final action = response.actionId;
+      if (action == 'approve' || action == 'deny') {
+        container
+            .read(chatProvider.notifier)
+            .approveToolDecision(
+              parsed.approvalId,
+              action == 'approve'
+                  ? ToolApprovalDecision.once
+                  : ToolApprovalDecision.deny,
+            );
+        return;
+      }
+      // "Always…" or a body tap: open the chat and let the approval dialog
+      // present the per-chat / global choices.
+      container
+          .read(conv.activeConversationIdProvider.notifier)
+          .setActiveConversationId(parsed.conversationId);
+      try {
+        container.read(routerProvider).go(AppRoutes.home);
+      } catch (_) {
+        // The router may not be mounted yet; the active id is already set.
+      }
+    };
   }
 
   /// A tap that launches the app from a terminated state arrives through the
@@ -205,6 +235,19 @@ class _BootstrapHostState extends State<BootstrapHost> {
         details?.notificationResponse?.payload,
       );
       if (ownerId != null) await _openOwnerChatForBgResult(ownerId);
+      final approval = ToolApprovalPayload.tryParse(
+        details?.notificationResponse?.payload,
+      );
+      if (approval != null) {
+        final container = _container;
+        if (container == null) return;
+        container
+            .read(conv.activeConversationIdProvider.notifier)
+            .setActiveConversationId(approval.conversationId);
+        try {
+          container.read(routerProvider).go(AppRoutes.home);
+        } catch (_) {}
+      }
     } catch (error) {
       Log.warning('Notification launch routing failed: $error');
     }

@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:localmind/features/chat/data/tool_approval_policy.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:localmind/core/models/enums.dart';
@@ -140,7 +142,7 @@ Future<bool> _grantNextApproval(
   while (DateTime.now().isBefore(deadline)) {
     final pending = container.read(chatProvider).pendingToolApproval;
     if (pending != null && !pending.completer.isCompleted) {
-      pending.completer.complete(true);
+      pending.completer.complete(ToolApprovalDecision.once);
       await _drain();
       return true;
     }
