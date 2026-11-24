@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:localmind/core/models/enums.dart';
 import 'package:localmind/core/providers/app_providers.dart';
+import 'package:localmind/core/providers/storage_providers.dart';
 import 'package:localmind/core/providers/service_providers.dart';
 import 'package:localmind/features/chat/utils/image_upload_utils.dart';
 import 'package:localmind/features/servers/data/models/server.dart';
@@ -14,6 +15,9 @@ import 'package:localmind/features/on_device/data/models/on_device_model.dart';
 import 'package:localmind/features/on_device/data/on_device_mlx_service.dart';
 import '../data/chat_service.dart';
 import '../data/smart_reply_service.dart';
+import '../data/chat_completion_notifier.dart';
+import '../data/tool_approval_notifier.dart';
+import '../data/tool_approval_policy.dart';
 import '../data/title_generation_service.dart';
 
 final chatServiceProvider = Provider<ChatService?>((ref) {
@@ -116,3 +120,15 @@ final smartReplyServiceProvider = Provider<SmartReplyService>((ref) {
 final titleGenerationServiceProvider = Provider<TitleGenerationService>((ref) {
   return TitleGenerationService();
 });
+
+final chatCompletionNotifierProvider = Provider<ChatCompletionNotifier>(
+  (ref) => ChatCompletionNotifier(),
+);
+
+final toolApprovalPolicyProvider = Provider<ToolApprovalPolicy>(
+  (ref) => ToolApprovalPolicy(ref.watch(sharedPreferencesProvider)),
+);
+
+final toolApprovalNotifierProvider = Provider<ToolApprovalNotifier>(
+  (ref) => ToolApprovalNotifier(),
+);

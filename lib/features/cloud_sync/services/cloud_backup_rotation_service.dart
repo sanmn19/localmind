@@ -25,6 +25,16 @@ class CloudBackupRotationService {
   /// Backups are written at most once per hour unless explicitly forced.
   static const minimumInterval = Duration(hours: 1);
 
+  /// Whether the remote state is due for a snapshot before it is replaced.
+  static bool shouldRotate({
+    required bool forced,
+    required DateTime? lastBackupAt,
+    required DateTime now,
+  }) =>
+      forced ||
+      lastBackupAt == null ||
+      now.difference(lastBackupAt) >= minimumInterval;
+
   Future<RotationResult> rotateBeforeWrite({
     required CloudSyncStorage storage,
     required List<int> existingState,
@@ -61,13 +71,14 @@ class CloudBackupRotationService {
   }
 
   Future<void> _pruneLocal() async {
-    final files = (await localRoot
-            .list()
-            .where((entity) => entity is File)
-            .cast<File>()
-            .where((file) => file.path.endsWith('.enc'))
-            .toList())
-      ..sort((a, b) => a.path.compareTo(b.path));
+    final files =
+        (await localRoot
+              .list()
+              .where((entity) => entity is File)
+              .cast<File>()
+              .where((file) => file.path.endsWith('.enc'))
+              .toList())
+          ..sort((a, b) => a.path.compareTo(b.path));
     while (files.length > keep) {
       final oldest = files.removeAt(0);
       if (await oldest.exists()) await oldest.delete();
@@ -81,9 +92,6 @@ class CloudBackupRotationService {
     }
   }
 
-  String _stamp(DateTime at) => at
-      .toUtc()
-      .toIso8601String()
-      .replaceAll(':', '-')
-      .replaceAll('.', '-');
+  String _stamp(DateTime at) =>
+      at.toUtc().toIso8601String().replaceAll(':', '-').replaceAll('.', '-');
 }

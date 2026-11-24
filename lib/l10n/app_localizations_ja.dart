@@ -2375,7 +2375,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get tool_status_failed => 'Failed';
 
   @override
-  String get tool_activity_title => 'Web activity';
+  String get tool_activity_title => 'Tool calls';
 
   @override
   String tool_activity_calls(int count) {
@@ -3643,6 +3643,26 @@ class AppLocalizationsJa extends AppLocalizations {
   String get background_pill_title => 'Background task';
 
   @override
+  String get cloud_sync_provider => 'Backup destination';
+
+  @override
+  String get cloud_sync_provider_s3 => 'S3-compatible';
+
+  @override
+  String get cloud_sync_provider_google_drive => 'Google Drive';
+
+  @override
+  String get cloud_sync_connect_google => 'Connect Google Drive';
+
+  @override
+  String cloud_sync_connected_as(String email) {
+    return 'Connected as $email';
+  }
+
+  @override
+  String get cloud_sync_backup_now => 'Back up now';
+
+  @override
   String get model_load_confirm_title => 'Load model?';
 
   @override
@@ -3721,26 +3741,6 @@ class AppLocalizationsJa extends AppLocalizations {
       'A reply is streaming and will be stopped.';
 
   @override
-  String get cloud_sync_provider => 'Backup destination';
-
-  @override
-  String get cloud_sync_provider_s3 => 'S3-compatible';
-
-  @override
-  String get cloud_sync_provider_google_drive => 'Google Drive';
-
-  @override
-  String get cloud_sync_connect_google => 'Connect Google Drive';
-
-  @override
-  String cloud_sync_connected_as(String email) {
-    return 'Connected as $email';
-  }
-
-  @override
-  String get cloud_sync_backup_now => 'Back up now';
-
-  @override
   String get memories_title => 'Memories';
 
   @override
@@ -3807,6 +3807,12 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get screen_memories_processing_model_reset => 'Use chat model';
+
+  @override
+  String get tool_approval_always_chat => 'Always for this chat';
+
+  @override
+  String get tool_approval_always_global => 'Always globally';
 
   @override
   String get screen_memories_sampling_mode => 'Sampling mode';

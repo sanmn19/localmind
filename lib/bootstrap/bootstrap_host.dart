@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'
-    show NotificationResponse;
+    show FlutterLocalNotificationsPlugin, NotificationResponse;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -16,10 +16,14 @@ import '../core/widgets/screen_memory_lifecycle_host.dart';
 import '../features/on_device/data/on_device_gemma_service.dart';
 import '../features/on_device/providers/on_device_providers.dart';
 import '../core/models/enums.dart';
+import '../core/routes/app_routes.dart';
 import '../features/personas/providers/personas_providers.dart';
 import '../features/servers/data/models/server.dart';
 import '../features/servers/providers/server_providers.dart';
 import '../features/chat/data/background_engine.dart';
+import '../features/chat/data/tool_approval_notifier.dart';
+import '../features/chat/data/tool_approval_policy.dart';
+import '../features/chat/providers/chat_providers.dart';
 import '../features/chat/providers/tooling_providers.dart';
 import '../features/chat/utils/message_variants.dart';
 import '../features/conversations/providers/conversation_providers.dart'
@@ -27,6 +31,7 @@ import '../features/conversations/providers/conversation_providers.dart'
 import '../features/skills/data/skills_provider.dart';
 import '../features/cloud_sync/views/cloud_sync_lifecycle_host.dart';
 import '../core/logger/app_logger.dart';
+import '../core/services/notification_tap_router.dart';
 import '../core/utils/locale_utils.dart';
 import '../features/ask_local/data/ask_local_main_channel.dart';
 import '../objectbox.g.dart';
@@ -161,6 +166,9 @@ class _BootstrapHostState extends State<BootstrapHost> {
 
       _container = container;
       _updateStage(BootstrapStage.done, 'Ready');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_handleNotificationLaunch());
+      });
     } catch (e) {
       _state = BootstrapState(
         stage: BootstrapStage.error,
@@ -188,6 +196,77 @@ class _BootstrapHostState extends State<BootstrapHost> {
       if (ownerId == null) return;
       unawaited(_openOwnerChatForBgResult(ownerId));
     };
+    ToolApprovalNotifier.onAction = (NotificationResponse response) {
+      final parsed = ToolApprovalPayload.tryParse(response.payload);
+      final container = _container;
+      if (parsed == null || container == null) return;
+      final action = response.actionId;
+      if (action == 'approve' || action == 'deny') {
+        final decision = action == 'approve'
+            ? ToolApprovalDecision.once
+            : ToolApprovalDecision.deny;
+        final notifier = container.read(chatProvider.notifier);
+        // Prefer the payload id, but fall back to the live pending approval:
+        // Android may deliver an action without the payload.
+        notifier.approveToolDecision(parsed.approvalId, decision);
+        notifier.approveCurrentTool(decision);
+        unawaited(ToolApprovalNotifier().cancel(parsed.approvalId));
+        return;
+      }
+      // "Always…" or a body tap: open the chat and let the approval dialog
+      // present the per-chat / global choices.
+      container
+          .read(conv.activeConversationIdProvider.notifier)
+          .setActiveConversationId(parsed.conversationId);
+      try {
+        container.read(routerProvider).go(AppRoutes.home);
+      } catch (_) {
+        // The router may not be mounted yet; the active id is already set.
+      }
+    };
+    NotificationTapRouter.onBackgroundTap =
+        BackgroundResultNotifier.onNotificationTap;
+    NotificationTapRouter.onToolApprovalTap = ToolApprovalNotifier.onAction;
+  }
+
+  /// A tap that launches the app from a terminated state arrives through the
+  /// plugin's launch details instead of the live callback. Route it through the same
+  /// owner-chat opener.
+  Future<void> _handleNotificationLaunch() async {
+    try {
+      final details = await FlutterLocalNotificationsPlugin()
+          .getNotificationAppLaunchDetails();
+      final ownerId = BgNotificationPayload.tryParse(
+        details?.notificationResponse?.payload,
+      );
+      if (ownerId != null) await _openOwnerChatForBgResult(ownerId);
+      final approval = ToolApprovalPayload.tryParse(
+        details?.notificationResponse?.payload,
+      );
+      if (approval != null) {
+        final container = _container;
+        if (container == null) return;
+        final action = details?.notificationResponse?.actionId;
+        if (action == 'approve' || action == 'deny') {
+          container
+              .read(chatProvider.notifier)
+              .approveCurrentTool(
+                action == 'approve'
+                    ? ToolApprovalDecision.once
+                    : ToolApprovalDecision.deny,
+              );
+          return;
+        }
+        container
+            .read(conv.activeConversationIdProvider.notifier)
+            .setActiveConversationId(approval.conversationId);
+        try {
+          container.read(routerProvider).go(AppRoutes.home);
+        } catch (_) {}
+      }
+    } catch (error) {
+      Log.warning('Notification launch routing failed: $error');
+    }
   }
 
   /// Opens the owner conversation and scrolls to the active timeline's LAST
@@ -208,6 +287,12 @@ class _BootstrapHostState extends State<BootstrapHost> {
     container
         .read(conv.activeConversationIdProvider.notifier)
         .setActiveConversationId(ownerId);
+    try {
+      container.read(routerProvider).go(AppRoutes.home);
+    } catch (_) {
+      // The router may not be mounted yet on a cold start; the active id is
+      // already set, so the home screen opens the right chat once it mounts.
+    }
 
     final rows = db.messageBox
         .query(MessageEntity_.conversationUid.equals(ownerId))

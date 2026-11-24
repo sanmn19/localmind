@@ -39,4 +39,15 @@ abstract class CloudSyncStorage {
 
   /// Keys under [backupPrefix], newest last (ISO timestamp names).
   Future<List<String>> listBackups();
+
+  /// Drive has no usable conditional write, so a writer leases the state object
+  /// for the duration of its write. S3 enforces `If-Match`/`If-None-Match` and
+  /// never leases.
+  bool get requiresLease => false;
+
+  Future<CloudSyncLease?> readLease() async => null;
+
+  Future<void> writeLease(CloudSyncLease lease) async {}
+
+  Future<void> deleteLease() async {}
 }

@@ -109,6 +109,51 @@ void main() {
     });
   });
 
+  group('ForkService.createFork', () {
+    test('inserts a hidden fork without touching the parent row', () async {
+      final main = ConversationEntity.fromDomain(
+        Conversation(
+          id: 'main-1',
+          title: 'Main chat',
+          createdAt: DateTime.utc(2026, 10, 8),
+          updatedAt: DateTime.utc(2026, 10, 8),
+          isArchived: true,
+          folderId: 'folder-1',
+        ),
+      );
+      final conversations = _RecordingConversationBox([main]);
+      final anchors = _RecordingAnchorBox();
+      final store = _RecordingCrudStore({
+        ConversationEntity: conversations,
+        ForkAnchorEntity: anchors,
+      });
+
+      final anchor = await ForkService(_FakeObjectBoxStore(store)).createFork(
+        mainConversationId: main.id,
+        anchorMessageId: 'a-1',
+        selectedText: 'Ada Lovelace wrote it',
+      );
+
+      // The parent row is still exactly the same object — a fork must never
+      // overwrite the chat it was created from.
+      final parent = conversations.items.firstWhere((c) => c.id == main.id);
+      expect(parent.title, 'Main chat');
+      expect(parent.isFork, isFalse);
+      expect(parent.isArchived, isTrue);
+      expect(parent.folderId, 'folder-1');
+
+      final fork = conversations.items.firstWhere(
+        (c) => c.id == anchor.forkConversationId,
+      );
+      expect(conversations.items, hasLength(2));
+      expect(fork.isFork, isTrue);
+      expect(fork.forkOfMessageId, 'a-1');
+      expect(fork.isArchived, isTrue);
+      expect(fork.folderId, 'folder-1');
+      expect(anchors.items.single.forkConversationId, fork.id);
+    });
+  });
+
   group('ChatNotifier.mainTimelineUpTo / messageById', () {
     test(
       'cuts at the anchor inclusive; post-anchor rows never enter the fork context',
@@ -206,6 +251,44 @@ void main() {
       final filtered = filteredAsync.value!;
       expect(filtered.map((c) => c.id), ['keep-1']);
     });
+
+    test(
+      'filteredConversationsProvider hides a fork identified only by its anchor',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final rows = [
+          _conversation('keep-1'),
+          _conversation('fork-1'),
+        ];
+        final container = ProviderContainer(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(
+              await SharedPreferences.getInstance(),
+            ),
+            conv.conversationsProvider.overrideWith(
+              () => _SeededConversations(rows),
+            ),
+            databaseProvider.overrideWithValue(
+              _FakeAnchorStore([
+                ForkAnchorEntity(
+                  id: 'anchor-1',
+                  mainConversationId: 'keep-1',
+                  anchorMessageId: 'a-1',
+                  selectedText: 'Ada',
+                  forkConversationId: 'fork-1',
+                  createdAt: DateTime.utc(2026, 10, 8),
+                ),
+              ]),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        await container.read(conv.conversationsProvider.future);
+        final filtered = container.read(conv.filteredConversationsProvider).value!;
+        expect(filtered.map((c) => c.id), ['keep-1']);
+      },
+    );
 
     test('message search skips hits from excluded fork conversations', () {
       final db = _FakeSearchStore([
@@ -429,6 +512,97 @@ class _TestSettingsNotifier extends SettingsNotifier {
 class _IdleVoiceModeNotifier extends VoiceModeNotifier {
   @override
   VoiceModeState build() => const VoiceModeState();
+}
+
+class _FakeObjectBoxStore extends Fake implements ObjectBoxStore {
+  _FakeObjectBoxStore(this.store);
+
+  @override
+  final Store store;
+}
+
+class _RecordingCrudStore extends Fake implements Store {
+  _RecordingCrudStore(this.boxes);
+
+  final Map<Type, Object> boxes;
+
+  @override
+  Box<T> box<T>() => boxes[T]! as Box<T>;
+
+  @override
+  Future<R> runInTransactionAsync<R, P>(
+    TxMode mode,
+    R Function(Store, P) callback,
+    P param,
+  ) async => callback(this, param);
+}
+
+class _RecordingConversationBox extends Fake
+    implements Box<ConversationEntity> {
+  _RecordingConversationBox(this.items);
+
+  final List<ConversationEntity> items;
+
+  @override
+  List<ConversationEntity> getAll() => List<ConversationEntity>.from(items);
+
+  @override
+  QueryBuilder<ConversationEntity> query([
+    Condition<ConversationEntity>? qc,
+  ]) => _FakeQueryBuilder(items);
+
+  @override
+  int put(ConversationEntity entity, {PutMode mode = PutMode.put}) {
+    final index = items.indexWhere((item) => item.id == entity.id);
+    if (index >= 0) {
+      items[index] = entity;
+    } else {
+      items.add(entity);
+    }
+    return items.length;
+  }
+}
+
+class _RecordingAnchorBox extends Fake implements Box<ForkAnchorEntity> {
+  final List<ForkAnchorEntity> items = [];
+
+  @override
+  int put(ForkAnchorEntity entity, {PutMode mode = PutMode.put}) {
+    items.add(entity);
+    return items.length;
+  }
+}
+
+class _FakeAnchorStore extends Fake implements ObjectBoxStore {
+  _FakeAnchorStore(this.anchors);
+
+  final List<ForkAnchorEntity> anchors;
+
+  @override
+  Store get store => _FakeAnchorBackingStore(anchors);
+}
+
+class _FakeAnchorBackingStore extends Fake implements Store {
+  _FakeAnchorBackingStore(this.anchors);
+
+  final List<ForkAnchorEntity> anchors;
+
+  @override
+  Box<T> box<T>() {
+    if (T == ForkAnchorEntity) {
+      return _FakeAnchorBox(anchors) as Box<T>;
+    }
+    throw UnimplementedError();
+  }
+}
+
+class _FakeAnchorBox extends Fake implements Box<ForkAnchorEntity> {
+  _FakeAnchorBox(this.anchors);
+
+  final List<ForkAnchorEntity> anchors;
+
+  @override
+  List<ForkAnchorEntity> getAll() => List<ForkAnchorEntity>.from(anchors);
 }
 
 class _FakeSearchStore extends Fake implements ObjectBoxStore {

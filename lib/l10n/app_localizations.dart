@@ -4512,7 +4512,7 @@ abstract class AppLocalizations {
   /// Header of the collapsed card summarizing a tool chain's web searches and fetches
   ///
   /// In en, this message translates to:
-  /// **'Web activity'**
+  /// **'Tool calls'**
   String get tool_activity_title;
 
   /// Badge counting the tool calls inside the web activity card
@@ -6819,6 +6819,42 @@ abstract class AppLocalizations {
   /// **'Background task'**
   String get background_pill_title;
 
+  /// Cloud Sync screen: provider selector label
+  ///
+  /// In en, this message translates to:
+  /// **'Backup destination'**
+  String get cloud_sync_provider;
+
+  /// Cloud Sync screen: S3 provider option
+  ///
+  /// In en, this message translates to:
+  /// **'S3-compatible'**
+  String get cloud_sync_provider_s3;
+
+  /// Cloud Sync screen: Google Drive provider option
+  ///
+  /// In en, this message translates to:
+  /// **'Google Drive'**
+  String get cloud_sync_provider_google_drive;
+
+  /// Cloud Sync screen: Google OAuth connect button
+  ///
+  /// In en, this message translates to:
+  /// **'Connect Google Drive'**
+  String get cloud_sync_connect_google;
+
+  /// Cloud Sync screen: connected Google account
+  ///
+  /// In en, this message translates to:
+  /// **'Connected as {email}'**
+  String cloud_sync_connected_as(String email);
+
+  /// Cloud Sync screen: force a backup rotation and upload
+  ///
+  /// In en, this message translates to:
+  /// **'Back up now'**
+  String get cloud_sync_backup_now;
+
   /// Ask Local rig load confirmation dialog title
   ///
   /// In en, this message translates to:
@@ -6963,42 +6999,6 @@ abstract class AppLocalizations {
   /// **'A reply is streaming and will be stopped.'**
   String get model_load_confirm_streaming;
 
-  /// Cloud Sync screen: provider selector label
-  ///
-  /// In en, this message translates to:
-  /// **'Backup destination'**
-  String get cloud_sync_provider;
-
-  /// Cloud Sync screen: S3 provider option
-  ///
-  /// In en, this message translates to:
-  /// **'S3-compatible'**
-  String get cloud_sync_provider_s3;
-
-  /// Cloud Sync screen: Google Drive provider option
-  ///
-  /// In en, this message translates to:
-  /// **'Google Drive'**
-  String get cloud_sync_provider_google_drive;
-
-  /// Cloud Sync screen: Google OAuth connect button
-  ///
-  /// In en, this message translates to:
-  /// **'Connect Google Drive'**
-  String get cloud_sync_connect_google;
-
-  /// Cloud Sync screen: connected Google account
-  ///
-  /// In en, this message translates to:
-  /// **'Connected as {email}'**
-  String cloud_sync_connected_as(String email);
-
-  /// Cloud Sync screen: force a backup rotation and upload
-  ///
-  /// In en, this message translates to:
-  /// **'Back up now'**
-  String get cloud_sync_backup_now;
-
   /// Drawer/settings row and screen title
   ///
   /// In en, this message translates to:
@@ -7118,6 +7118,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Use chat model'**
   String get screen_memories_processing_model_reset;
+
+  /// No description provided for @tool_approval_always_chat.
+  ///
+  /// In en, this message translates to:
+  /// **'Always for this chat'**
+  String get tool_approval_always_chat;
+
+  /// No description provided for @tool_approval_always_global.
+  ///
+  /// In en, this message translates to:
+  /// **'Always globally'**
+  String get tool_approval_always_global;
 
   /// No description provided for @screen_memories_sampling_mode.
   ///

@@ -6,6 +6,8 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:localmind/l10n/app_localizations.dart';
 import '../../../core/components/server_logo.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/routes/app_routes.dart';
+import '../../../core/routes/desktop_window_scope.dart';
 import '../../models/data/models/manual_model.dart';
 import '../../models/providers/manual_model_providers.dart';
 import '../data/models/server.dart';
@@ -327,8 +329,11 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> {
       if (mounted) {
         final l10n = AppLocalizations.of(context);
         final messenger = ScaffoldMessenger.maybeOf(context);
+        final window = DesktopWindowScope.maybeOf(context);
         hasPopped = true;
-        if (Navigator.canPop(context)) {
+        if (window != null) {
+          window.close();
+        } else if (Navigator.canPop(context)) {
           Navigator.pop(context);
         } else {
           context.pop();
@@ -451,7 +456,8 @@ class _AddServerScreenState extends ConsumerState<AddServerScreen> {
         title: Text(_isEditing ? l10n.edit_server : l10n.add_server_title),
         leading: IconButton(
           icon: const HugeIcon(icon: HugeIcons.strokeRoundedCancel01),
-          onPressed: () => context.pop(),
+          onPressed: () =>
+              DesktopWindowScope.popOrClose(context, AppRoutes.servers),
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,

@@ -219,6 +219,74 @@ void main() {
     expect(payload['settings'], isNot(contains('screenMemoryBlockedApps')));
   });
 
+  test('cloud export preserves fork identity and its anchor', () async {
+    final main = ConversationEntity.fromDomain(
+      Conversation(
+        id: 'main-1',
+        title: 'Main chat',
+        createdAt: DateTime.utc(2026, 10, 20),
+        updatedAt: DateTime.utc(2026, 10, 20),
+      ),
+    );
+    final fork = ConversationEntity.fromDomain(
+      Conversation(
+        id: 'fork-1',
+        title: 'Fork — Main chat',
+        createdAt: DateTime.utc(2026, 10, 20, 1),
+        updatedAt: DateTime.utc(2026, 10, 20, 1),
+        forkOfMessageId: 'message-1',
+        forkSpan: '{"text":"that"}',
+        isFork: true,
+      ),
+    );
+    final anchor = ForkAnchorEntity(
+      id: 'anchor-1',
+      mainConversationId: main.id,
+      anchorMessageId: 'message-1',
+      selectedText: 'that',
+      forkConversationId: fork.id,
+      createdAt: DateTime.utc(2026, 10, 20, 1),
+    );
+    final store = _FakeStore({
+      ConversationEntity: _FakeBox([main, fork]),
+      MessageEntity: _FakeBox<MessageEntity>(const []),
+      PersonaEntity: _FakeBox<PersonaEntity>(const []),
+      SavedMessageEntity: _FakeBox<SavedMessageEntity>(const []),
+      SavedMessageFolderEntity: _FakeBox<SavedMessageFolderEntity>(const []),
+      ServerEntity: _FakeBox<ServerEntity>(const []),
+      ConversationFolderEntity: _FakeBox<ConversationFolderEntity>(const []),
+      ForkAnchorEntity: _FakeBox([anchor]),
+    });
+    final directory = await Directory.systemTemp.createTemp(
+      'backup-fork-test',
+    );
+    addTearDown(() async {
+      if (await directory.exists()) await directory.delete(recursive: true);
+    });
+    final service = DataBackupService(
+      documentsDirectory: () async => directory,
+    );
+
+    final payload = await service.exportCloudSync(store, jsonEncode({}));
+    final conversations = (payload['conversations'] as List)
+        .cast<Map<String, dynamic>>();
+    final forkRow = conversations.firstWhere((row) => row['id'] == fork.id);
+    expect(forkRow['isFork'], isTrue);
+    expect(forkRow['forkOfMessageId'], 'message-1');
+    expect(forkRow['forkSpan'], '{"text":"that"}');
+    expect(
+      conversations.map((row) => row['id']),
+      containsAll([main.id, fork.id]),
+    );
+
+    final anchors = (payload['forkAnchors'] as List)
+        .cast<Map<String, dynamic>>();
+    expect(anchors.single['id'], anchor.id);
+    expect(anchors.single['mainConversationId'], main.id);
+    expect(anchors.single['forkConversationId'], fork.id);
+    expect(anchors.single['selectedText'], 'that');
+  });
+
   test('memory tags, summary, expiry and source app survive export/import',
       () async {
     final memory = MemoryEntity(
@@ -329,6 +397,72 @@ void main() {
     expect(restored.shortSummary, 'Standup at 10:00');
     expect(restored.expiresAt, DateTime.utc(2026, 10, 21));
     expect(restored.sourceApp, 'com.whatsapp');
+  });
+
+  test('exports timestamps in UTC so devices agree on ordering', () {
+    ConversationEntity conversation(DateTime createdAt, DateTime updatedAt) =>
+        ConversationEntity.fromDomain(
+          Conversation(
+            id: 'conv-1',
+            title: 'Chat',
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+          ),
+        );
+    MessageEntity message(DateTime createdAt, DateTime updatedAt) =>
+        MessageEntity.fromDomain(
+          Message(
+            id: 'm1',
+            conversationId: 'conv-1',
+            role: MessageRole.user,
+            content: 'Hello',
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+          ),
+        );
+    _FakeStore storeFor(DateTime createdAt, DateTime updatedAt) => _FakeStore({
+      ConversationEntity: _FakeBox([conversation(createdAt, updatedAt)]),
+      MessageEntity: _FakeBox([message(createdAt, updatedAt)]),
+      PersonaEntity: _FakeBox<PersonaEntity>(const []),
+      SavedMessageEntity: _FakeBox<SavedMessageEntity>(const []),
+      SavedMessageFolderEntity: _FakeBox<SavedMessageFolderEntity>(const []),
+      ServerEntity: _FakeBox<ServerEntity>(const []),
+      ConversationFolderEntity: _FakeBox<ConversationFolderEntity>(const []),
+    });
+
+    // The same instants, stored once with a local offset and once in UTC.
+    final withOffset = DataBackupService().exportAll(
+      storeFor(
+        DateTime.parse('2026-01-01T10:00:00+02:00'),
+        DateTime.parse('2026-01-01T11:00:00+02:00'),
+      ),
+    );
+    final utc = DataBackupService().exportAll(
+      storeFor(
+        DateTime.parse('2026-01-01T08:00:00Z'),
+        DateTime.parse('2026-01-01T09:00:00Z'),
+      ),
+    );
+
+    final offsetMessage = (withOffset['messages'] as List).single as Map;
+    final utcMessage = (utc['messages'] as List).single as Map;
+    final offsetConversation =
+        (withOffset['conversations'] as List).single as Map;
+    final utcConversation = (utc['conversations'] as List).single as Map;
+
+    for (final value in [
+      offsetMessage['createdAt'],
+      offsetMessage['updatedAt'],
+      offsetConversation['createdAt'],
+      offsetConversation['updatedAt'],
+    ]) {
+      expect(value, isA<String>());
+      expect(value as String, endsWith('Z'));
+    }
+    expect(offsetMessage['createdAt'], utcMessage['createdAt']);
+    expect(offsetMessage['updatedAt'], utcMessage['updatedAt']);
+    expect(offsetConversation['createdAt'], utcConversation['createdAt']);
+    expect(offsetConversation['updatedAt'], utcConversation['updatedAt']);
   });
 
   test(

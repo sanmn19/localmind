@@ -1,7 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:localmind/core/logger/app_logger.dart';
 import 'package:localmind/core/models/enums.dart';
@@ -31,11 +32,14 @@ import 'package:localmind/features/servers/data/models/server.dart';
 import 'package:localmind/features/servers/providers/server_providers.dart';
 import 'package:localmind/objectbox.g.dart';
 import '../data/chat_service.dart';
+import '../data/tool_approval_notifier.dart';
+import '../data/tool_approval_policy.dart';
 import '../../mcp/data/device_mcp_server.dart' show parseScreenshotAttachPath;
 import '../data/mcp_server_manager.dart' show webMcpServerUrl;
 import '../data/models/chat_parameters.dart';
 import '../data/models/message.dart' hide ToolCallData;
 import '../data/models/message.dart' as msg_model show ToolCallData;
+import '../data/chat_completion_notifier.dart';
 import '../data/title_generation_service.dart';
 import '../data/tool_budget.dart';
 import '../data/tools/tool_definition.dart';
@@ -60,10 +64,17 @@ import '../../stt/providers/stt_providers.dart' as stt;
 import '../../voice_mode/providers/voice_mode_provider.dart';
 
 class PendingToolApproval {
+  final String id;
+  final String conversationId;
   final ParsedToolCall toolCall;
-  final Completer<bool> completer;
+  final Completer<ToolApprovalDecision> completer;
 
-  PendingToolApproval({required this.toolCall, required this.completer});
+  PendingToolApproval({
+    required this.id,
+    required this.conversationId,
+    required this.toolCall,
+    required this.completer,
+  });
 }
 
 /// What one turn's collected tool calls led to, shared by the first-turn
@@ -137,8 +148,17 @@ final chatProvider = NotifierProvider<ChatNotifier, ChatState>(() {
 });
 
 class ChatNotifier extends Notifier<ChatState> {
+  ChatNotifier({this.resumeLastChat = true});
+
+  /// Whether [build] may restore the last active conversation from the previous
+  /// session. Floating desktop windows pass `false`: each window loads the
+  /// conversation it was opened for instead of racing the global resume, and it
+  /// never takes over the app-wide "last active chat" persistence.
+  final bool resumeLastChat;
+
   MessageSaveService? _saveService;
   PendingToolApproval? _pendingToolApproval;
+  Timer? _approvalActionPoll;
   final Set<String> _titleGenerationsInFlight = <String>{};
   final Map<String, Future<void>> _titleGenerationFutures =
       <String, Future<void>>{};
@@ -234,8 +254,8 @@ class ChatNotifier extends Notifier<ChatState> {
   bool _canContinueInBackground() {
     if (!state.isStreaming || _isInMemoryChat) return false;
     if (_activeSession == null) return false;
-    if (_pendingToolApproval != null) return false;
-    if (ref.read(chatMcpConfigProvider).enabled) return false;
+    // MCP/tool approvals do NOT block background continuation: the approval
+    // notification keeps the turn alive while the user is elsewhere.
     return ref.read(voiceModeProvider).phase == VoiceModePhase.idle;
   }
 
@@ -385,6 +405,7 @@ class ChatNotifier extends Notifier<ChatState> {
       conversationId: conversationId,
       timeline: timeline,
     );
+    _maybeNotifyReplyCompletion(conversationId, finalMessage);
 
     final lastUserMessage = timeline
         .where((m) => m.role == MessageRole.user)
@@ -400,18 +421,96 @@ class ChatNotifier extends Notifier<ChatState> {
 
   void approveTool(bool approved) {
     final pending = _pendingToolApproval;
-    if (pending != null && !pending.completer.isCompleted) {
-      pending.completer.complete(approved);
+    if (pending != null) {
+      approveToolDecision(
+        pending.id,
+        approved ? ToolApprovalDecision.once : ToolApprovalDecision.deny,
+      );
     }
   }
 
+  void _startApprovalActionPoll(String approvalId) {
+    _approvalActionPoll?.cancel();
+    _approvalActionPoll = Timer.periodic(
+      const Duration(milliseconds: 500),
+      (_) async {
+        final prefs = ref.read(sharedPreferencesProvider);
+        final raw = prefs.getString(toolApprovalActionKey);
+        if (raw == null) return;
+        try {
+          final map = jsonDecode(raw) as Map<String, dynamic>;
+          if (map['approvalId'] != approvalId) return;
+          await prefs.remove(toolApprovalActionKey);
+          final action = map['action'];
+          final decision = action == 'approve'
+              ? ToolApprovalDecision.once
+              : action == 'deny'
+              ? ToolApprovalDecision.deny
+              : null;
+          if (decision != null) approveToolDecision(approvalId, decision);
+        } catch (_) {
+          // Ignore malformed handoff; the dialog remains the fallback.
+        }
+      },
+    );
+  }
+
+  /// Approves whichever tool approval is currently pending, regardless of the id
+  /// carried by a notification action. Android can deliver an action through the
+  /// launch-details path without the payload; the pending completer is still the
+  /// authority in the live app.
+  void approveCurrentTool(ToolApprovalDecision decision) {
+    final pending = _pendingToolApproval;
+    if (pending != null) {
+      approveToolDecision(pending.id, decision);
+    }
+  }
+
+  void approveToolDecision(
+    String approvalId,
+    ToolApprovalDecision decision,
+  ) {
+    final pending = _pendingToolApproval;
+    if (pending == null ||
+        pending.id != approvalId ||
+        pending.completer.isCompleted) {
+      return;
+    }
+    _pendingToolApproval = null;
+    _approvalActionPoll?.cancel();
+    _approvalActionPoll = null;
+    if (ref.mounted) {
+      state = state.copyWith(clearPendingApproval: true);
+    }
+    unawaited(
+      ref
+          .read(toolApprovalPolicyProvider)
+          .remember(
+            decision: decision,
+            conversationId: pending.conversationId,
+            toolName: pending.toolCall.name,
+            args: pending.toolCall.arguments,
+          )
+          .catchError((Object error, StackTrace stack) {
+            Log.warning('Tool approval policy save failed: $error');
+          }),
+    );
+    unawaited(
+      ref.read(toolApprovalNotifierProvider).cancel(approvalId),
+    );
+    pending.completer.complete(decision);
+  }
+
   void _clearPendingApproval() {
+    _approvalActionPoll?.cancel();
+    _approvalActionPoll = null;
     final pending = _pendingToolApproval;
     _pendingToolApproval = null;
     if (pending != null) {
       if (!pending.completer.isCompleted) {
-        pending.completer.complete(false);
+        pending.completer.complete(ToolApprovalDecision.deny);
       }
+      unawaited(ref.read(toolApprovalNotifierProvider).cancel(pending.id));
       if (ref.mounted) {
         state = state.copyWith(clearPendingApproval: true);
       }
@@ -434,10 +533,10 @@ class ChatNotifier extends Notifier<ChatState> {
       final pending = _pendingToolApproval;
       _pendingToolApproval = null;
       if (pending != null && !pending.completer.isCompleted) {
-        pending.completer.complete(false);
+        pending.completer.complete(ToolApprovalDecision.deny);
       }
     });
-    if (!_attemptedResume) {
+    if (resumeLastChat && !_attemptedResume) {
       _attemptedResume = true;
       Future.microtask(_tryResumeLastChat);
     }
@@ -480,7 +579,10 @@ class ChatNotifier extends Notifier<ChatState> {
         .setString(_lastActiveConversationKey, conversationId);
   }
 
-  Future<void> loadConversation(Conversation conversation) async {
+  Future<void> loadConversation(
+    Conversation conversation, {
+    bool activate = true,
+  }) async {
     if (!ref.mounted) return;
     // Leave an eligible reply streaming in the background (#94). Only the
     // open chat's own stream may be cancelled here; a reply already running
@@ -514,12 +616,14 @@ class ChatNotifier extends Notifier<ChatState> {
         isStreaming: liveMessage != null,
         streamingMessage: liveMessage,
       );
-      ref
-          .read(conv.activeConversationIdProvider.notifier)
-          .setActiveConversation(conversation);
+      if (activate) {
+        ref
+            .read(conv.activeConversationIdProvider.notifier)
+            .setActiveConversation(conversation);
+      }
       _publishGenerations();
 
-      if (!conversation.isTemporary) {
+      if (activate && resumeLastChat && !conversation.isTemporary) {
         _persistLastActiveConversation(conversation.id);
       }
 
@@ -630,7 +734,7 @@ class ChatNotifier extends Notifier<ChatState> {
     if (!ref.mounted) return;
     if (state.isStreaming && !_canContinueInBackground()) {
       await _abortStreamImmediately();
-    } else {
+    } else if (!state.isStreaming) {
       _clearPendingApproval();
     }
     if (!ref.mounted) return;
@@ -797,7 +901,9 @@ class ChatNotifier extends Notifier<ChatState> {
     ref
         .read(conv.activeConversationIdProvider.notifier)
         .setActiveConversation(conversation);
-    _persistLastActiveConversation(conversation.id);
+    if (resumeLastChat) {
+      _persistLastActiveConversation(conversation.id);
+    }
     // A conversationsProvider refresh triggered later in this same send
     // (e.g. syncConversationStats) rebuilds activeConversationProvider
     // from the reloaded list; use this captured value for this send so
@@ -1737,8 +1843,8 @@ class ChatNotifier extends Notifier<ChatState> {
       result.insert(0, message);
     }
 
-      return result;
-    }
+    return result;
+  }
 
   /// Fork-context slice (selection-fork feature): the composed API history
   /// for the OPEN conversation truncated at [anchorMessageId] inclusive —
@@ -1879,6 +1985,46 @@ class ChatNotifier extends Notifier<ChatState> {
         _memoryExtractionInFlight = null;
       }
     }();
+  }
+
+  /// Posts a "reply ready" notification whenever a chat finishes. The app
+  /// lifecycle is intentionally not consulted: Android reports `resumed` with a lag
+  /// after minimizing, which silently skipped notifications. The notification id is
+  /// per conversation, so different chats stack while a newer reply replaces the
+  /// older one.
+  void _maybeNotifyReplyCompletion(String conversationId, Message finalMessage) {
+    if (finalMessage.role != MessageRole.assistant ||
+        finalMessage.status != MessageStatus.complete ||
+        finalMessage.content.trim().isEmpty) {
+      return;
+    }
+    final conversation = ref
+        .read(conv.conversationsProvider)
+        .value
+        ?.where((candidate) => candidate.id == conversationId)
+        .firstOrNull;
+    if (conversation == null ||
+        conversation.isTemporary ||
+        conversation.isBackground) {
+      return;
+    }
+    final title = conversation.title.trim().isEmpty ||
+            conversation.title.trim() == 'New Chat'
+        ? 'LocalMind'
+        : conversation.title.trim();
+    unawaited(
+      ref
+          .read(chatCompletionNotifierProvider)
+          .notify(
+            conversationId: conversationId,
+            title: title,
+            body: chatReplyPreview(finalMessage.content),
+          )
+          .catchError((Object error, StackTrace stack) {
+            Log.warning('Chat reply notification failed: $error');
+            return;
+          }),
+    );
   }
 
   Future<void>? _maybeAutoGenerateTitleAfterFirstReply({
@@ -2669,6 +2815,14 @@ class ChatNotifier extends Notifier<ChatState> {
           registry: registry,
           onRequestApproval: (call) async {
             final settings = ref.read(settingsProvider);
+            final policy = ref.read(toolApprovalPolicyProvider);
+            if (policy.isAlwaysApproved(
+              conversationId: finalMessage.conversationId,
+              toolName: call.name,
+              args: call.arguments,
+            )) {
+              return true;
+            }
             if (await shouldAutoApproveTool(
               call.name,
               args: call.arguments,
@@ -2684,14 +2838,41 @@ class ChatNotifier extends Notifier<ChatState> {
             )) {
               return true;
             }
-            final completer = Completer<bool>();
+            final completer = Completer<ToolApprovalDecision>();
             final approval = PendingToolApproval(
+              id: generateUuidV4(),
+              conversationId: finalMessage.conversationId,
               toolCall: call,
               completer: completer,
             );
             _pendingToolApproval = approval;
             if (ref.mounted) {
               state = state.copyWith(pendingToolApproval: approval);
+            }
+            _startApprovalActionPoll(approval.id);
+            final onChat = WidgetsBinding.instance.lifecycleState ==
+                    AppLifecycleState.resumed &&
+                _activeConversationId == finalMessage.conversationId;
+            if (!onChat) {
+              final conversation = ref
+                  .read(conv.conversationsProvider)
+                  .value
+                  ?.where((c) => c.id == finalMessage.conversationId)
+                  .firstOrNull;
+              unawaited(
+                ref
+                    .read(toolApprovalNotifierProvider)
+                    .show(
+                      approvalId: approval.id,
+                      conversationId: finalMessage.conversationId,
+                      conversationTitle: conversation?.title ?? 'LocalMind',
+                      toolName: call.name,
+                      arguments: call.arguments,
+                    )
+                    .catchError((Object error, StackTrace stack) {
+                      Log.warning('Tool approval notification failed: $error');
+                    }),
+              );
             }
 
             final result = await completer.future;
@@ -2701,7 +2882,7 @@ class ChatNotifier extends Notifier<ChatState> {
               state = state.copyWith(clearPendingApproval: true);
             }
 
-            return result;
+            return result != ToolApprovalDecision.deny;
           },
         );
 
@@ -3387,7 +3568,10 @@ class ChatNotifier extends Notifier<ChatState> {
     if (newContent.trim().isEmpty) return;
     if (newContent == message.content) return;
 
-    final updated = message.copyWith(content: newContent);
+    final updated = message.copyWith(
+      content: newContent,
+      updatedAt: DateTime.now().toUtc(),
+    );
     await _saveMessage(updated);
     _replaceMessageInAll(updated);
   }
@@ -3545,7 +3729,9 @@ class ChatNotifier extends Notifier<ChatState> {
     if (!ref.mounted) return;
     if (persist == false) return;
     if (persist == null && _isInMemoryChat) return;
-    await persistMessage(message);
+    await persistMessage(
+      message.copyWith(updatedAt: message.updatedAt ?? DateTime.now().toUtc()),
+    );
   }
 
   /// Reads a conversation's messages from ObjectBox. Overridden in tests.
@@ -3578,6 +3764,14 @@ class ChatNotifier extends Notifier<ChatState> {
   Future<void> debugSaveMessageForTest(Message message) =>
       _saveMessage(message);
 
+  /// Test-only hook that exposes [_saveMessageInBackground] so persistence
+  /// timestamp preservation can be verified without a real store.
+  @visibleForTesting
+  static void debugSaveMessageInBackgroundForTest(
+    Store store,
+    Message message,
+  ) => _saveMessageInBackground(store, message);
+
   static void _saveMessageInBackground(Store store, Message message) {
     final box = store.box<MessageEntity>();
     final convBox = store.box<ConversationEntity>();
@@ -3589,6 +3783,9 @@ class ChatNotifier extends Notifier<ChatState> {
     final entity = MessageEntity.fromDomain(message);
     if (existing != null) {
       entity.internalId = existing.internalId;
+      // A full-row save must never erase a completion timestamp written by an
+      // earlier streaming checkpoint.
+      entity.updatedAt ??= existing.updatedAt;
     }
 
     final convQuery = convBox
