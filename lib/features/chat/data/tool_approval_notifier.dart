@@ -1,5 +1,6 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:localmind/core/logger/app_logger.dart';
+import 'package:localmind/core/services/notification_tap_router.dart';
 
 const toolApprovalChannelId = 'localmind_tool_approvals';
 
@@ -43,7 +44,7 @@ class ToolApprovalNotifier {
       settings: const InitializationSettings(
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       ),
-      onDidReceiveNotificationResponse: onAction,
+      onDidReceiveNotificationResponse: NotificationTapRouter.handle,
     );
     final android = _plugin
         .resolvePlatformSpecificImplementation<

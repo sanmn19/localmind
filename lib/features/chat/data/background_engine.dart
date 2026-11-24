@@ -4,6 +4,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart'
     hide Message;
 
 import '../../../core/models/enums.dart';
+import '../../../core/services/notification_tap_router.dart';
 import '../../../core/utils/uuid.dart';
 import '../../servers/data/models/server.dart';
 import 'background_runner.dart';
@@ -353,7 +354,7 @@ class BackgroundResultNotifier {
       settings: const InitializationSettings(
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       ),
-      onDidReceiveNotificationResponse: onNotificationTap,
+      onDidReceiveNotificationResponse: NotificationTapRouter.handle,
     );
     final android = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
