@@ -3604,6 +3604,23 @@ class AppLocalizationsFr extends AppLocalizations {
   String get notifications_grant_action => 'Grant in settings';
 
   @override
+  String get hub_card_title => 'MCP Hub';
+
+  @override
+  String get hub_card_desc =>
+      'Calls the tools published to the on-device MCP Hub over Binder. The hub keeps its own consent prompts on the device.';
+
+  @override
+  String get hub_card_connected => 'Connected to the on-device hub';
+
+  @override
+  String get hub_card_connecting => 'Looking for the on-device hub…';
+
+  @override
+  String get hub_card_unavailable =>
+      'MCP Hub app is not installed or not running';
+
+  @override
   String get ask_local_card_title => 'Ask Local';
 
   @override

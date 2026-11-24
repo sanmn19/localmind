@@ -16,6 +16,7 @@ import 'package:localmind/features/memories/data/models/memory.dart';
 import 'package:localmind/features/skills/data/skills_store.dart';
 
 import 'mcp_client.dart';
+import 'hub_mcp_client.dart';
 import 'models/background_task.dart';
 
 const exampleMcpServerLabel = 'Example MCP';
@@ -26,6 +27,11 @@ const webMcpServerUrl = 'local://web';
 
 const bgMcpServerLabel = 'Background Tasks';
 const bgMcpServerUrl = 'local://background';
+
+/// Built-in client for the on-device MCP hub (Binder, not HTTP). The URL is a
+/// stable marker so the manager creates [HubMcpClient] instead of [McpClient].
+const hubMcpServerLabel = 'MCP Hub';
+const hubMcpServerUrl = 'binder://hub';
 
 /// Engine relays in the run-request seam (`local://background` bundle).
 /// v1 registration wires a no-op; Task 4's engine replaces it with the
@@ -92,7 +98,7 @@ class TerminalServices {
 
 class McpServerManager {
   final String _appVersion;
-  final Map<String, McpClient> _clients = {};
+  final Map<String, McpConnection> _clients = {};
   final Map<String, McpCapabilities> _capabilities = {};
   final Map<String, List<McpTool>> _tools = {};
   final Map<String, String> _serverUrls = {};
@@ -127,11 +133,13 @@ class McpServerManager {
         _serverUrls.remove(label);
       }
 
-      final client = McpClient(
-        serverUrl: url,
-        headers: headers,
-        version: _appVersion,
-      );
+      final McpConnection client = url == hubMcpServerUrl
+          ? HubMcpClient(version: _appVersion)
+          : McpClient(
+              serverUrl: url,
+              headers: headers,
+              version: _appVersion,
+            );
 
       final capabilities = await client.initialize();
       final tools = await client.listTools();
@@ -142,6 +150,20 @@ class McpServerManager {
       _serverUrls[label] = url;
     } finally {
       _pendingLabels.remove(label);
+    }
+  }
+
+  /// Registers the built-in [hubMcpServerLabel] server through the Binder
+  /// client. The hub app may not be installed, so an unavailable binding is a
+  /// normal state: report false and leave the manager unchanged instead of
+  /// failing the whole settings rebuild.
+  Future<bool> addHubServer() async {
+    if (hasHubServer()) return true;
+    try {
+      await addServer(hubMcpServerLabel, hubMcpServerUrl);
+      return hasHubServer();
+    } catch (_) {
+      return false;
     }
   }
 
@@ -798,6 +820,8 @@ class McpServerManager {
 
   bool hasExampleServer() =>
       _localExampleServers.contains(exampleMcpServerLabel);
+
+  bool hasHubServer() => _clients.containsKey(hubMcpServerLabel);
 
   bool hasWebServer() => _webServices.containsKey(webMcpServerLabel);
 

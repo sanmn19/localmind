@@ -217,6 +217,8 @@ class McpToolsScreen extends ConsumerWidget {
                           const SizedBox(height: 16),
                           const _TerminalCard(),
                           const SizedBox(height: 16),
+                          const _HubCard(),
+                          const SizedBox(height: 16),
                           const _DeviceCard(),
                           const SizedBox(height: 16),
                           const _MailConnectorsCard(),
@@ -1110,6 +1112,90 @@ class __ConfiguredMcpServersCardState
               onPressed: _addServer,
             ),
           ],
+        ),
+      ],
+    );
+  }
+}
+
+/// MCP Hub built-in card: the hub is a Binder service on the device, so it has
+/// no toggle or URL field. The status row reports whether the hub app answered
+/// the bind; consent stays entirely in the hub's own UI.
+class _HubCard extends ConsumerWidget {
+  const _HubCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final manager = ref.watch(mcpServerManagerProvider);
+    final registration = ref.watch(hubServerRegistrationProvider);
+    final connected = manager.hasHubServer();
+
+    return KeyedSubtree(
+      key: const Key('mcp_hub_card'),
+      child: _McpSectionCard(
+        title: l10n.hub_card_title,
+        accent: const Color(0xFF14B8A6),
+        icon: HugeIcons.strokeRoundedMcpServer,
+        children: [
+          Text(
+            l10n.hub_card_desc,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          _McpPanel(
+            child: registration.when(
+              loading: () => _HubStatusRow(
+                connected: false,
+                label: l10n.hub_card_connecting,
+              ),
+              error: (_, _) => const _HubStatusRow(connected: false),
+              data: (_) => _HubStatusRow(connected: connected),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HubStatusRow extends StatelessWidget {
+  const _HubStatusRow({required this.connected, this.label});
+
+  final bool connected;
+  final String? label;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    return Row(
+      key: Key(
+        connected ? 'mcp_hub_status_connected' : 'mcp_hub_status_unavailable',
+      ),
+      children: [
+        HugeIcon(
+          icon: connected
+              ? HugeIcons.strokeRoundedCheckmarkCircle01
+              : HugeIcons.strokeRoundedAlertCircle,
+          size: 18,
+          color: connected
+              ? const Color(0xFF22C55E)
+              : theme.colorScheme.outline,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            label ??
+                (connected
+                    ? l10n.hub_card_connected
+                    : l10n.hub_card_unavailable),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
         ),
       ],
     );

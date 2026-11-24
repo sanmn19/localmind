@@ -6,7 +6,22 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:localmind/core/logger/app_logger.dart';
 
-class McpClient {
+/// Transport-neutral MCP client surface used by [McpServerManager].
+///
+/// [McpClient] speaks HTTP/SSE; [HubMcpClient] speaks the on-device hub's
+/// Binder protocol. Both return the same [McpTool] / [McpCapabilities] models.
+abstract interface class McpConnection {
+  bool get isInitialized;
+  McpCapabilities? get capabilities;
+  Future<McpCapabilities> initialize();
+  Future<List<McpTool>> listTools();
+  Future<String> callTool(String name, Map<String, dynamic> arguments);
+  Future<List<McpResource>> listResources();
+  Future<String> readResource(String uri);
+  Future<void> close();
+}
+
+class McpClient implements McpConnection {
   final String serverUrl;
   final Map<String, String>? headers;
   final String _version;
@@ -29,7 +44,9 @@ class McpClient {
   }) : _version = version,
        _dio = dio ?? Dio();
 
+  @override
   bool get isInitialized => _initialized;
+  @override
   McpCapabilities? get capabilities => _capabilities;
 
   Future<void> _connectSse() async {
@@ -279,6 +296,7 @@ class McpClient {
     }
   }
 
+  @override
   Future<McpCapabilities> initialize() async {
     if (_initialized && _capabilities != null) {
       return _capabilities!;
@@ -357,6 +375,7 @@ class McpClient {
     } catch (_) {}
   }
 
+  @override
   Future<List<McpTool>> listTools() async {
     if (!_initialized) {
       await initialize();
@@ -376,6 +395,7 @@ class McpClient {
     }
   }
 
+  @override
   Future<String> callTool(String name, Map<String, dynamic> arguments) async {
     if (!_initialized) {
       await initialize();
@@ -404,6 +424,7 @@ class McpClient {
     }
   }
 
+  @override
   Future<List<McpResource>> listResources() async {
     if (!_initialized) {
       await initialize();
@@ -423,6 +444,7 @@ class McpClient {
     }
   }
 
+  @override
   Future<String> readResource(String uri) async {
     if (!_initialized) {
       await initialize();
@@ -442,6 +464,7 @@ class McpClient {
     }
   }
 
+  @override
   Future<void> close() async {
     await _closeSse();
     _initialized = false;

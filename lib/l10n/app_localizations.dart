@@ -6615,6 +6615,36 @@ abstract class AppLocalizations {
   /// **'Grant in settings'**
   String get notifications_grant_action;
 
+  /// MCP Hub built-in server card title
+  ///
+  /// In en, this message translates to:
+  /// **'MCP Hub'**
+  String get hub_card_title;
+
+  /// MCP Hub built-in server card description
+  ///
+  /// In en, this message translates to:
+  /// **'Calls the tools published to the on-device MCP Hub over Binder. The hub keeps its own consent prompts on the device.'**
+  String get hub_card_desc;
+
+  /// MCP Hub card status when the hub service is bound
+  ///
+  /// In en, this message translates to:
+  /// **'Connected to the on-device hub'**
+  String get hub_card_connected;
+
+  /// MCP Hub card status while the bind is in flight
+  ///
+  /// In en, this message translates to:
+  /// **'Looking for the on-device hub…'**
+  String get hub_card_connecting;
+
+  /// MCP Hub card status when the hub service cannot be bound
+  ///
+  /// In en, this message translates to:
+  /// **'MCP Hub app is not installed or not running'**
+  String get hub_card_unavailable;
+
   /// Ask Local card title on the MCP Tools screen
   ///
   /// In en, this message translates to:
