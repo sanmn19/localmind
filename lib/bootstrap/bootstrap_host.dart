@@ -202,14 +202,15 @@ class _BootstrapHostState extends State<BootstrapHost> {
       if (parsed == null || container == null) return;
       final action = response.actionId;
       if (action == 'approve' || action == 'deny') {
-        container
-            .read(chatProvider.notifier)
-            .approveToolDecision(
-              parsed.approvalId,
-              action == 'approve'
-                  ? ToolApprovalDecision.once
-                  : ToolApprovalDecision.deny,
-            );
+        final decision = action == 'approve'
+            ? ToolApprovalDecision.once
+            : ToolApprovalDecision.deny;
+        final notifier = container.read(chatProvider.notifier);
+        // Prefer the payload id, but fall back to the live pending approval:
+        // Android may deliver an action without the payload.
+        notifier.approveToolDecision(parsed.approvalId, decision);
+        notifier.approveCurrentTool(decision);
+        unawaited(ToolApprovalNotifier().cancel(parsed.approvalId));
         return;
       }
       // "Always…" or a body tap: open the chat and let the approval dialog
@@ -245,6 +246,17 @@ class _BootstrapHostState extends State<BootstrapHost> {
       if (approval != null) {
         final container = _container;
         if (container == null) return;
+        final action = details?.notificationResponse?.actionId;
+        if (action == 'approve' || action == 'deny') {
+          container
+              .read(chatProvider.notifier)
+              .approveCurrentTool(
+                action == 'approve'
+                    ? ToolApprovalDecision.once
+                    : ToolApprovalDecision.deny,
+              );
+          return;
+        }
         container
             .read(conv.activeConversationIdProvider.notifier)
             .setActiveConversationId(approval.conversationId);
