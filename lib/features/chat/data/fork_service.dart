@@ -78,6 +78,27 @@ class ForkService {
     );
   }
 
+  /// Repairs fork rows left behind by older builds / cloud restores.
+  ///
+  /// Two corrupt shapes are healed idempotently:
+  /// - the fork and its parent share one conversation row (the fork overwrote
+  ///   the parent): the row is split at the fork's first quoted turn, the parent
+  ///   keeps its original title/messages, and a fresh hidden fork row receives
+  ///   the fork turns;
+  /// - the fork row exists but the parent row was removed: a parent row is
+  ///   recreated from the anchor and any surviving parent messages.
+  ///
+  /// This runs before history loads so a restored chat is never lost just because
+  /// an older restore collapsed the two conversations into one row.
+  Future<void> repairForkConversations() async {
+    final db = _database;
+    await db.store.runInTransactionAsync(
+      TxMode.write,
+      _repairForkConversationsInBackground,
+      null,
+    );
+  }
+
   /// All anchors recorded for [mainConversationId], oldest first.
   Future<List<ForkAnchor>> anchorsFor(String mainConversationId) async {
     final db = _database;
@@ -192,6 +213,154 @@ class ForkService {
     );
     anchorBox.put(ForkAnchorEntity.fromDomain(anchor));
     return anchor;
+  }
+
+  static void _repairForkConversationsInBackground(Store store, _) {
+    final anchorBox = store.box<ForkAnchorEntity>();
+    final convBox = store.box<ConversationEntity>();
+    final messageBox = store.box<MessageEntity>();
+
+    for (final anchor in anchorBox.getAll()) {
+      final mainQuery = convBox
+          .query(ConversationEntity_.id.equals(anchor.mainConversationId))
+          .build();
+      final mainRow = mainQuery.findFirst();
+      mainQuery.close();
+      final forkQuery = convBox
+          .query(ConversationEntity_.id.equals(anchor.forkConversationId))
+          .build();
+      final forkRow = forkQuery.findFirst();
+      forkQuery.close();
+
+      if (anchor.mainConversationId == anchor.forkConversationId &&
+          mainRow != null) {
+        _splitCollapsedFork(store, anchor, mainRow, messageBox, convBox);
+        continue;
+      }
+
+      if (mainRow == null && forkRow != null) {
+        final parent = ConversationEntity(
+          id: anchor.mainConversationId,
+          title: _parentTitle(forkRow.title),
+          createdAt: anchor.createdAt,
+          updatedAt: anchor.createdAt,
+          isTemporary: forkRow.isTemporary,
+          isArchived: forkRow.isArchived,
+          isBackground: forkRow.isBackground,
+          folderId: forkRow.folderId,
+          personaId: forkRow.personaId,
+          serverId: forkRow.serverId,
+          modelId: forkRow.modelId,
+          systemPrompt: forkRow.systemPrompt,
+          temperature: forkRow.temperature,
+          topP: forkRow.topP,
+          maxTokens: forkRow.maxTokens,
+          contextLength: forkRow.contextLength,
+          mcpEnabled: forkRow.mcpEnabled,
+        );
+        convBox.put(parent);
+      }
+    }
+  }
+
+  static void _splitCollapsedFork(
+    Store store,
+    ForkAnchorEntity anchor,
+    ConversationEntity row,
+    Box<MessageEntity> messageBox,
+    Box<ConversationEntity> convBox,
+  ) {
+    final messageQuery = messageBox
+        .query(MessageEntity_.conversationUid.equals(row.id))
+        .build();
+    final messages = messageQuery.find();
+    messageQuery.close();
+    messages.sort((a, b) {
+      final byCreated = a.createdAt.compareTo(b.createdAt);
+      if (byCreated != 0) return byCreated;
+      return a.internalId.compareTo(b.internalId);
+    });
+
+    final anchorIndex = messages.indexWhere(
+      (message) => message.id == anchor.anchorMessageId,
+    );
+    if (anchorIndex < 0) return;
+
+    var split = messages.length;
+    for (var i = anchorIndex + 1; i < messages.length; i++) {
+      final message = messages[i];
+      if (message.roleIndex == MessageRole.user.index &&
+          message.content.startsWith('Selected:')) {
+        split = i;
+        break;
+      }
+    }
+
+    final parentMessages = messages.sublist(0, split);
+    final forkMessages = messages.sublist(split);
+    final parentTitle = _parentTitle(row.title);
+    final forkId = generateUuidV4();
+    final fork = ConversationEntity(
+      id: forkId,
+      title: 'Fork — $parentTitle',
+      createdAt: forkMessages.isNotEmpty
+          ? forkMessages.first.createdAt
+          : anchor.createdAt,
+      updatedAt: forkMessages.isNotEmpty
+          ? (forkMessages.last.updatedAt ?? forkMessages.last.createdAt)
+          : anchor.createdAt,
+      forkOfMessageId: anchor.anchorMessageId,
+      forkSpan: jsonEncode({'text': anchor.selectedText}),
+      isFork: true,
+      isTemporary: row.isTemporary,
+      isArchived: row.isArchived,
+      isBackground: row.isBackground,
+      folderId: row.folderId,
+      personaId: row.personaId,
+      serverId: row.serverId,
+      modelId: row.modelId,
+      systemPrompt: row.systemPrompt,
+      temperature: row.temperature,
+      topP: row.topP,
+      maxTokens: row.maxTokens,
+      contextLength: row.contextLength,
+      mcpEnabled: row.mcpEnabled,
+      messageCount: forkMessages.length,
+      characterCount: forkMessages.fold<int>(
+        0,
+        (sum, message) => sum + message.content.length,
+      ),
+    );
+    final forkInternalId = convBox.put(fork);
+    final forkEntity = convBox.get(forkInternalId);
+    for (final message in forkMessages) {
+      message.conversationUid = forkId;
+      if (forkEntity != null) message.conversation.target = forkEntity;
+      messageBox.put(message);
+    }
+
+    row
+      ..title = parentTitle
+      ..isFork = false
+      ..forkOfMessageId = null
+      ..forkSpan = null
+      ..messageCount = parentMessages.length
+      ..characterCount = parentMessages.fold<int>(
+        0,
+        (sum, message) => sum + message.content.length,
+      );
+    if (parentMessages.isNotEmpty) {
+      row.updatedAt =
+          parentMessages.last.updatedAt ?? parentMessages.last.createdAt;
+    }
+    convBox.put(row);
+    anchor.forkConversationId = forkId;
+    store.box<ForkAnchorEntity>().put(anchor);
+  }
+
+  static String _parentTitle(String title) {
+    const prefix = 'Fork — ';
+    return title.startsWith(prefix) ? title.substring(prefix.length) : title;
   }
 
   static List<ForkAnchor> _anchorsForInBackground(
