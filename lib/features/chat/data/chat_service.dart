@@ -11,6 +11,7 @@ import 'models/chat_parameters.dart';
 import 'models/mcp_integration.dart';
 import 'tools/tool_definition.dart';
 import '../../../core/models/enums.dart';
+import '../../../core/utils/json_safe.dart';
 import '../../../core/logger/app_logger.dart';
 import '../../on_device/data/on_device_gemma_service.dart';
 import '../../on_device/data/on_device_chat_service.dart';
@@ -1170,7 +1171,7 @@ class OllamaChatService implements ChatService {
             'name': tc.toolName,
             // Native Ollama decodes `arguments` into an object and answers
             // HTTP 400 for the JSON-encoded string OpenAI-style APIs use.
-            'arguments': tc.arguments,
+            'arguments': jsonSafe(tc.arguments),
           },
         };
       }).toList();
@@ -1673,7 +1674,7 @@ Future<Map<String, dynamic>> _buildOpenAiApiMessage(
         'type': 'function',
         'function': {
           'name': tc.toolName,
-          'arguments': jsonEncode(tc.arguments),
+          'arguments': jsonEncode(jsonSafe(tc.arguments)),
         },
       };
     }).toList();

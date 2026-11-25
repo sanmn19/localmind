@@ -109,6 +109,122 @@ void main() {
     });
   });
 
+  group('ForkService.createFork', () {
+    test('inserts a hidden fork without touching the parent row', () async {
+      final main = ConversationEntity.fromDomain(
+        Conversation(
+          id: 'main-1',
+          title: 'Main chat',
+          createdAt: DateTime.utc(2026, 10, 8),
+          updatedAt: DateTime.utc(2026, 10, 8),
+          isArchived: true,
+          folderId: 'folder-1',
+        ),
+      );
+      final conversations = _RecordingConversationBox([main]);
+      final anchors = _RecordingAnchorBox();
+      final store = _RecordingCrudStore({
+        ConversationEntity: conversations,
+        MessageEntity: _RecordingMessageBox(),
+        ForkAnchorEntity: anchors,
+      });
+
+      final anchor = await ForkService(_FakeObjectBoxStore(store)).createFork(
+        mainConversationId: main.id,
+        anchorMessageId: 'a-1',
+        selectedText: 'Ada Lovelace wrote it',
+      );
+
+      // The parent row is still exactly the same object — a fork must never
+      // overwrite the chat it was created from.
+      final parent = conversations.items.firstWhere((c) => c.id == main.id);
+      expect(parent.title, 'Main chat');
+      expect(parent.isFork, isFalse);
+      expect(parent.isArchived, isTrue);
+      expect(parent.folderId, 'folder-1');
+
+      final fork = conversations.items.firstWhere(
+        (c) => c.id == anchor.forkConversationId,
+      );
+      expect(conversations.items, hasLength(2));
+      expect(fork.isFork, isTrue);
+      expect(fork.forkOfMessageId, 'a-1');
+      expect(fork.isArchived, isTrue);
+      expect(fork.folderId, 'folder-1');
+      expect(anchors.items.single.forkConversationId, fork.id);
+    });
+  });
+
+  group('ForkService.repairForkConversations', () {
+    test('splits a fork collapsed into its parent row', () async {
+      final collapsed = ConversationEntity(
+        id: 'collapsed-1',
+        title: 'Fork — Main chat',
+        createdAt: DateTime.utc(2026, 10, 8),
+        updatedAt: DateTime.utc(2026, 10, 8),
+      )..internalId = 1;
+      MessageEntity row(
+        String id,
+        MessageRole role,
+        String content,
+        int minute,
+      ) => MessageEntity(
+        id: id,
+        conversationUid: collapsed.id,
+        roleIndex: role.index,
+        content: content,
+        createdAt: DateTime.utc(2026, 10, 8, 10, minute),
+        statusIndex: MessageStatus.complete.index,
+      );
+      final messages = _RecordingMessageBox([
+        row('m0', MessageRole.user, 'hello', 0),
+        row('m1', MessageRole.assistant, 'hi', 1),
+        row('m2', MessageRole.user, 'Selected: "hi"\n\nwhy?', 2),
+        row('m3', MessageRole.assistant, 'because', 3),
+      ]);
+      final conversations = _RecordingConversationBox([collapsed]);
+      final anchors = _RecordingAnchorBox([
+        ForkAnchorEntity(
+          id: 'anchor-1',
+          mainConversationId: collapsed.id,
+          anchorMessageId: 'm1',
+          selectedText: 'hi',
+          forkConversationId: collapsed.id,
+          createdAt: DateTime.utc(2026, 10, 8, 10, 1),
+        ),
+      ]);
+      final store = _RecordingCrudStore({
+        ConversationEntity: conversations,
+        MessageEntity: messages,
+        ForkAnchorEntity: anchors,
+      });
+
+      await ForkService(
+        _FakeObjectBoxStore(store),
+      ).repairForkConversations();
+
+      expect(conversations.items, hasLength(2));
+      final parent = conversations.items.firstWhere(
+        (c) => c.id == collapsed.id,
+      );
+      expect(parent.title, 'Main chat');
+      expect(parent.isFork, isFalse);
+      expect(parent.messageCount, 2);
+
+      final fork = conversations.items.firstWhere(
+        (c) => c.id != collapsed.id,
+      );
+      expect(fork.isFork, isTrue);
+      expect(fork.forkOfMessageId, 'm1');
+      expect(fork.messageCount, 2);
+      expect(
+        messages.items.firstWhere((m) => m.id == 'm2').conversationUid,
+        fork.id,
+      );
+      expect(anchors.items.single.forkConversationId, fork.id);
+    });
+  });
+
   group('ChatNotifier.mainTimelineUpTo / messageById', () {
     test(
       'cuts at the anchor inclusive; post-anchor rows never enter the fork context',
@@ -206,6 +322,44 @@ void main() {
       final filtered = filteredAsync.value!;
       expect(filtered.map((c) => c.id), ['keep-1']);
     });
+
+    test(
+      'filteredConversationsProvider hides a fork identified only by its anchor',
+      () async {
+        SharedPreferences.setMockInitialValues({});
+        final rows = [
+          _conversation('keep-1'),
+          _conversation('fork-1'),
+        ];
+        final container = ProviderContainer(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(
+              await SharedPreferences.getInstance(),
+            ),
+            conv.conversationsProvider.overrideWith(
+              () => _SeededConversations(rows),
+            ),
+            databaseProvider.overrideWithValue(
+              _FakeAnchorStore([
+                ForkAnchorEntity(
+                  id: 'anchor-1',
+                  mainConversationId: 'keep-1',
+                  anchorMessageId: 'a-1',
+                  selectedText: 'Ada',
+                  forkConversationId: 'fork-1',
+                  createdAt: DateTime.utc(2026, 10, 8),
+                ),
+              ]),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        await container.read(conv.conversationsProvider.future);
+        final filtered = container.read(conv.filteredConversationsProvider).value!;
+        expect(filtered.map((c) => c.id), ['keep-1']);
+      },
+    );
 
     test('message search skips hits from excluded fork conversations', () {
       final db = _FakeSearchStore([
@@ -431,6 +585,142 @@ class _IdleVoiceModeNotifier extends VoiceModeNotifier {
   VoiceModeState build() => const VoiceModeState();
 }
 
+class _FakeObjectBoxStore extends Fake implements ObjectBoxStore {
+  _FakeObjectBoxStore(this.store);
+
+  @override
+  final Store store;
+}
+
+class _RecordingCrudStore extends Fake implements Store {
+  _RecordingCrudStore(this.boxes);
+
+  final Map<Type, Object> boxes;
+
+  @override
+  Box<T> box<T>() => boxes[T]! as Box<T>;
+
+  @override
+  Future<R> runInTransactionAsync<R, P>(
+    TxMode mode,
+    R Function(Store, P) callback,
+    P param,
+  ) async => callback(this, param);
+}
+
+class _RecordingConversationBox extends Fake
+    implements Box<ConversationEntity> {
+  _RecordingConversationBox(this.items);
+
+  final List<ConversationEntity> items;
+
+  @override
+  List<ConversationEntity> getAll() => List<ConversationEntity>.from(items);
+
+  @override
+  QueryBuilder<ConversationEntity> query([
+    Condition<ConversationEntity>? qc,
+  ]) => _FakeQueryBuilder(items);
+
+  @override
+  ConversationEntity? get(int id) =>
+      items.where((item) => item.internalId == id).firstOrNull;
+
+  @override
+  int put(ConversationEntity entity, {PutMode mode = PutMode.put}) {
+    final index = items.indexWhere((item) => item.id == entity.id);
+    if (index >= 0) {
+      items[index] = entity;
+    } else {
+      if (entity.internalId == 0) entity.internalId = items.length + 1;
+      items.add(entity);
+    }
+    return entity.internalId;
+  }
+}
+
+class _RecordingMessageBox extends Fake implements Box<MessageEntity> {
+  _RecordingMessageBox([Iterable<MessageEntity> items = const []]) {
+    this.items.addAll(items);
+  }
+
+  final List<MessageEntity> items = [];
+
+  @override
+  List<MessageEntity> getAll() => List<MessageEntity>.from(items);
+
+  @override
+  QueryBuilder<MessageEntity> query([Condition<MessageEntity>? qc]) =>
+      _FakeQueryBuilder(items);
+
+  @override
+  int put(MessageEntity entity, {PutMode mode = PutMode.put}) {
+    final index = items.indexWhere((item) => item.id == entity.id);
+    if (index >= 0) {
+      items[index] = entity;
+    } else {
+      if (entity.internalId == 0) entity.internalId = items.length + 1;
+      items.add(entity);
+    }
+    return entity.internalId;
+  }
+}
+
+class _RecordingAnchorBox extends Fake implements Box<ForkAnchorEntity> {
+  _RecordingAnchorBox([Iterable<ForkAnchorEntity> items = const []]) {
+    this.items.addAll(items);
+  }
+
+  final List<ForkAnchorEntity> items = [];
+
+  @override
+  List<ForkAnchorEntity> getAll() => List<ForkAnchorEntity>.from(items);
+
+  @override
+  int put(ForkAnchorEntity entity, {PutMode mode = PutMode.put}) {
+    final index = items.indexWhere((item) => item.id == entity.id);
+    if (index >= 0) {
+      items[index] = entity;
+    } else {
+      if (entity.internalId == 0) entity.internalId = items.length + 1;
+      items.add(entity);
+    }
+    return entity.internalId;
+  }
+}
+
+class _FakeAnchorStore extends Fake implements ObjectBoxStore {
+  _FakeAnchorStore(this.anchors);
+
+  final List<ForkAnchorEntity> anchors;
+
+  @override
+  Store get store => _FakeAnchorBackingStore(anchors);
+}
+
+class _FakeAnchorBackingStore extends Fake implements Store {
+  _FakeAnchorBackingStore(this.anchors);
+
+  final List<ForkAnchorEntity> anchors;
+
+  @override
+  Box<T> box<T>() {
+    if (T == ForkAnchorEntity) {
+      return _FakeAnchorBox(anchors) as Box<T>;
+    }
+    throw UnimplementedError();
+  }
+}
+
+class _FakeAnchorBox extends Fake implements Box<ForkAnchorEntity> {
+  _FakeAnchorBox(this.anchors);
+
+  final List<ForkAnchorEntity> anchors;
+
+  @override
+  List<ForkAnchorEntity> getAll() => List<ForkAnchorEntity>.from(anchors);
+}
+
 class _FakeSearchStore extends Fake implements ObjectBoxStore {
   _FakeSearchStore(this.messages);
 
@@ -486,7 +776,7 @@ class _FakeQuery<T> extends Fake implements Query<T> {
   final List<T> rows;
 
   @override
-  List<T> find() => rows;
+  List<T> find() => List<T>.from(rows);
 
   @override
   T? findFirst() => rows.isEmpty ? null : rows.first;

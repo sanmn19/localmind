@@ -7,6 +7,7 @@ import '../../../core/providers/storage_providers.dart';
 import '../../../core/storage/entities.dart';
 import '../../../objectbox.g.dart';
 import '../../chat/data/background_task_service.dart';
+import '../../chat/data/fork_service.dart';
 import '../../chat/providers/tooling_providers.dart';
 import '../../chat/utils/message_variants.dart';
 import '../data/message_search_service.dart';
@@ -24,6 +25,13 @@ final conversationsProvider =
 class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
   @override
   Future<List<Conversation>> build() async {
+    // Repair collapsed/missing fork rows left by older restores before
+    // history is built. Best-effort: a damaged row must never block the app.
+    try {
+      await ref.read(forkServiceProvider).repairForkConversations();
+    } catch (_) {
+      // The normal history load below still runs.
+    }
     return _loadAll();
   }
 
@@ -226,6 +234,27 @@ class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
 
   Future<void> deleteConversation(String id) async {
     final db = ref.read(databaseProvider);
+
+    // A fork belongs to its parent. Deleting either side must remove the
+    // anchor and the fork row too, otherwise the startup repair would
+    // resurrect a conversation the user explicitly deleted.
+    try {
+      final anchorBox = db.store.box<ForkAnchorEntity>();
+      final anchorQuery = anchorBox
+          .query(
+            ForkAnchorEntity_.mainConversationId.equals(id) |
+                ForkAnchorEntity_.forkConversationId.equals(id),
+          )
+          .build();
+      final anchors = anchorQuery.find();
+      anchorQuery.close();
+      for (final anchor in anchors) {
+        await ref.read(forkServiceProvider).deleteFork(anchor.id);
+      }
+    } catch (_) {
+      // A storage fake or an older store without the anchor box still
+      // deletes the conversation itself below.
+    }
 
     // Delete messages first
     final msgQuery = db.messageBox
@@ -707,8 +736,30 @@ final filteredConversationsProvider = Provider<AsyncValue<List<Conversation>>>((
     // background-task conversations (background sub-agents feature) never
     // surface in history; fork turns live in the fork panel, task turns in
     // the task chat pane.
+    //
+    // The anchor is the durable identity of a fork. Consult it as a second
+    // line of defence for payloads restored from an older backup that lost the
+    // conversation's isFork flag, so a fork can never become a history row.
+    Set<String> anchoredForkIds = const {};
+    try {
+      anchoredForkIds = ref
+          .read(databaseProvider)
+          .store
+          .box<ForkAnchorEntity>()
+          .getAll()
+          .map((anchor) => anchor.forkConversationId)
+          .toSet();
+    } catch (_) {
+      // A store that is still opening (or a test override) has no anchors.
+    }
     var filtered = conversations
-        .where((c) => !c.isTemporary && !c.isFork && !c.isBackground)
+        .where(
+          (c) =>
+              !c.isTemporary &&
+              !c.isFork &&
+              !c.isBackground &&
+              !anchoredForkIds.contains(c.id),
+        )
         .toList();
 
     switch (listFilter) {

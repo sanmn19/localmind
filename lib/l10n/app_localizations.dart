@@ -4512,7 +4512,7 @@ abstract class AppLocalizations {
   /// Header of the collapsed card summarizing a tool chain's web searches and fetches
   ///
   /// In en, this message translates to:
-  /// **'Web activity'**
+  /// **'Tool calls'**
   String get tool_activity_title;
 
   /// Badge counting the tool calls inside the web activity card
@@ -7148,6 +7148,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Use chat model'**
   String get screen_memories_processing_model_reset;
+
+  /// No description provided for @tool_approval_always_chat.
+  ///
+  /// In en, this message translates to:
+  /// **'Always for this chat'**
+  String get tool_approval_always_chat;
+
+  /// No description provided for @tool_approval_always_global.
+  ///
+  /// In en, this message translates to:
+  /// **'Always globally'**
+  String get tool_approval_always_global;
 
   /// No description provided for @screen_memories_sampling_mode.
   ///
