@@ -2970,7 +2970,7 @@
   "tool_status_running": "Running",
   "tool_status_done": "Done",
   "tool_status_failed": "Failed",
-  "tool_activity_title": "Web activity",
+  "tool_activity_title": "Tool calls",
   "@tool_activity_title": {
     "description": "Header of the collapsed card summarizing a tool chain's web searches and fetches"
   },
@@ -3890,6 +3890,8 @@
   "screen_memories_processing_model_chat": "Same as chat",
   "screen_memories_processing_model_empty": "No models found on this server",
   "screen_memories_processing_model_reset": "Use chat model",
+  "tool_approval_always_chat": "Always for this chat",
+  "tool_approval_always_global": "Always globally",
   "screen_memories_sampling_mode": "Sampling mode",
   "screen_memories_sampling_mode_desc": "Screen changes uses less battery; 500 ms captures more but drains faster.",
   "screen_memories_sampling_event": "On screen changes",

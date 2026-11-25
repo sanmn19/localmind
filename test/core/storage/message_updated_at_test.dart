@@ -149,6 +149,51 @@ void main() {
     expect(imported['m3']!.updatedAt, DateTime.utc(2026, 1, 2));
   });
 
+  test('import preserves fork identity and its anchor', () async {
+    _mockDocumentsDirectory();
+    final conversations = _FakeBox<ConversationEntity>([], (c) => c.id);
+    final anchors = _FakeBox<ForkAnchorEntity>([], (a) => a.id);
+    final store = _FakeStore({
+      ConversationEntity: conversations,
+      MessageEntity: _FakeBox<MessageEntity>([], (m) => m.id),
+      ForkAnchorEntity: anchors,
+    });
+
+    await DataBackupService().importFromJson(
+      store,
+      jsonEncode({
+        'conversations': [
+          {
+            'id': 'fork-1',
+            'title': 'Fork — Main',
+            'createdAt': DateTime.utc(2026, 1, 1).toIso8601String(),
+            'updatedAt': DateTime.utc(2026, 1, 1).toIso8601String(),
+            'isFork': true,
+            'forkOfMessageId': 'm1',
+            'forkSpan': '{"text":"that"}',
+          },
+        ],
+        'forkAnchors': [
+          {
+            'id': 'anchor-1',
+            'mainConversationId': 'main-1',
+            'anchorMessageId': 'm1',
+            'selectedText': 'that',
+            'forkConversationId': 'fork-1',
+            'createdAt': DateTime.utc(2026, 1, 1).toIso8601String(),
+          },
+        ],
+      }),
+    );
+
+    final imported = conversations.rows.single;
+    expect(imported.isFork, isTrue);
+    expect(imported.forkOfMessageId, 'm1');
+    expect(imported.forkSpan, '{"text":"that"}');
+    expect(anchors.rows.single.id, 'anchor-1');
+    expect(anchors.rows.single.forkConversationId, 'fork-1');
+  });
+
   test('enqueue stamps the saved message with a completion time', () async {
     final box = _FakeBox<MessageEntity>([], (m) => m.id);
     final store = _FakeStore({

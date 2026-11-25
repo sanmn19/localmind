@@ -1,8 +1,9 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:localmind/core/logger/app_logger.dart';
+import 'package:localmind/core/services/notification_tap_router.dart';
 
 import 'background_engine.dart'
-    show BackgroundResultNotifier, BgNotificationPayload;
+    show BgNotificationPayload;
 
 /// One notification per conversation: a newer reply replaces the older one, while
 /// different chats keep separate notifications.
@@ -38,8 +39,7 @@ class ChatCompletionNotifier {
       settings: const InitializationSettings(
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       ),
-      onDidReceiveNotificationResponse:
-          BackgroundResultNotifier.onNotificationTap,
+      onDidReceiveNotificationResponse: NotificationTapRouter.handle,
     );
     final android = _plugin
         .resolvePlatformSpecificImplementation<

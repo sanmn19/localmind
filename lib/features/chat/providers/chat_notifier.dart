@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/widgets.dart';
@@ -31,6 +32,8 @@ import 'package:localmind/features/servers/data/models/server.dart';
 import 'package:localmind/features/servers/providers/server_providers.dart';
 import 'package:localmind/objectbox.g.dart';
 import '../data/chat_service.dart';
+import '../data/tool_approval_notifier.dart';
+import '../data/tool_approval_policy.dart';
 import '../../mcp/data/device_mcp_server.dart' show parseScreenshotAttachPath;
 import '../data/mcp_server_manager.dart' show webMcpServerUrl;
 import '../data/models/chat_parameters.dart';
@@ -61,10 +64,17 @@ import '../../stt/providers/stt_providers.dart' as stt;
 import '../../voice_mode/providers/voice_mode_provider.dart';
 
 class PendingToolApproval {
+  final String id;
+  final String conversationId;
   final ParsedToolCall toolCall;
-  final Completer<bool> completer;
+  final Completer<ToolApprovalDecision> completer;
 
-  PendingToolApproval({required this.toolCall, required this.completer});
+  PendingToolApproval({
+    required this.id,
+    required this.conversationId,
+    required this.toolCall,
+    required this.completer,
+  });
 }
 
 /// What one turn's collected tool calls led to, shared by the first-turn
@@ -148,6 +158,7 @@ class ChatNotifier extends Notifier<ChatState> {
 
   MessageSaveService? _saveService;
   PendingToolApproval? _pendingToolApproval;
+  Timer? _approvalActionPoll;
   final Set<String> _titleGenerationsInFlight = <String>{};
   final Map<String, Future<void>> _titleGenerationFutures =
       <String, Future<void>>{};
@@ -243,8 +254,8 @@ class ChatNotifier extends Notifier<ChatState> {
   bool _canContinueInBackground() {
     if (!state.isStreaming || _isInMemoryChat) return false;
     if (_activeSession == null) return false;
-    if (_pendingToolApproval != null) return false;
-    if (ref.read(chatMcpConfigProvider).enabled) return false;
+    // MCP/tool approvals do NOT block background continuation: the approval
+    // notification keeps the turn alive while the user is elsewhere.
     return ref.read(voiceModeProvider).phase == VoiceModePhase.idle;
   }
 
@@ -410,18 +421,96 @@ class ChatNotifier extends Notifier<ChatState> {
 
   void approveTool(bool approved) {
     final pending = _pendingToolApproval;
-    if (pending != null && !pending.completer.isCompleted) {
-      pending.completer.complete(approved);
+    if (pending != null) {
+      approveToolDecision(
+        pending.id,
+        approved ? ToolApprovalDecision.once : ToolApprovalDecision.deny,
+      );
     }
   }
 
+  void _startApprovalActionPoll(String approvalId) {
+    _approvalActionPoll?.cancel();
+    _approvalActionPoll = Timer.periodic(
+      const Duration(milliseconds: 500),
+      (_) async {
+        final prefs = ref.read(sharedPreferencesProvider);
+        final raw = prefs.getString(toolApprovalActionKey);
+        if (raw == null) return;
+        try {
+          final map = jsonDecode(raw) as Map<String, dynamic>;
+          if (map['approvalId'] != approvalId) return;
+          await prefs.remove(toolApprovalActionKey);
+          final action = map['action'];
+          final decision = action == 'approve'
+              ? ToolApprovalDecision.once
+              : action == 'deny'
+              ? ToolApprovalDecision.deny
+              : null;
+          if (decision != null) approveToolDecision(approvalId, decision);
+        } catch (_) {
+          // Ignore malformed handoff; the dialog remains the fallback.
+        }
+      },
+    );
+  }
+
+  /// Approves whichever tool approval is currently pending, regardless of the id
+  /// carried by a notification action. Android can deliver an action through the
+  /// launch-details path without the payload; the pending completer is still the
+  /// authority in the live app.
+  void approveCurrentTool(ToolApprovalDecision decision) {
+    final pending = _pendingToolApproval;
+    if (pending != null) {
+      approveToolDecision(pending.id, decision);
+    }
+  }
+
+  void approveToolDecision(
+    String approvalId,
+    ToolApprovalDecision decision,
+  ) {
+    final pending = _pendingToolApproval;
+    if (pending == null ||
+        pending.id != approvalId ||
+        pending.completer.isCompleted) {
+      return;
+    }
+    _pendingToolApproval = null;
+    _approvalActionPoll?.cancel();
+    _approvalActionPoll = null;
+    if (ref.mounted) {
+      state = state.copyWith(clearPendingApproval: true);
+    }
+    unawaited(
+      ref
+          .read(toolApprovalPolicyProvider)
+          .remember(
+            decision: decision,
+            conversationId: pending.conversationId,
+            toolName: pending.toolCall.name,
+            args: pending.toolCall.arguments,
+          )
+          .catchError((Object error, StackTrace stack) {
+            Log.warning('Tool approval policy save failed: $error');
+          }),
+    );
+    unawaited(
+      ref.read(toolApprovalNotifierProvider).cancel(approvalId),
+    );
+    pending.completer.complete(decision);
+  }
+
   void _clearPendingApproval() {
+    _approvalActionPoll?.cancel();
+    _approvalActionPoll = null;
     final pending = _pendingToolApproval;
     _pendingToolApproval = null;
     if (pending != null) {
       if (!pending.completer.isCompleted) {
-        pending.completer.complete(false);
+        pending.completer.complete(ToolApprovalDecision.deny);
       }
+      unawaited(ref.read(toolApprovalNotifierProvider).cancel(pending.id));
       if (ref.mounted) {
         state = state.copyWith(clearPendingApproval: true);
       }
@@ -444,7 +533,7 @@ class ChatNotifier extends Notifier<ChatState> {
       final pending = _pendingToolApproval;
       _pendingToolApproval = null;
       if (pending != null && !pending.completer.isCompleted) {
-        pending.completer.complete(false);
+        pending.completer.complete(ToolApprovalDecision.deny);
       }
     });
     if (resumeLastChat && !_attemptedResume) {
@@ -645,7 +734,7 @@ class ChatNotifier extends Notifier<ChatState> {
     if (!ref.mounted) return;
     if (state.isStreaming && !_canContinueInBackground()) {
       await _abortStreamImmediately();
-    } else {
+    } else if (!state.isStreaming) {
       _clearPendingApproval();
     }
     if (!ref.mounted) return;
@@ -2726,6 +2815,14 @@ class ChatNotifier extends Notifier<ChatState> {
           registry: registry,
           onRequestApproval: (call) async {
             final settings = ref.read(settingsProvider);
+            final policy = ref.read(toolApprovalPolicyProvider);
+            if (policy.isAlwaysApproved(
+              conversationId: finalMessage.conversationId,
+              toolName: call.name,
+              args: call.arguments,
+            )) {
+              return true;
+            }
             if (await shouldAutoApproveTool(
               call.name,
               args: call.arguments,
@@ -2741,14 +2838,41 @@ class ChatNotifier extends Notifier<ChatState> {
             )) {
               return true;
             }
-            final completer = Completer<bool>();
+            final completer = Completer<ToolApprovalDecision>();
             final approval = PendingToolApproval(
+              id: generateUuidV4(),
+              conversationId: finalMessage.conversationId,
               toolCall: call,
               completer: completer,
             );
             _pendingToolApproval = approval;
             if (ref.mounted) {
               state = state.copyWith(pendingToolApproval: approval);
+            }
+            _startApprovalActionPoll(approval.id);
+            final onChat = WidgetsBinding.instance.lifecycleState ==
+                    AppLifecycleState.resumed &&
+                _activeConversationId == finalMessage.conversationId;
+            if (!onChat) {
+              final conversation = ref
+                  .read(conv.conversationsProvider)
+                  .value
+                  ?.where((c) => c.id == finalMessage.conversationId)
+                  .firstOrNull;
+              unawaited(
+                ref
+                    .read(toolApprovalNotifierProvider)
+                    .show(
+                      approvalId: approval.id,
+                      conversationId: finalMessage.conversationId,
+                      conversationTitle: conversation?.title ?? 'LocalMind',
+                      toolName: call.name,
+                      arguments: call.arguments,
+                    )
+                    .catchError((Object error, StackTrace stack) {
+                      Log.warning('Tool approval notification failed: $error');
+                    }),
+              );
             }
 
             final result = await completer.future;
@@ -2758,7 +2882,7 @@ class ChatNotifier extends Notifier<ChatState> {
               state = state.copyWith(clearPendingApproval: true);
             }
 
-            return result;
+            return result != ToolApprovalDecision.deny;
           },
         );
 

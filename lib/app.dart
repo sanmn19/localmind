@@ -782,8 +782,16 @@ const int _recentDesktopConversations = 8;
 /// commands and the palette only lists them.
 List<DesktopCommand> _desktopConversationCommands(WidgetRef ref) {
   final conversations = ref.watch(conv.conversationsProvider).value ?? const [];
+  final visibleConversations = conversations.where(
+    (conversation) =>
+        !conversation.isFork &&
+        !conversation.isBackground &&
+        !conversation.isTemporary,
+  );
   return [
-    for (final conversation in conversations.take(_recentDesktopConversations))
+    for (final conversation in visibleConversations.take(
+      _recentDesktopConversations,
+    ))
       DesktopCommand(
         id: '${DesktopCommand.conversationPrefix}${conversation.id}',
         label: conversation.title,

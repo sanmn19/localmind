@@ -163,6 +163,22 @@ class ForkService {
         // verbatim-match band logic), so only text is known at write time.
         forkSpan: jsonEncode({'text': input.selectedText}),
         isFork: true,
+        // A fork is part of its parent chat, not a new top-level chat. Inherit
+        // the parent's visibility/grouping so a fork of a temporary, archived,
+        // or foldered chat can never surface as a persistent history row.
+        isTemporary: mainEntity?.isTemporary ?? false,
+        isArchived: mainEntity?.isArchived ?? false,
+        isBackground: mainEntity?.isBackground ?? false,
+        folderId: mainEntity?.folderId,
+        personaId: mainEntity?.personaId,
+        serverId: mainEntity?.serverId,
+        modelId: mainEntity?.modelId,
+        systemPrompt: mainEntity?.systemPrompt,
+        temperature: mainEntity?.temperature,
+        topP: mainEntity?.topP,
+        maxTokens: mainEntity?.maxTokens,
+        contextLength: mainEntity?.contextLength,
+        mcpEnabled: mainEntity?.mcpEnabled,
       ),
     );
 

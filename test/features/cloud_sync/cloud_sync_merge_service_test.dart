@@ -113,6 +113,46 @@ void main() {
     expect(result.conflictCount, 0);
   });
 
+  test('unions fork anchors across devices', () async {
+    final remote = snapshot('remote-device', 1, {
+      'forkAnchors': [
+        {
+          'id': 'remote-anchor',
+          'mainConversationId': 'remote-main',
+          'anchorMessageId': 'remote-message',
+          'selectedText': 'remote',
+          'forkConversationId': 'remote-fork',
+          'createdAt': DateTime.utc(2026, 1, 1).toIso8601String(),
+        },
+      ],
+    });
+    final local = snapshot('local-device', 2, {
+      'forkAnchors': [
+        {
+          'id': 'local-anchor',
+          'mainConversationId': 'local-main',
+          'anchorMessageId': 'local-message',
+          'selectedText': 'local',
+          'forkConversationId': 'local-fork',
+          'createdAt': DateTime.utc(2026, 1, 1, 0, 1).toIso8601String(),
+        },
+      ],
+    });
+
+    final result = await service.merge(
+      local: local,
+      remote: remote,
+      journal: const {},
+    );
+
+    expect(
+      (result.snapshot.payload['forkAnchors'] as List)
+          .map((item) => item['id'])
+          .toSet(),
+      {'remote-anchor', 'local-anchor'},
+    );
+  });
+
   test(
     'uses remote settings when linking a device for the first time',
     () async {

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../utils/json_safe.dart';
 import 'dart:typed_data';
 import 'package:objectbox/objectbox.dart';
 import '../models/enums.dart';
@@ -596,13 +597,17 @@ class MessageEntity {
       generationTimeMs: message.generationTimeMs,
       reasoningContent: message.reasoningContent,
       toolCallsJson: message.toolCalls != null
-          ? jsonEncode(message.toolCalls!.map((e) => e.toMap()).toList())
+          ? jsonEncode(
+              message.toolCalls!.map((e) => jsonSafe(e.toMap())).toList(),
+            )
           : null,
       toolCallId: message.toolCallId,
       isProcessing: message.isProcessing,
       toolSessionId: message.toolSessionId,
       toolEventsJson: message.toolEvents != null
-          ? jsonEncode(message.toolEvents!.map((e) => e.toMap()).toList())
+          ? jsonEncode(
+              message.toolEvents!.map((e) => jsonSafe(e.toMap())).toList(),
+            )
           : null,
       variantGroupId: message.variantGroupId,
       variantIndex: message.variantIndex,
