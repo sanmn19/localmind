@@ -67,10 +67,11 @@ class BackgroundServices {
     required String prompt,
     int? loopMinutes,
     int? maxRuns,
-  }) spawn;
+  })
+  spawn;
 
   final Future<List<BackgroundTask>> Function(String ownerConversationId)
-      tasksFor;
+  tasksFor;
 
   final Future<bool> Function(String taskId) cancelTask;
 
@@ -135,11 +136,7 @@ class McpServerManager {
 
       final McpConnection client = url == hubMcpServerUrl
           ? HubMcpClient(version: _appVersion)
-          : McpClient(
-              serverUrl: url,
-              headers: headers,
-              version: _appVersion,
-            );
+          : McpClient(serverUrl: url, headers: headers, version: _appVersion);
 
       final capabilities = await client.initialize();
       final tools = await client.listTools();
@@ -164,6 +161,39 @@ class McpServerManager {
       return hasHubServer();
     } catch (_) {
       return false;
+    }
+  }
+
+  /// Re-pulls the hub catalogue without rebuilding the binding.
+  ///
+  /// Publishers register with the hub at their own pace, so the catalogue this
+  /// client read when it first bound can be empty or stale (a browser publisher
+  /// that starts later never appears). Refreshing on every tool-screen visit
+  /// keeps the hub's tools current without an app restart.
+  Future<bool> refreshHubServer() async {
+    final client = _clients[hubMcpServerLabel];
+    if (client is! HubMcpClient) {
+      return addHubServer();
+    }
+    try {
+      final tools = await client.refreshTools();
+      _tools[hubMcpServerLabel] = tools;
+      _capabilities[hubMcpServerLabel] =
+          client.capabilities ??
+          _capabilities[hubMcpServerLabel] ??
+          const McpCapabilities(tools: true);
+      _serverUrls.putIfAbsent(hubMcpServerLabel, () => hubMcpServerUrl);
+      return true;
+    } catch (_) {
+      // The bound service died or the hub app was updated; rebuild the
+      // connection once with a fresh protocol read.
+      await removeServer(hubMcpServerLabel);
+      try {
+        await addServer(hubMcpServerLabel, hubMcpServerUrl);
+        return hasHubServer();
+      } catch (_) {
+        return false;
+      }
     }
   }
 
@@ -705,8 +735,7 @@ class McpServerManager {
             },
             'max_runs': {
               'type': 'integer',
-              'description':
-                  'Maximum number of runs (1-25). Defaults to 10.',
+              'description': 'Maximum number of runs (1-25). Defaults to 10.',
             },
           },
           'required': ['prompt'],
@@ -1190,8 +1219,10 @@ class McpServerManager {
           ? 'not started'
           : 'last run ${_backgroundIso(task.lastRunAt!)}';
       rows
-        ..write('${index + 1}. ${task.state.name}: '
-            '"${bgPromptSnippet(task.prompt)}"')
+        ..write(
+          '${index + 1}. ${task.state.name}: '
+          '"${bgPromptSnippet(task.prompt)}"',
+        )
         ..write(
           '\n   task_id: ${task.id} — $cadence, '
           '${task.runCount}/${task.maxRuns} runs, $activity',
@@ -1203,14 +1234,15 @@ class McpServerManager {
 
   String bgPromptSnippet(String prompt) {
     final flattened = prompt.replaceAll(RegExp(r'\s+'), ' ').trim();
-    return flattened.length <= 48 ? flattened : '${flattened.substring(0, 48)}…';
+    return flattened.length <= 48
+        ? flattened
+        : '${flattened.substring(0, 48)}…';
   }
 
-  String _backgroundIso(DateTime time) =>
-      DateTime.fromMillisecondsSinceEpoch(
-        time.millisecondsSinceEpoch,
-        isUtc: true,
-      ).toIso8601String().split('.').first;
+  String _backgroundIso(DateTime time) => DateTime.fromMillisecondsSinceEpoch(
+    time.millisecondsSinceEpoch,
+    isUtc: true,
+  ).toIso8601String().split('.').first;
 
   /// NOTE: the whitelist is deliberately NOT enforced here. It only gates
   /// auto-approval (see `shouldAutoApproveTool` in tooling_providers.dart) —

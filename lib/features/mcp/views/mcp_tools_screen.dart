@@ -1121,16 +1121,41 @@ class __ConfiguredMcpServersCardState
 /// MCP Hub built-in card: the hub is a Binder service on the device, so it has
 /// no toggle or URL field. The status row reports whether the hub app answered
 /// the bind; consent stays entirely in the hub's own UI.
-class _HubCard extends ConsumerWidget {
+///
+/// The card re-pulls the catalogue when it mounts and offers a refresh action:
+/// publishers register with the hub on their own schedule, so a catalogue read
+/// before (for example) the browser publisher started must not hide its tools
+/// for the rest of the session.
+class _HubCard extends ConsumerStatefulWidget {
   const _HubCard();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_HubCard> createState() => _HubCardState();
+}
+
+class _HubCardState extends ConsumerState<_HubCard> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.invalidate(hubServerRegistrationProvider);
+    });
+  }
+
+  void _refresh() {
+    ref.invalidate(hubServerRegistrationProvider);
+    ref.invalidate(availableToolsProvider);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final manager = ref.watch(mcpServerManagerProvider);
     final registration = ref.watch(hubServerRegistrationProvider);
     final connected = manager.hasHubServer();
+    final hubTools = manager.getTools(hubMcpServerLabel);
 
     return KeyedSubtree(
       key: const Key('mcp_hub_card'),
@@ -1138,6 +1163,12 @@ class _HubCard extends ConsumerWidget {
         title: l10n.hub_card_title,
         accent: const Color(0xFF14B8A6),
         icon: HugeIcons.strokeRoundedMcpServer,
+        trailing: IconButton(
+          key: const Key('mcp_hub_refresh'),
+          visualDensity: VisualDensity.compact,
+          onPressed: _refresh,
+          icon: const HugeIcon(icon: HugeIcons.strokeRoundedRefresh, size: 18),
+        ),
         children: [
           Text(
             l10n.hub_card_desc,
@@ -1155,6 +1186,31 @@ class _HubCard extends ConsumerWidget {
               data: (_) => _HubStatusRow(connected: connected),
             ),
           ),
+          if (hubTools.isNotEmpty)
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final tool in hubTools)
+                  Container(
+                    key: ValueKey('mcp_hub_tool_${tool.name}'),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF14B8A6).withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      tool.name,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
         ],
       ),
     );

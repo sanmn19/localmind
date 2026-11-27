@@ -4,12 +4,14 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.Parcel
 import android.os.ParcelFileDescriptor
 import android.util.Log
-import dev.mcphub.ipc.IMcpHub
 import dev.mcphub.ipc.IResultCallback
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -25,6 +27,12 @@ import java.util.concurrent.TimeUnit
  * [ACTION_BIND], lists its merged tool catalogue, and forwards tool calls.
  * The hub keeps consent in its own UI; this client never grants or bypasses it.
  *
+ * Hubs from 0.4.0 on add `refreshTools()` between `listTools()` and
+ * `callTool()`. Binder transaction codes follow declaration order, so a client
+ * that always used the old copy would send `callTool` to `refreshTools` on a
+ * new hub. The hub package's version code picks the right layout at bind time,
+ * so one build works with both hub generations.
+ *
  * Every method channel reply is posted back to the main thread because Flutter
  * requires results on the platform thread. Binder calls themselves run on a
  * background executor so the main thread never waits on the hub.
@@ -34,16 +42,21 @@ class HubMcpClient(private val context: Context) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val callExecutor = Executors.newCachedThreadPool()
 
-    private var hub: IMcpHub? = null
+    private var hub: IBinder? = null
     private var bound = false
     private var connectLatch: CountDownLatch? = null
+
+    /** True when the connected hub declares the newer `refreshTools()` slot. */
+    private var supportsRefreshTools = false
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             synchronized(lock) {
-                hub = service?.let(IMcpHub.Stub::asInterface)
+                hub = service
+                supportsRefreshTools = service != null && hubSupportsRefreshTools()
                 connectLatch?.countDown()
             }
+            Log.i(TAG, "MCP Hub connected (refreshTools=$supportsRefreshTools)")
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -52,6 +65,7 @@ class HubMcpClient(private val context: Context) {
             synchronized(lock) {
                 hub = null
                 connectLatch = null
+                supportsRefreshTools = false
             }
         }
     }
@@ -61,6 +75,7 @@ class HubMcpClient(private val context: Context) {
         when (call.method) {
             "initialize" -> initialize(result)
             "listTools" -> listTools(result)
+            "refreshTools" -> refreshTools(result)
             "callTool" -> callTool(call, result)
             "readResource" -> readResource(call, result)
             "close" -> close(result)
@@ -72,12 +87,14 @@ class HubMcpClient(private val context: Context) {
         callExecutor.execute {
             try {
                 ensureConnected()
+                val refresh = synchronized(lock) { supportsRefreshTools }
                 mainHandler.post {
                     result.success(
                         mapOf(
                             "tools" to true,
                             "resources" to false,
-                            "prompts" to false
+                            "prompts" to false,
+                            "refreshTools" to refresh,
                         )
                     )
                 }
@@ -97,10 +114,38 @@ class HubMcpClient(private val context: Context) {
     private fun listTools(result: MethodChannel.Result) {
         callExecutor.execute {
             try {
-                val catalogue = ensureConnected().listTools()
+                val binder = ensureConnected()
+                val catalogue = transactString(binder, TX_LIST_TOOLS)
                 mainHandler.post { result.success(catalogue) }
             } catch (error: Exception) {
                 Log.w(TAG, "MCP Hub listTools failed: $error")
+                mainHandler.post {
+                    result.error(
+                        HUB_UNAVAILABLE,
+                        error.message ?: "MCP Hub is unavailable",
+                        null
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Re-pulls every live publisher's manifest on hubs that support it. Older
+     * hubs answer with their cached merged catalogue instead, so the caller
+     * still gets the freshest list those hubs can produce.
+     */
+    private fun refreshTools(result: MethodChannel.Result) {
+        callExecutor.execute {
+            try {
+                val binder = ensureConnected()
+                val code = synchronized(lock) {
+                    if (supportsRefreshTools) TX_REFRESH_TOOLS else TX_LIST_TOOLS
+                }
+                val catalogue = transactString(binder, code)
+                mainHandler.post { result.success(catalogue) }
+            } catch (error: Exception) {
+                Log.w(TAG, "MCP Hub refreshTools failed: $error")
                 mainHandler.post {
                     result.error(
                         HUB_UNAVAILABLE,
@@ -122,12 +167,23 @@ class HubMcpClient(private val context: Context) {
 
         callExecutor.execute {
             try {
-                val hub = ensureConnected()
+                val binder = ensureConnected()
                 val latch = CountDownLatch(1)
                 val relay = ResultRelay(latch)
-                val callId = hub.callTool(name, argumentsJson, relay)
+                val code = synchronized(lock) {
+                    if (supportsRefreshTools) {
+                        TX_CALL_TOOL_REFRESH
+                    } else {
+                        TX_CALL_TOOL_LEGACY
+                    }
+                }
+                val callId = transactString(binder, code) { data ->
+                    data.writeString(name)
+                    data.writeString(argumentsJson)
+                    data.writeStrongBinder(relay.asBinder())
+                }
                 if (!latch.await(CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                    runCatching { hub.cancelCall(callId) }
+                    if (!callId.isNullOrBlank()) cancelCall(binder, callId)
                     throw IllegalStateException("MCP Hub tool call timed out")
                 }
                 if (relay.errorCode != 0) {
@@ -158,6 +214,17 @@ class HubMcpClient(private val context: Context) {
         }
     }
 
+    private fun cancelCall(binder: IBinder, callId: String) {
+        val code = synchronized(lock) {
+            if (supportsRefreshTools) TX_CANCEL_CALL_REFRESH else TX_CANCEL_CALL_LEGACY
+        }
+        try {
+            transactVoid(binder, code) { data -> data.writeString(callId) }
+        } catch (error: Exception) {
+            Log.w(TAG, "MCP Hub cancelCall($callId) failed: $error")
+        }
+    }
+
     /**
      * The hub protocol carries tools only; MCP resources are not part of it.
      * Reply with the protocol's own error so the Dart surface can fail loudly
@@ -181,6 +248,7 @@ class HubMcpClient(private val context: Context) {
         synchronized(lock) {
             hub = null
             connectLatch = null
+            supportsRefreshTools = false
             if (bound) {
                 runCatching { context.unbindService(connection) }
                 bound = false
@@ -188,7 +256,7 @@ class HubMcpClient(private val context: Context) {
         }
     }
 
-    private fun ensureConnected(): IMcpHub {
+    private fun ensureConnected(): IBinder {
         synchronized(lock) { hub }?.let { return it }
 
         val latch = synchronized(lock) {
@@ -213,6 +281,62 @@ class HubMcpClient(private val context: Context) {
         }
         return synchronized(lock) { hub }
             ?: throw IllegalStateException("MCP Hub is not available")
+    }
+
+    /**
+     * Hub 0.4.0 added `refreshTools()`, shifting every later transaction code.
+     * `versionCode` 7 is the first build with that interface.
+     */
+    private fun hubSupportsRefreshTools(): Boolean {
+        return try {
+            val info = context.packageManager.getPackageInfo(HUB_PACKAGE, 0)
+            val version = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                info.longVersionCode
+            } else {
+                @Suppress("DEPRECATION")
+                info.versionCode.toLong()
+            }
+            version >= REFRESH_TOOLS_VERSION_CODE
+        } catch (_: PackageManager.NameNotFoundException) {
+            false
+        }
+    }
+
+    private fun transactString(
+        binder: IBinder,
+        code: Int,
+        write: ((Parcel) -> Unit)? = null,
+    ): String? {
+        val data = Parcel.obtain()
+        val reply = Parcel.obtain()
+        try {
+            data.writeInterfaceToken(HUB_DESCRIPTOR)
+            write?.invoke(data)
+            if (!binder.transact(code, data, reply, 0)) {
+                throw IllegalStateException("MCP Hub rejected transaction $code")
+            }
+            reply.readException()
+            return reply.readString()
+        } finally {
+            reply.recycle()
+            data.recycle()
+        }
+    }
+
+    private fun transactVoid(binder: IBinder, code: Int, write: (Parcel) -> Unit) {
+        val data = Parcel.obtain()
+        val reply = Parcel.obtain()
+        try {
+            data.writeInterfaceToken(HUB_DESCRIPTOR)
+            write(data)
+            if (!binder.transact(code, data, reply, 0)) {
+                throw IllegalStateException("MCP Hub rejected transaction $code")
+            }
+            reply.readException()
+        } finally {
+            reply.recycle()
+            data.recycle()
+        }
     }
 
     private class ResultRelay(private val latch: CountDownLatch) :
@@ -256,6 +380,19 @@ class HubMcpClient(private val context: Context) {
         const val HUB_PACKAGE = "dev.mcphub.hub"
         const val HUB_SERVICE = "dev.mcphub.hub.HubService"
         const val ACTION_BIND = "dev.mcphub.hub.BIND"
+        const val HUB_DESCRIPTOR = "dev.mcphub.ipc.IMcpHub"
+
+        // Binder transaction slots, in the two interface layouts the hub ships.
+        const val TX_LIST_TOOLS = 3
+        const val TX_REFRESH_TOOLS = 4
+        const val TX_CALL_TOOL_LEGACY = 4
+        const val TX_CANCEL_CALL_LEGACY = 5
+        const val TX_CALL_TOOL_REFRESH = 5
+        const val TX_CANCEL_CALL_REFRESH = 6
+
+        /** First hub build with `refreshTools()` in the interface. */
+        const val REFRESH_TOOLS_VERSION_CODE = 7L
+
         const val HUB_UNAVAILABLE = "hub_unavailable"
         const val HUB_CALL_FAILED = "hub_call_failed"
         const val INVALID_ARGUMENTS = "invalid_arguments"

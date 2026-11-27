@@ -196,9 +196,7 @@ Future<bool> shouldAutoApproveTool(
 /// on [shouldAutoApproveTool] to gate silently. Pure + dependency-injected.
 List<ToolDefinition> forkChatToolset(List<ToolDefinition> allDefs) {
   return allDefs
-      .where(
-        (def) => !bgNeverAvailableToolPrefixes.any(def.name.startsWith),
-      )
+      .where((def) => !bgNeverAvailableToolPrefixes.any(def.name.startsWith))
       .toList();
 }
 
@@ -243,9 +241,12 @@ WebSearchProvider webSearchProviderFromName(String name) {
 /// same list the other built-ins feed.
 final hubServerRegistrationProvider = FutureProvider<void>((ref) async {
   final manager = ref.watch(mcpServerManagerProvider);
-  if (manager.hasHubServer()) return;
 
-  final registered = await manager.addHubServer();
+  // Always re-pull: publishers register with the hub after this client may
+  // have bound, and an early empty catalogue must not stick for the session.
+  final registered = manager.hasHubServer()
+      ? await manager.refreshHubServer()
+      : await manager.addHubServer();
   if (!ref.mounted) return;
   if (registered) ref.invalidate(availableToolsProvider);
 });
@@ -326,8 +327,7 @@ final webServerRegistrationProvider = Provider<void>((ref) {
     // retrieval working, never fails the write).
     manager.addMemoriesServer(
       MemoriesServices(
-        list: () async =>
-            ref.read(memoryRepositoryProvider).list(),
+        list: () async => ref.read(memoryRepositoryProvider).list(),
         remember: (title, content, kind, importance) async => ref
             .read(memoryRepositoryProvider)
             .remember(
@@ -336,11 +336,8 @@ final webServerRegistrationProvider = Provider<void>((ref) {
               kind: kind,
               importance: importance,
             ),
-        search: (query) => ref
-            .read(memoryRetrieverProvider)
-            .retrieve(query),
-        forget: (id) async =>
-            ref.read(memoryRepositoryProvider).forget(id),
+        search: (query) => ref.read(memoryRetrieverProvider).retrieve(query),
+        forget: (id) async => ref.read(memoryRepositoryProvider).forget(id),
         link: (from, to, label) async => ref
             .read(memoryRepositoryProvider)
             .link(from: from, to: to, label: label),
@@ -354,14 +351,16 @@ final webServerRegistrationProvider = Provider<void>((ref) {
             '${memory.title}. ${memory.content}',
           );
           if (vector == null) return;
-          ref.read(memoryStoreProvider).putEmbedding(
-            MemoryEmbedding(
-              memoryId: memory.id,
-              modelId: gateway.modelId,
-              vector: vector,
-              createdAt: DateTime.now(),
-            ),
-          );
+          ref
+              .read(memoryStoreProvider)
+              .putEmbedding(
+                MemoryEmbedding(
+                  memoryId: memory.id,
+                  modelId: gateway.modelId,
+                  vector: vector,
+                  createdAt: DateTime.now(),
+                ),
+              );
         },
       ),
     );
@@ -395,23 +394,27 @@ final webServerRegistrationProvider = Provider<void>((ref) {
       BackgroundServices(
         currentOwnerConversationId: () =>
             ref.read(activeConversationIdProvider),
-        spawn: ({required String ownerConversationId, required String prompt,
-              int? loopMinutes, int? maxRuns}) {
-          return _spawnBackgroundTask(
-            ref,
-            service,
-            ownerConversationId: ownerConversationId,
-            prompt: prompt,
-            loopMinutes: loopMinutes,
-            maxRuns: maxRuns,
-          );
-        },
+        spawn:
+            ({
+              required String ownerConversationId,
+              required String prompt,
+              int? loopMinutes,
+              int? maxRuns,
+            }) {
+              return _spawnBackgroundTask(
+                ref,
+                service,
+                ownerConversationId: ownerConversationId,
+                prompt: prompt,
+                loopMinutes: loopMinutes,
+                maxRuns: maxRuns,
+              );
+            },
         tasksFor: (ownerConversationId) => ref
             .read(backgroundTasksServiceProvider)
             .tasksFor(ownerConversationId),
-        cancelTask: (taskId) => ref
-            .read(backgroundTasksServiceProvider)
-            .cancelTask(taskId),
+        cancelTask: (taskId) =>
+            ref.read(backgroundTasksServiceProvider).cancelTask(taskId),
         runRequester: (taskId) {
           // Bridge to the live engine (cap enforced DB-side by createTask;
           // the engine's own guard covers direct relays).
@@ -435,10 +438,10 @@ final webServerRegistrationProvider = Provider<void>((ref) {
       NotificationsServices(
         recent: ({int? max, int? sinceMinutes, String? package}) =>
             const NotificationListenerChannel().fetchRecent(
-          max: max ?? notificationsReadRecentMaxDefault,
-          sinceMinutes: sinceMinutes,
-          package: package,
-        ),
+              max: max ?? notificationsReadRecentMaxDefault,
+              sinceMinutes: sinceMinutes,
+              package: package,
+            ),
       ),
     );
   } else if (manager.hasNotificationsServer()) {
@@ -626,35 +629,24 @@ final backgroundEngineProvider = Provider<BackgroundRunEngine>((ref) {
           ownerMessageId: ownerMessageId,
         ),
     markFailed: service.markFailed,
-    conversationExists: (conversationId) => _conversationExists(
-      ref.read(databaseProvider),
-      conversationId,
-    ),
-    conversationTitle: (conversationId) => _conversationTitle(
-      ref.read(databaseProvider),
-      conversationId,
-    ),
+    conversationExists: (conversationId) =>
+        _conversationExists(ref.read(databaseProvider), conversationId),
+    conversationTitle: (conversationId) =>
+        _conversationTitle(ref.read(databaseProvider), conversationId),
     buildRunSnapshot: () => _backgroundRunSnapshot(ref),
     loadRows: (conversationId) =>
         _backgroundRows(ref.read(databaseProvider), conversationId),
-    persistRow: (row) =>
-        _persistBackgroundRow(ref.read(databaseProvider), row),
+    persistRow: (row) => _persistBackgroundRow(ref.read(databaseProvider), row),
     executeTool: (name, args) =>
         ref.read(toolRegistryProvider).execute(name, args),
     chatServiceFor: (server) => ChatService.forServer(server.type, Dio()),
-    notifyResult: (ownerTitle, task, content) =>
-        BackgroundResultNotifier().post(
-      ownerTitle: ownerTitle,
-      task: task,
-      content: content,
-    ),
+    notifyResult: (ownerTitle, task, content) => BackgroundResultNotifier()
+        .post(ownerTitle: ownerTitle, task: task, content: content),
     // Review C1: the owner result row anchors onto the owner conversation's
     // RESOLVED active-timeline tail (real resolver over the persisted rows)
     // — an independent root would be dropped by the timeline render.
-    ownerTailResolver: (ownerConversationId) => _ownerTimelineTail(
-      ref.read(databaseProvider),
-      ownerConversationId,
-    ),
+    ownerTailResolver: (ownerConversationId) =>
+        _ownerTimelineTail(ref.read(databaseProvider), ownerConversationId),
     onEngineTouched: () {
       if (ref.mounted) {
         ref.invalidate(backgroundTaskRowsProvider);
@@ -764,7 +756,8 @@ final backgroundTaskActionsProvider = Provider<BackgroundTaskActions>((ref) {
 Future<void> _ensureFgServiceChannel() async {
   final android = FlutterLocalNotificationsPlugin()
       .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
+        AndroidFlutterLocalNotificationsPlugin
+      >();
   await android?.createNotificationChannel(
     AndroidNotificationChannel(
       localmindFgServiceChannelId,
@@ -877,7 +870,8 @@ Future<bool> pauseBackgroundTask(Ref ref, String taskId) =>
 /// Resume bridge: flip + resume notice ride the service seam, then THIS
 /// side enqueues the fresh engine run (`_ensureTaskRunning` → requestRun).
 Future<bool> resumeBackgroundTask(Ref ref, String taskId) async {
-  final resumed = await ref.read(backgroundTasksServiceProvider)
+  final resumed = await ref
+      .read(backgroundTasksServiceProvider)
       .resumeTask(taskId);
   if (resumed) {
     await _ensureTaskRunning(ref, taskId, resumed: true);
@@ -898,10 +892,7 @@ Future<void> persistBackgroundNoticeRow(
   final rows = await _backgroundRows(db, taskConversationId);
   final nextThreadOrder = rows.isEmpty
       ? 0
-      : rows.map((row) => row.threadOrder).reduce(
-            (a, b) => a > b ? a : b,
-          ) +
-          1;
+      : rows.map((row) => row.threadOrder).reduce((a, b) => a > b ? a : b) + 1;
   await _persistBackgroundRow(
     db,
     Message(
@@ -989,10 +980,7 @@ Future<({String? parentMessageId, int nextThreadOrder})> _ownerTimelineTail(
   final timeline = MessageVariants.resolveActiveTimeline(rows);
   final nextThreadOrder = rows.isEmpty
       ? 0
-      : rows.map((row) => row.threadOrder).reduce(
-            (a, b) => a > b ? a : b,
-          ) +
-          1;
+      : rows.map((row) => row.threadOrder).reduce((a, b) => a > b ? a : b) + 1;
   return (
     parentMessageId: timeline.isEmpty ? null : timeline.last.id,
     nextThreadOrder: nextThreadOrder,
@@ -1000,24 +988,23 @@ Future<({String? parentMessageId, int nextThreadOrder})> _ownerTimelineTail(
 }
 
 Future<List<Message>> _backgroundRows(ObjectBoxStore db, String convId) {
-  final rows = db.messageBox
-      .query(MessageEntity_.conversationUid.equals(convId))
-      .build()
-      .find()
-      .map((entity) => entity.toDomain())
-      .toList()
-    ..sort((a, b) {
-      final order = a.threadOrder.compareTo(b.threadOrder);
-      if (order != 0) return order;
-      return a.createdAt.compareTo(b.createdAt);
-    });
+  final rows =
+      db.messageBox
+          .query(MessageEntity_.conversationUid.equals(convId))
+          .build()
+          .find()
+          .map((entity) => entity.toDomain())
+          .toList()
+        ..sort((a, b) {
+          final order = a.threadOrder.compareTo(b.threadOrder);
+          if (order != 0) return order;
+          return a.createdAt.compareTo(b.createdAt);
+        });
   return Future.value(rows);
 }
 
 Future<void> _persistBackgroundRow(ObjectBoxStore db, Message row) {
-  final query = db.messageBox
-      .query(MessageEntity_.id.equals(row.id))
-      .build();
+  final query = db.messageBox.query(MessageEntity_.id.equals(row.id)).build();
   final existing = query.findFirst();
   query.close();
   final entity = MessageEntity.fromDomain(row);
