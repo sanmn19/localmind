@@ -20,10 +20,9 @@ import '../../features/memories/data/memory_store.dart';
 import '../../objectbox.g.dart';
 
 class DataBackupService {
-  DataBackupService({
-    Future<Directory> Function()? documentsDirectory,
-  }) : _documentsDirectory =
-           documentsDirectory ?? getApplicationDocumentsDirectory;
+  DataBackupService({Future<Directory> Function()? documentsDirectory})
+    : _documentsDirectory =
+          documentsDirectory ?? getApplicationDocumentsDirectory;
 
   /// Skills live beside the database in the app documents directory; tests
   /// inject a temporary directory because path_provider needs a binding.
@@ -180,6 +179,47 @@ class DataBackupService {
     }).toList();
   }
 
+  /// Local store shape for support reports. Included only in the manual
+  /// conversations export (never in cloud payloads, whose hashes must stay
+  /// stable): it shows whether a missing chat is absent from the database or
+  /// merely hidden/mis-filtered.
+  Map<String, dynamic> _exportStoreDiagnostics(Store store) {
+    final conversations = store.box<ConversationEntity>().getAll();
+    final messages = store.box<MessageEntity>().getAll();
+    final anchors = store.box<ForkAnchorEntity>().getAll();
+    final conversationIds = conversations.map((c) => c.id).toSet();
+    final messageConversationIds = messages
+        .map((m) => m.conversationUid)
+        .whereType<String>()
+        .toSet();
+    return {
+      'exportedAt': DateTime.now().toUtc().toIso8601String(),
+      'conversationCount': conversations.length,
+      'messageCount': messages.length,
+      'conversationIds': conversationIds.toList(),
+      'messagesWithoutConversationRow': messageConversationIds
+          .difference(conversationIds)
+          .toList(),
+      'anchoredForkConversationIds': anchors
+          .map((anchor) => anchor.forkConversationId)
+          .toList(),
+      'hiddenConversations': [
+        for (final c in conversations)
+          if (c.isTemporary || c.isFork || c.isBackground || c.isArchived)
+            {
+              'id': c.id,
+              'title': c.title,
+              'isTemporary': c.isTemporary,
+              'isFork': c.isFork,
+              'isBackground': c.isBackground,
+              'isArchived': c.isArchived,
+              'folderId': c.folderId,
+              'updatedAt': c.updatedAt.toUtc().toIso8601String(),
+            },
+      ],
+    };
+  }
+
   List<Map<String, dynamic>> _conversationFoldersForConversationIds(
     Map<String, dynamic> all,
     Set<String> conversationIds,
@@ -254,9 +294,7 @@ class DataBackupService {
   /// relations; embeddings are recomputed on import). Absent sections are no-ops.
   Future<Map<String, dynamic>> exportSkillsAndMemories(Store store) async {
     final documents = await _documentsDirectory();
-    final skills = SkillsStore(
-      DirectorySkillFileHost(Future.value(documents)),
-    );
+    final skills = SkillsStore(DirectorySkillFileHost(Future.value(documents)));
     final entries = await skills.refresh();
     final memoryStore = ObjectBoxMemoryStore(
       memories: store.box<MemoryEntity>(),
@@ -368,9 +406,7 @@ class DataBackupService {
             importance: (raw['importance'] as num?)?.toInt() ?? 50,
             createdAt: createdAt,
             updatedAt: updatedAt,
-            scopeConversationId: backupImportString(
-              raw['scopeConversationId'],
-            ),
+            scopeConversationId: backupImportString(raw['scopeConversationId']),
             sourceConversationId: backupImportString(
               raw['sourceConversationId'],
             ),
@@ -512,12 +548,25 @@ class DataBackupService {
     };
   }
 
+  /// Applies a merged cloud snapshot.
+  ///
+  /// [tombstones] carries the merges' explicit deletions. Only records named
+  /// there are removed: a record that is merely absent from [payload] may have
+  /// been created after the snapshot was exported (a sync that was already in
+  /// flight while the user sent a message). Deleting by absence used to make
+  /// those new chats disappear from history.
   Future<void> importCloudSync(
     Store store,
-    Map<String, dynamic> payload,
-  ) async {
+    Map<String, dynamic> payload, {
+    Map<String, Map<String, String>> tombstones = const {},
+  }) async {
     _validateCloudPayload(payload);
-    await importFromJson(store, jsonEncode(payload), replaceCloudData: true);
+    await importFromJson(
+      store,
+      jsonEncode(payload),
+      replaceCloudData: true,
+      tombstones: tombstones,
+    );
   }
 
   void _validateCloudPayload(Map<String, dynamic> payload) {
@@ -590,6 +639,9 @@ class DataBackupService {
       'savedMessageFolders': all['savedMessageFolders'],
       'conversationFolders': all['conversationFolders'],
       'forkAnchors': all['forkAnchors'],
+      // Manual export only: tells support whether a missing chat is absent
+      // from the store or hidden by a row flag. Ignored on import.
+      'diagnostics': _exportStoreDiagnostics(store),
       // Cloud sync carries the memory graph too. Screen-memory device settings
       // stay out of `settings` so a restore cannot turn screen watching on.
       'memories': all['memories'],
@@ -798,6 +850,7 @@ class DataBackupService {
     Store store,
     String jsonString, {
     bool replaceCloudData = false,
+    Map<String, Map<String, String>> tombstones = const {},
   }) async {
     final decoded = jsonDecode(jsonString);
     if (decoded is! Map<String, dynamic>) {
@@ -814,7 +867,7 @@ class DataBackupService {
     final attachmentsDir = p.normalize(p.join(appDir.path, 'attachments'));
 
     await store.runInTransactionAsync(TxMode.write, (store, data) {
-      final (decoded, attachmentsDir, replaceCloudData) = data;
+      final (decoded, attachmentsDir, replaceCloudData, tombstones) = data;
       final convBox = store.box<ConversationEntity>();
       final messageBox = store.box<MessageEntity>();
       final personaBox = store.box<PersonaEntity>();
@@ -1213,52 +1266,39 @@ class DataBackupService {
       }
 
       if (replaceCloudData) {
-        Set<String> ids(dynamic records) => records is List
-            ? records
-                  .whereType<Map>()
-                  .map((item) => item['id'])
-                  .whereType<String>()
-                  .toSet()
-            : <String>{};
-
-        void removeMissing<T>(
-          Box<T> box,
-          Set<String> expected,
-          String Function(T) idOf,
-          int Function(T) internalIdOf,
-        ) {
-          box.removeMany(
-            box
-                .getAll()
-                .where((item) => !expected.contains(idOf(item)))
-                .map(internalIdOf)
-                .toList(),
+        /// A snapshot may have been exported before a local write landed.
+        /// Absence from the payload is therefore not proof of deletion — only
+        /// the snapshot's tombstones are. A tombstone also only removes data
+        /// recorded at or before the deletion instant, so a local edit made
+        /// after the delete survives (same rule the merge uses).
+        bool tombstoned(String collection, String id, DateTime? recordTime) {
+          final deletedAt = DateTime.tryParse(
+            tombstones[collection]?[id] ?? '',
           );
+          if (deletedAt == null) return false;
+          if (recordTime == null) return true;
+          return !recordTime.toUtc().isAfter(deletedAt.toUtc());
         }
 
-        final conversationIds = ids(decoded['conversations']);
-        final messageIds = ids(decoded['messages']);
-        final personaIds = ids(decoded['personas']);
-        final temporaryConversationIds = convBox
-            .getAll()
-            .where((item) => item.isTemporary)
-            .map((item) => item.id)
-            .toSet();
         convBox.removeMany(
           convBox
               .getAll()
               .where((item) => !item.isTemporary)
-              .where((item) => !conversationIds.contains(item.id))
+              .where(
+                (item) => tombstoned('conversations', item.id, item.updatedAt),
+              )
               .map((item) => item.internalId)
               .toList(),
         );
         messageBox.removeMany(
           messageBox
               .getAll()
-              .where((item) => !messageIds.contains(item.id))
               .where(
-                (item) =>
-                    !temporaryConversationIds.contains(item.conversationUid),
+                (item) => tombstoned(
+                  'messages',
+                  item.id,
+                  item.updatedAt ?? item.createdAt,
+                ),
               )
               .map((item) => item.internalId)
               .toList(),
@@ -1266,40 +1306,54 @@ class DataBackupService {
         personaBox.removeMany(
           personaBox
               .getAll()
-              .where((item) => !item.isBuiltIn && !personaIds.contains(item.id))
+              .where(
+                (item) =>
+                    !item.isBuiltIn &&
+                    tombstoned('personas', item.id, item.updatedAt),
+              )
               .map((item) => item.internalId)
               .toList(),
         );
-        removeMissing<SavedMessageEntity>(
-          savedBox,
-          ids(decoded['savedMessages']),
-          (item) => item.id,
-          (item) => item.internalId,
+        savedBox.removeMany(
+          savedBox
+              .getAll()
+              .where(
+                (item) => tombstoned('savedMessages', item.id, item.savedAt),
+              )
+              .map((item) => item.internalId)
+              .toList(),
         );
-        removeMissing<SavedMessageFolderEntity>(
-          savedFolderBox,
-          ids(decoded['savedMessageFolders']),
-          (item) => item.id,
-          (item) => item.internalId,
+        savedFolderBox.removeMany(
+          savedFolderBox
+              .getAll()
+              .where(
+                (item) =>
+                    tombstoned('savedMessageFolders', item.id, item.createdAt),
+              )
+              .map((item) => item.internalId)
+              .toList(),
         );
-        removeMissing<ConversationFolderEntity>(
-          conversationFolderBox,
-          ids(decoded['conversationFolders']),
-          (item) => item.id,
-          (item) => item.internalId,
+        conversationFolderBox.removeMany(
+          conversationFolderBox
+              .getAll()
+              .where(
+                (item) =>
+                    tombstoned('conversationFolders', item.id, item.createdAt),
+              )
+              .map((item) => item.internalId)
+              .toList(),
         );
-        // Old payloads have no anchor collection; keep local anchors in that
-        // case instead of deleting the fork's only durable identity.
-        if (decoded['forkAnchors'] is List) {
-          removeMissing<ForkAnchorEntity>(
-            forkAnchorBox,
-            ids(decoded['forkAnchors']),
-            (item) => item.id,
-            (item) => item.internalId,
-          );
-        }
+        forkAnchorBox.removeMany(
+          forkAnchorBox
+              .getAll()
+              .where(
+                (item) => tombstoned('forkAnchors', item.id, item.createdAt),
+              )
+              .map((item) => item.internalId)
+              .toList(),
+        );
       }
-    }, (decoded, attachmentsDir, replaceCloudData));
+    }, (decoded, attachmentsDir, replaceCloudData, tombstones));
   }
 
   List<String>? _sanitizedAttachmentPaths(dynamic raw, String attachmentsDir) {

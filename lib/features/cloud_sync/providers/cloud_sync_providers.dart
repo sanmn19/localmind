@@ -788,6 +788,7 @@ class CloudSyncController extends Notifier<CloudSyncStatus> {
       await DataBackupService().importCloudSync(
         ref.read(databaseProvider).store,
         payload,
+        tombstones: snapshot.tombstones,
       );
       _ensureActive(generation);
       // Defer both the settings update and the async provider invalidations
