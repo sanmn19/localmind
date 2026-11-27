@@ -78,19 +78,7 @@ class HubMcpClient implements McpConnection {
 
     try {
       final raw = await _channel.invokeMethod<String>('listTools');
-      if (raw == null || raw.isEmpty) return [];
-
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map) {
-        throw const FormatException('catalogue is not a JSON object');
-      }
-      final tools = decoded['tools'];
-      if (tools is! List) return [];
-
-      return tools
-          .whereType<Map>()
-          .map((tool) => McpTool.fromJson(Map<String, dynamic>.from(tool)))
-          .toList();
+      return _parseCatalogue(raw);
     } on PlatformException catch (error) {
       _throwHubError('Failed to list MCP Hub tools', error);
     } on MissingPluginException catch (error) {
@@ -98,6 +86,43 @@ class HubMcpClient implements McpConnection {
     } on FormatException catch (error) {
       throw McpException('Failed to parse MCP Hub tool catalogue: $error');
     }
+  }
+
+  /// Re-pulls the hub catalogue.
+  ///
+  /// Newer hubs ask every publisher for its manifest before answering; older
+  /// hubs return their cached merged catalogue. Either way this is the freshest
+  /// list the device can produce, so a publisher that registered after this
+  /// client bound becomes visible without restarting LocalMind.
+  Future<List<McpTool>> refreshTools() async {
+    if (!_initialized) {
+      await initialize();
+    }
+
+    try {
+      final raw = await _channel.invokeMethod<String>('refreshTools');
+      return _parseCatalogue(raw);
+    } on PlatformException catch (error) {
+      _throwHubError('Failed to refresh MCP Hub tools', error);
+    } on MissingPluginException catch (error) {
+      _throwHubError('Failed to refresh MCP Hub tools', error);
+    } on FormatException catch (error) {
+      throw McpException('Failed to parse MCP Hub tool catalogue: $error');
+    }
+  }
+
+  List<McpTool> _parseCatalogue(String? raw) {
+    if (raw == null || raw.isEmpty) return [];
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) {
+      throw const FormatException('catalogue is not a JSON object');
+    }
+    final tools = decoded['tools'];
+    if (tools is! List) return [];
+    return tools
+        .whereType<Map>()
+        .map((tool) => McpTool.fromJson(Map<String, dynamic>.from(tool)))
+        .toList();
   }
 
   @override

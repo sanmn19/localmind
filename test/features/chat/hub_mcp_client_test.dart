@@ -12,21 +12,31 @@ void main() {
   const channel = MethodChannel(hubMcpChannelName);
   final calls = <MethodCall>[];
 
-  const catalogue = {
-    'protocolVersion': 1,
-    'tools': [
-      {
-        'name': 'dev.mcphub.testpublisher.echo',
-        'description': 'Answer ok, so a caller can see the call ran',
-        'inputSchema': {'type': 'object', 'properties': <String, dynamic>{}},
-        'readOnly': true,
-        'available': true,
-      },
-    ],
+  late Map<String, dynamic> catalogue;
+
+  Map<String, dynamic> tool(String name, String description) => {
+    'name': name,
+    'description': description,
+    'inputSchema': {'type': 'object', 'properties': <String, dynamic>{}},
+    'readOnly': true,
+    'available': true,
   };
+
+  void resetCatalogue() {
+    catalogue = {
+      'protocolVersion': 1,
+      'tools': [
+        tool(
+          'dev.mcphub.testpublisher.echo',
+          'Answer ok, so a caller can see the call ran',
+        ),
+      ],
+    };
+  }
 
   setUp(() {
     calls.clear();
+    resetCatalogue();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
           calls.add(call);
@@ -34,6 +44,7 @@ void main() {
             case 'initialize':
               return {'tools': true, 'resources': false, 'prompts': false};
             case 'listTools':
+            case 'refreshTools':
               return jsonEncode(catalogue);
             case 'callTool':
               final arguments = Map<String, dynamic>.from(
@@ -116,6 +127,37 @@ void main() {
       });
       expect(calls.map((call) => call.method), ['initialize', 'listTools']);
     });
+
+    test(
+      'refreshTools shows a publisher that registered after the first read',
+      () async {
+        final client = HubMcpClient(channel: channel);
+        await client.initialize();
+        expect(await client.listTools(), hasLength(1));
+
+        catalogue = {
+          'protocolVersion': 1,
+          'tools': [
+            tool(
+              'dev.mcphub.testpublisher.echo',
+              'Answer ok, so a caller can see the call ran',
+            ),
+            tool(
+              'dev.mcphub.firefoxpublisher.navigate',
+              'Load a URL in the browser',
+            ),
+          ],
+        };
+
+        final refreshed = await client.refreshTools();
+
+        expect(
+          refreshed.map((tool) => tool.name),
+          contains('dev.mcphub.firefoxpublisher.navigate'),
+        );
+        expect(calls.last.method, 'refreshTools');
+      },
+    );
 
     test(
       'callTool sends JSON arguments and returns the first text block',
@@ -232,6 +274,36 @@ void main() {
       expect(manager.hasHubServer(), isTrue);
       expect(manager.getServerUrl(hubMcpServerLabel), hubMcpServerUrl);
     });
+
+    test(
+      'refreshHubServer picks up tools published after the first bind',
+      () async {
+        final manager = McpServerManager();
+        await manager.addHubServer();
+        expect(manager.getTools(hubMcpServerLabel), hasLength(1));
+
+        catalogue = {
+          'protocolVersion': 1,
+          'tools': [
+            tool(
+              'dev.mcphub.testpublisher.echo',
+              'Answer ok, so a caller can see the call ran',
+            ),
+            tool(
+              'dev.mcphub.firefoxpublisher.navigate',
+              'Load a URL in the browser',
+            ),
+          ],
+        };
+
+        expect(await manager.refreshHubServer(), isTrue);
+        expect(
+          manager.getTools(hubMcpServerLabel).map((tool) => tool.name),
+          contains('dev.mcphub.firefoxpublisher.navigate'),
+        );
+        expect(calls.last.method, 'refreshTools');
+      },
+    );
 
     test('addHubServer reports unavailable when the bind fails', () async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
