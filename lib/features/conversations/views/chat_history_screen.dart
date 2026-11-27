@@ -14,11 +14,28 @@ import 'components/conversation_list.dart';
 import 'components/conversation_search_bar.dart';
 import 'components/message_search_results_list.dart';
 
-class ChatHistoryScreen extends ConsumerWidget {
+class ChatHistoryScreen extends ConsumerStatefulWidget {
   const ChatHistoryScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ChatHistoryScreen> createState() => _ChatHistoryScreenState();
+}
+
+class _ChatHistoryScreenState extends ConsumerState<ChatHistoryScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // History is where the user checks that a chat was stored. Re-read once
+    // on open so a chat created moments ago cannot be hidden by a list load
+    // that started before the row existed (and is still cached in the
+    // conversations notifier).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.invalidate(conversationsProvider);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;

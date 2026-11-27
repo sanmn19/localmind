@@ -9,6 +9,7 @@ import '../../../objectbox.g.dart';
 import '../../chat/data/background_task_service.dart';
 import '../../chat/data/fork_service.dart';
 import '../../chat/providers/tooling_providers.dart';
+import '../../chat/data/models/message.dart';
 import '../../chat/utils/message_variants.dart';
 import '../data/message_search_service.dart';
 import '../data/models/message_search_hit.dart';
@@ -23,6 +24,17 @@ final conversationsProvider =
     });
 
 class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
+  /// Monotonic counter bumped by every state mutation.
+  ///
+  /// A load started before a write must never overwrite the list after the
+  /// write. Without this, a first message sent while the initial (or a
+  /// cloud-sync-triggered) reload is still running can vanish from history
+  /// until the next rebuild: the stale read lands last and replaces the list
+  /// that already contained the new chat.
+  int _revision = 0;
+
+  static const _maxLoadRetries = 4;
+
   @override
   Future<List<Conversation>> build() async {
     // Repair collapsed/missing fork rows left by older restores before
@@ -31,6 +43,11 @@ class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
       await ref.read(forkServiceProvider).repairForkConversations();
     } catch (_) {
       // The normal history load below still runs.
+    }
+    for (var attempt = 0; attempt < _maxLoadRetries; attempt++) {
+      final revision = _revision;
+      final data = await _loadAll();
+      if (revision == _revision) return data;
     }
     return _loadAll();
   }
@@ -46,6 +63,15 @@ class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
   }
 
   Future<void> _updateState() async {
+    for (var attempt = 0; attempt < _maxLoadRetries; attempt++) {
+      final revision = ++_revision;
+      final data = await _loadAll();
+      if (revision != _revision) continue;
+      if (ref.mounted) {
+        state = AsyncData(data);
+      }
+      return;
+    }
     final data = await _loadAll();
     if (ref.mounted) {
       state = AsyncData(data);
@@ -53,6 +79,7 @@ class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
   }
 
   void _updateInState(Conversation updated) {
+    _revision++;
     final conversations = state.value;
     if (conversations == null) {
       unawaited(_updateState());
@@ -76,20 +103,30 @@ class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
     final entities = convBox.getAll();
     final conversations = <Conversation>[];
 
+    // One message read instead of a query per conversation: the per-row
+    // queries made history load O(conversations) round-trips inside ObjectBox,
+    // which is both slow on a large archive and a wide race window against
+    // a chat created meanwhile.
+    final messagesByConversation = <String, List<Message>>{};
+    for (final row in msgBox.getAll()) {
+      final ids = messagesByConversation[row.conversationUid];
+      if (ids == null) {
+        messagesByConversation[row.conversationUid] = [row.toDomain()];
+      } else {
+        ids.add(row.toDomain());
+      }
+    }
+
     for (final entity in entities) {
       final domain = entity.toDomain();
-      final query = msgBox
-          .query(MessageEntity_.conversationUid.equals(domain.id))
-          .build();
-      final messages = query.find();
-      query.close();
+      final messages = messagesByConversation[domain.id] ?? const <Message>[];
 
       // A flat `isActiveVariant` filter counts every message ever marked
       // active within its own variant group, including messages hanging
       // off a branch whose ancestor is no longer the active variant.
       // Resolve the real connected timeline from the root instead.
       final activeMessages = MessageVariants.resolveActiveTimeline(
-        messages.map((e) => e.toDomain()).toList(),
+        List<Message>.of(messages),
       );
       final count = activeMessages.length;
       final chars = activeMessages.fold<int>(
@@ -146,6 +183,9 @@ class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
     );
 
     db.conversationBox.put(ConversationEntity.fromDomain(conversation));
+    // Put the row in the list immediately; the authoritative reload below
+    // cannot resurrect it if a stale read is still in flight.
+    _updateInState(conversation);
     await _updateState();
     return conversation;
   }
@@ -272,9 +312,7 @@ class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
 
     // Delete-state cascade: task rows owned by the conversation go with it
     // (live-run cancel is relayed through the engine seam).
-    await ref
-        .read(backgroundTasksServiceProvider)
-        .deleteTasksOwnedBy(id);
+    await ref.read(backgroundTasksServiceProvider).deleteTasksOwnedBy(id);
     ref.invalidate(backgroundPageTasksProvider);
 
     await _updateState();
