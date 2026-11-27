@@ -704,6 +704,9 @@ class _MsgBox extends Fake implements Box<MessageEntity> {
   final List<MessageEntity> rows;
 
   @override
+  List<MessageEntity> getAll() => List.of(rows);
+
+  @override
   QueryBuilder<MessageEntity> query([Condition<MessageEntity>? qc]) {
     return _FakeQueryBuilder<MessageEntity>(rows);
   }
